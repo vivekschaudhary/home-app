@@ -1,0 +1,112 @@
+# Compass configuration — central place for team decisions.
+# Workflows read this on every run.
+
+schema_version: 1
+framework: compass
+framework_version: 1.0
+
+# ─── HITL ─────────────────────────────────────────────────────────────
+# Human-in-the-loop level
+# - every_phase  : approve at every role handoff (heavy)
+# - milestones   : approve at major milestones (default)
+# - merge_only   : approve only at PR merge (lightest)
+hitl_level: milestones
+
+# ─── Tool assignments ─────────────────────────────────────────────────
+# Which AI tool plays which role.
+tool_assignments:
+  pm:                       claude
+  researcher:               claude
+  support:                  claude
+  designer:                 claude
+  ux_writer:                claude
+  architect:                claude
+  enterprise_architect:     claude
+  engineer:                 claude    # writes unit/API/component tests too
+  reviewer:                 codex     # writes E2E + automation framework
+  security_reviewer:        codex
+  tech_writer:              claude
+  project_manager:          claude
+
+# ─── Connectors (MCP) ─────────────────────────────────────────────────
+# Wire these up in .mcp.json. The framework references them by name here.
+connectors:
+  source_control:  github       # github | gitlab
+  ticketing:       jira         # jira | linear | trello
+  observability:   sentry       # sentry | datadog | newrelic
+  design:          figma
+  docs:            confluence   # confluence | notion | gdrive
+  incident_alert:  slack        # slack | pagerduty | opsgenie | linear
+
+# ─── Sprint cadence ───────────────────────────────────────────────────
+sprint:
+  length_weeks:   1
+  end_day:        friday
+  comms_channel:  slack         # where sprint announcements go
+  jira_sync:      true
+
+# ─── Conventions ──────────────────────────────────────────────────────
+conventions:
+  bet_id_format:       jira_style       # PROJ-42
+  story_id_format:     jira_style       # PROJ-43 (sub-ticket of bet)
+  branch_pattern:      "<type>/<id>-<slug>"
+  commit_prefixes:     [feat, fix, chore, refactor, test, docs, spec, ops]
+  merge_strategy:      squash
+  pr_template:         ".github/PULL_REQUEST_TEMPLATE.md"
+
+# ─── Routing ──────────────────────────────────────────────────────────
+# What flow each work type triggers.
+work_types:
+  feature:                bet-driven      # /create-brief → /create-story → /build
+  change:                 bet-driven      # same; tagged change
+  tech_debt:              bet-driven      # tagged on bet
+  continuous_improvement: bet-driven      # tagged on bet
+  fix:                    /fix            # bug; can be hygiene
+  triage:                 /triage         # incident
+  ops:                    /ops            # non-code; can be hygiene
+
+# Hygiene flag: when true on /ops or /fix, skips bet requirement.
+hygiene_path_enabled: true
+
+# ─── Bet types and outcomes ───────────────────────────────────────────
+bet_types:
+  - foundational-product
+  - foundational-architecture
+  - okr
+  - feature
+  - architectural-initiative
+  - tech-debt
+  - continuous-improvement
+
+bet_outcomes: [won, learning, inconclusive]
+
+# ─── Measurement ──────────────────────────────────────────────────────
+measurement:
+  default_window_days:    30
+  default_checkin_cadence: weekly       # weekly | biweekly | monthly
+  cron_owner:             enterprise_architect
+  data_unavailable_action: hitl_flag    # hitl_flag | extend | mark_inconclusive
+
+# ─── CI/CD ────────────────────────────────────────────────────────────
+ci_cd:
+  pipeline_command:       "make deploy"      # or "pnpm deploy", etc.
+  deploy_on_merge:        true
+  rollback_command:       "make rollback"
+
+# ─── DRI logging ──────────────────────────────────────────────────────
+dri:
+  required_for_decisions:  [rationale, area_tag, alternatives, reversibility]
+  required_for_risks:      [likelihood, impact, mitigation, area_tag]
+  required_for_issues:     [severity, owner, area_tag]
+  decisions_append_only:   true
+  p0_alerts:               true
+  auto_log_framework_decisions: true
+
+# ─── Disputes ─────────────────────────────────────────────────────────
+disputes:
+  arbiter: pm           # not reviewer-wins-by-default
+
+# ─── Setup ordering ───────────────────────────────────────────────────
+# Hard rule: product foundation must exist before architecture foundation.
+setup:
+  enforce_product_before_architecture: true
