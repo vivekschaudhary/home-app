@@ -13,13 +13,13 @@ Creates the **foundational product bet** — the company / product mission as a 
    - If amend: rename existing to `product-v<N>.md`, mark status `superseded`
 2. **Load PM role context** (`compass/roles/pm.md`)
 3. **Researcher MUST engage — always.** Load `compass/roles/researcher.md`.
-   - For a foundational product bet, Researcher's job is to:
-     - Verify the source material covers users, market positioning, success metrics
-     - Surface industry/competitive context not in the source
-     - Identify unstated assumptions
-   - Mandatory output: research section in the brief OR standalone `docs/foundation/research.md`
-   - If source is complete, log explicitly: "Source material complete for foundational scope. No additional research conducted. Confidence: <high|medium>."
-   - **No silent skip.**
+   - For a foundational product bet, mandatory research categories:
+     - User pain
+     - Competitive
+     - **Moat / defensibility (ALL 9 classic moat types evaluated, even if some are "not applicable")**
+   - Researcher's job: verify source material covers users, market positioning, success metrics, AND defensibility
+   - Mandatory output: research findings (in brief or standalone `docs/foundation/research.md`)
+   - **No silent skip on moat analysis.** Foundational bets without defensibility analysis are reckless.
 4. **Gather source material:**
    - Ask user for sources (Confluence link, Google Drive doc, notes, free text)
    - Read via MCP
@@ -44,6 +44,18 @@ Creates the **foundational product bet** — the company / product mission as a 
 - `docs/foundation/product.md` with status `proposed` → `approved` after HITL
 - Mirrored to Confluence/Jira per config
 - `docs/status.md` updated
+
+### Verification (mandatory)
+
+Before marking workflow complete:
+- [ ] `docs/foundation/product.md` exists with all required sections, including Defensibility / Moat
+- [ ] All 9 moat types evaluated in the Defensibility section (yes / no / partial + rationale)
+- [ ] Primary moat(s) being bet on are named
+- [ ] Researcher findings present
+- [ ] DRI Log has entries from PM AND Researcher
+- [ ] Status: proposed
+
+If any unchecked, workflow is NOT complete.
 
 ## Refusal cases
 

@@ -53,6 +53,31 @@ check_in_cadence: quarterly
 
 <If we build <this>, then <these users> will achieve <this outcome>, measured by <this metric> hitting <target> within <window>.>
 
+## Defensibility / Moat
+
+If this bet wins, what stops competitors from catching up?
+
+Evaluate each moat type. Two lines each is fine; "not applicable" is a valid answer if honest.
+
+| Moat type | Applies? | Evidence / rationale |
+|-----------|---------|---------------------|
+| Network effects | yes / no / partial | |
+| Switching costs | | |
+| Data / proprietary intelligence | | |
+| Scale economics | | |
+| Brand / trust | | |
+| Regulatory / certification | | |
+| Distribution / channel | | |
+| Talent / domain expertise | | |
+| Speed / iteration velocity | | |
+
+**Primary moat(s) we're betting on:**
+
+**Defensibility proxy metrics (where applicable):**
+- Retention rate (proxy for switching costs)
+- DAU/MAU ratio (proxy for habituation)
+- Time-to-replicate (estimated months for a well-resourced competitor)
+
 ## Guardrail metrics
 
 What must NOT degrade for this bet to count as won:

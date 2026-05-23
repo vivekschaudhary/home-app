@@ -29,3 +29,18 @@ Initial release. 72 files. 12 roles, 13 workflows, 10 templates, 3 cross-cutting
 ### Added
 
 - Documentation in SETUP.md and README.md explaining how AI tool memory persists across folder deletion at the same path, with cleanup instructions per tool.
+
+## [0.1.8] — 2026-05-24
+
+### Added
+- Researcher role gained 6-category source guide (user pain, competitive, technical, quantitative, trends, moat).
+- Moat / defensibility analysis added as mandatory step for foundational product bets — all 9 classic moat types must be evaluated (network effects, switching costs, data, scale, brand, regulatory, distribution, talent, speed).
+- `docs/foundation/product.md` template includes a Defensibility / Moat section.
+- Brief template includes optional Defensibility section for feature bets.
+- AI tools (Claude, ChatGPT, Codex with browser) acknowledged as first-class research tools across all categories.
+
+### Changed
+- Researcher role's "Where to research" section completely rewritten with current (2025-2026) sources, replacing generic guidance.
+
+### Fixed
+- Source quality hierarchy now explicit; AI summaries placed below primary sources to discourage AI-only research.

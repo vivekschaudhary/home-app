@@ -41,6 +41,17 @@ area_tags: [frontend, backend, mobile, payments, etc.]
 
 <If we ship <X>, then <user> will <outcome>, measured by <metric> reaching <target> within <window>.>
 
+## Defensibility (optional for feature bets)
+
+If this feature ships and works, does it strengthen any moat? Examples:
+- Increases switching costs by adding workflow embedding
+- Generates proprietary usage data
+- Strengthens brand in a specific user segment
+
+If no — that's fine, not every feature contributes to defensibility. But name it explicitly rather than skip.
+
+**Moat impact (one line):**
+
 ## Scope
 
 ### In scope
