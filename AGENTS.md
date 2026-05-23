@@ -104,6 +104,13 @@ Every bet has an outcome: `won | learning | inconclusive`.
 9. **HITL approval at every milestone** — configurable level but mandatory at brief approval, design + copy approval, tech design approval, merge, release
 10. **Claude implements, Codex reviews** — independent models, PM arbitrates disputes
 11. **No silent writes** — when a workflow writes files outside the primary artifact it's producing, it must: (a) list every file before writing, (b) wait for user confirmation, (c) summarize what was written at the end. Drafting the named artifact is expected; everything else is a side effect requiring visibility.
+12. **Structured, scannable responses** — every workflow output to the user follows this shape:
+    - **TL;DR** at the top (2-3 bullets max)
+    - **What I did** — brief list of actions taken / files created
+    - **What's next** — single clear instruction for the user (approve / edit / run command X)
+    - **Open questions or risks** (only if applicable)
+
+    No walls of prose. No multi-paragraph narration. Use tables for lists, bullets for steps, code blocks for commands. The user should be able to scan the response in under 10 seconds and know exactly what to do next.
 
 ## HITL levels
 
