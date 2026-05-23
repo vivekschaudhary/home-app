@@ -12,7 +12,14 @@ Creates the **foundational product bet** — the company / product mission as a 
    - Ask user: amend (creates v2, supersedes v1) or abort?
    - If amend: rename existing to `product-v<N>.md`, mark status `superseded`
 2. **Load PM role context** (`compass/roles/pm.md`)
-3. **Engage Researcher** (always — `compass/roles/researcher.md`)
+3. **Researcher MUST engage — always.** Load `compass/roles/researcher.md`.
+   - For a foundational product bet, Researcher's job is to:
+     - Verify the source material covers users, market positioning, success metrics
+     - Surface industry/competitive context not in the source
+     - Identify unstated assumptions
+   - Mandatory output: research section in the brief OR standalone `docs/foundation/research.md`
+   - If source is complete, log explicitly: "Source material complete for foundational scope. No additional research conducted. Confidence: <high|medium>."
+   - **No silent skip.**
 4. **Gather source material:**
    - Ask user for sources (Confluence link, Google Drive doc, notes, free text)
    - Read via MCP
