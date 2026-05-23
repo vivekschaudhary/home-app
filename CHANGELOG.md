@@ -44,3 +44,16 @@ Initial release. 72 files. 12 roles, 13 workflows, 10 templates, 3 cross-cutting
 
 ### Fixed
 - Source quality hierarchy now explicit; AI summaries placed below primary sources to discourage AI-only research.
+
+## [0.1.9] — 2026-05-24
+
+### Changed
+- `/setup-product` step 3 now explicitly bans "log-and-walk-away" — Researcher must produce evidence in at least User pain, Competitive, and Moat categories. Filing missing research as open DRI Issues is no longer a valid substitute for doing the research.
+- `/setup-product` verification checklist tightened: empty moat rows fail; Researcher DRI must include ≥1 Decision AND ≥1 Risk (Issues-only no longer satisfies); findings must cite evidence, not point at TBDs.
+- HITL approval gate cannot pass while any verification item is unchecked — made explicit.
+
+### Added
+- Researcher role gained "When the source is vision-only" subsection: vision-only sources are the normal starting state for foundational bets, not a reason to defer research.
+
+### Fixed
+- Closed an enforcement gap surfaced by a real `/setup-product` run where vision-only source material allowed the Researcher to ship Issues-as-deliverable rather than evidence-as-deliverable.

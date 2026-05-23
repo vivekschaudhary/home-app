@@ -41,4 +41,8 @@ A markdown-based framework that any AI tool can read. The framework lives in `co
 
 ## Get started
 
+## Heads-up: AI tool memory persists across folder deletion
+
+If you reuse a folder path for a new Compass project (delete + recreate at the same path), AI tools may carry stale context from the prior project. See `SETUP.md` → "Starting fresh at the same folder path" for the cleanup steps.
+
 Read `SETUP.md`.

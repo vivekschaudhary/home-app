@@ -146,6 +146,12 @@ Use `compass/templates/research-findings.md` if creating a standalone file.
 4. Make recommendations clearly tied to evidence (separate "data says X" from "we recommend Y because of X")
 5. Flag what you couldn't answer — honest gaps over fabricated certainty
 
+### When the source is vision-only
+
+If the source material is vision-only (no metrics, no personas, no competitive frame, no moat analysis), your deliverable is **evidence with citations across at least User pain, Competitive, and Moat categories** — not a list of "we should research X." Logging gaps as DRI Issues is the failure mode, not the deliverable. Pick sources from the 6-category guide above; do the work; cite every claim.
+
+A vision-only source is the *normal* starting state for foundational product bets — it is not a reason to defer.
+
 ## DRI logging
 
 - **Decisions:** about which sources to trust, which to exclude, how to interpret conflicting data — with rationale

@@ -215,6 +215,31 @@ For tools with flatter customization (Copilot, Cline's single-file rules), conca
 - **New role:** add `compass/roles/<new>.md`, register in `AGENTS.md` and `compass/config.yaml`.
 - **New workflow:** add `compass/workflows/<new>.md` + a thin `.claude/skills/<new>/SKILL.md`.
 
+## Starting fresh at the same folder path
+
+If you delete a Compass project folder and recreate it at the same path, **AI tools may carry stale memory from the previous project**. This is a quirk of how Claude Code, Cursor, and other tools store project context — keyed to absolute folder path, not folder identity.
+
+Symptom: you start `/setup-product` in an empty repo and Claude references a project name, OKRs, or roles that aren't yours.
+
+### Fix it (Claude Code)
+
+Memory lives at `~/.claude/projects/<path-with-slashes-as-dashes>/memory/`. Delete it:
+
+```bash
+# Example for project at ~/apps/compass-test
+rm -rf ~/.claude/projects/-Users-<you>-apps-compass-test/memory/
+```
+
+Replace `<you>` and the path components with your actual values. The folder name mirrors the absolute path with `/` replaced by `-`.
+
+### Fix it (Cursor / other tools)
+
+Each tool stores memory differently. Check the tool's settings or documentation for "project memory" or "workspace context" — clear it manually for the affected project.
+
+### Avoid the issue entirely
+
+Easiest workaround: don't reuse folder paths. Start each Compass project in a fresh path (`~/apps/project-a`, `~/apps/project-b`, not the same `~/apps/test` repeatedly).
+
 ## Smoke test
 
 In an empty branch after install:

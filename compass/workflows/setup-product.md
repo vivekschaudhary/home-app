@@ -19,6 +19,7 @@ Creates the **foundational product bet** — the company / product mission as a 
      - **Moat / defensibility (ALL 9 classic moat types evaluated, even if some are "not applicable")**
    - Researcher's job: verify source material covers users, market positioning, success metrics, AND defensibility
    - Mandatory output: research findings (in brief or standalone `docs/foundation/research.md`)
+   - **Researcher must produce evidence** in at least **User pain, Competitive, and Moat** categories using the 6-category framework in `compass/roles/researcher.md`. Logging missing research as open Issues is **not** a substitute for doing the research. If the source is vision-only, the Researcher's job is to fill the gap — not record it.
    - **No silent skip on moat analysis.** Foundational bets without defensibility analysis are reckless.
 4. **Gather source material:**
    - Ask user for sources (Confluence link, Google Drive doc, notes, free text)
@@ -48,14 +49,16 @@ Creates the **foundational product bet** — the company / product mission as a 
 ### Verification (mandatory)
 
 Before marking workflow complete:
+
 - [ ] `docs/foundation/product.md` exists with all required sections, including Defensibility / Moat
-- [ ] All 9 moat types evaluated in the Defensibility section (yes / no / partial + rationale)
+- [ ] All 9 moat types evaluated — each row has a verdict (yes / no / partial) AND a rationale line. Empty rows fail.
 - [ ] Primary moat(s) being bet on are named
-- [ ] Researcher findings present
-- [ ] DRI Log has entries from PM AND Researcher
+- [ ] Researcher findings cover at minimum: User pain, Competitive, Moat — each with cited evidence (not "TBD" or "see R-N").
+- [ ] Researcher DRI has ≥1 Decision AND ≥1 Risk entry. Issues-only does not satisfy.
+- [ ] PM DRI has entries
 - [ ] Status: proposed
 
-If any unchecked, workflow is NOT complete.
+If any unchecked, workflow is NOT complete. **Approval gate (HITL) cannot pass while any verification item is unchecked.**
 
 ## Refusal cases
 
