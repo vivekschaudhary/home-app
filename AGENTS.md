@@ -7,12 +7,14 @@ Read by every AI tool working in this repo (Claude Code, OpenAI Codex CLI, Curso
 **Compass** — a product development framework where every initiative is a measurable bet. Work flows: brief → architecture → story → build → review → release → measure. Roles load context per phase. One tool implements; another tool reviews.
 
 The framework lives in `compass/`:
+
 - `compass/roles/` — 12 role definitions
 - `compass/workflows/` — phase flows
 - `compass/templates/` — artifact templates
 - `compass/config.yaml` — team decisions
 
 Artifacts the framework produces live in `docs/`:
+
 - `docs/foundation/` — foundational product & architecture bets
 - `docs/bets/<bet-id>/` — all bets, parent linkage via frontmatter
 - `docs/sprints/` — weekly release comms
@@ -22,7 +24,7 @@ Artifacts the framework produces live in `docs/`:
 ## Tool division of labor
 
 | Tool   | Plays the role of                                          |
-|--------|------------------------------------------------------------|
+| ------ | ---------------------------------------------------------- |
 | Claude | All roles EXCEPT Reviewer and Security Reviewer            |
 | Codex  | Reviewer, Security Reviewer (independent model on purpose) |
 
@@ -30,40 +32,40 @@ Reviewer findings are real. Disputes go to PM, not auto-resolved by either tool.
 
 ## The 12 roles
 
-| Role | Where defined |
-|------|---------------|
-| Product Manager (merged PM + PO) | `compass/roles/pm.md` |
-| Researcher | `compass/roles/researcher.md` |
-| Support | `compass/roles/support.md` |
-| Designer | `compass/roles/designer.md` |
-| UX Writer | `compass/roles/ux-writer.md` |
-| Architect (per-bet) | `compass/roles/architect.md` |
-| Enterprise/Solution Architect | `compass/roles/enterprise-architect.md` |
-| Engineer (writes unit/API/component tests) | `compass/roles/engineer.md` |
-| Reviewer (Codex; writes E2E + automation) | `compass/roles/reviewer.md` |
-| Security Reviewer (Codex) | `compass/roles/security-reviewer.md` |
-| Tech Writer | `compass/roles/tech-writer.md` |
-| Project Manager | `compass/roles/project-manager.md` |
+| Role                                       | Where defined                           |
+| ------------------------------------------ | --------------------------------------- |
+| Product Manager (merged PM + PO)           | `compass/roles/pm.md`                   |
+| Researcher                                 | `compass/roles/researcher.md`           |
+| Support                                    | `compass/roles/support.md`              |
+| Designer                                   | `compass/roles/designer.md`             |
+| UX Writer                                  | `compass/roles/ux-writer.md`            |
+| Architect (per-bet)                        | `compass/roles/architect.md`            |
+| Enterprise/Solution Architect              | `compass/roles/enterprise-architect.md` |
+| Engineer (writes unit/API/component tests) | `compass/roles/engineer.md`             |
+| Reviewer (Codex; writes E2E + automation)  | `compass/roles/reviewer.md`             |
+| Security Reviewer (Codex)                  | `compass/roles/security-reviewer.md`    |
+| Tech Writer                                | `compass/roles/tech-writer.md`          |
+| Project Manager                            | `compass/roles/project-manager.md`      |
 
 Load the role's full definition when playing it. Do not pattern-match — read the file.
 
 ## The 13 workflows
 
-| Workflow | Command | Where defined |
-|----------|---------|---------------|
-| Setup foundational product bet | `/setup product` | `compass/workflows/setup-product.md` |
-| Setup foundational architecture bet | `/setup architecture` | `compass/workflows/setup-architecture.md` |
-| Create a new bet (brief) | `/create-brief` | `compass/workflows/create-brief.md` |
-| Create bet-level architecture | `/create-architecture` | `compass/workflows/create-architecture.md` |
-| Create a story under a bet | `/create-story` | `compass/workflows/create-story.md` |
-| Build a story | `/build <story-id>` | `compass/workflows/build.md` |
-| Fix a bug | `/fix <ticket-or-text>` | `compass/workflows/fix.md` |
-| Respond to an incident | `/triage <alert>` | `compass/workflows/triage.md` |
-| Make a non-code/ops change | `/ops <description>` | `compass/workflows/ops.md` |
-| Advance work to next phase | `/advance` | `compass/workflows/advance.md` |
-| Project status | `/status` | `compass/workflows/status.md` |
-| Top-down metrics | `/metrics` | `compass/workflows/metrics.md` |
-| Measure a bet (cron) | `/measure <bet-id>` | `compass/workflows/measure.md` |
+| Workflow                            | Command                 | Where defined                              |
+| ----------------------------------- | ----------------------- | ------------------------------------------ |
+| Setup foundational product bet      | `/setup product`        | `compass/workflows/setup-product.md`       |
+| Setup foundational architecture bet | `/setup architecture`   | `compass/workflows/setup-architecture.md`  |
+| Create a new bet (brief)            | `/create-brief`         | `compass/workflows/create-brief.md`        |
+| Create bet-level architecture       | `/create-architecture`  | `compass/workflows/create-architecture.md` |
+| Create a story under a bet          | `/create-story`         | `compass/workflows/create-story.md`        |
+| Build a story                       | `/build <story-id>`     | `compass/workflows/build.md`               |
+| Fix a bug                           | `/fix <ticket-or-text>` | `compass/workflows/fix.md`                 |
+| Respond to an incident              | `/triage <alert>`       | `compass/workflows/triage.md`              |
+| Make a non-code/ops change          | `/ops <description>`    | `compass/workflows/ops.md`                 |
+| Advance work to next phase          | `/advance`              | `compass/workflows/advance.md`             |
+| Project status                      | `/status`               | `compass/workflows/status.md`              |
+| Top-down metrics                    | `/metrics`              | `compass/workflows/metrics.md`             |
+| Measure a bet (cron)                | `/measure <bet-id>`     | `compass/workflows/measure.md`             |
 
 ## Bet hierarchy
 
@@ -101,6 +103,7 @@ Every bet has an outcome: `won | learning | inconclusive`.
 8. **Discipline holds under pressure** — no reduced review during incidents or P0 work
 9. **HITL approval at every milestone** — configurable level but mandatory at brief approval, design + copy approval, tech design approval, merge, release
 10. **Claude implements, Codex reviews** — independent models, PM arbitrates disputes
+11. **No silent writes** — when a workflow writes files outside the primary artifact it's producing, it must: (a) list every file before writing, (b) wait for user confirmation, (c) summarize what was written at the end. Drafting the named artifact is expected; everything else is a side effect requiring visibility.
 
 ## HITL levels
 

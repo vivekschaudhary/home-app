@@ -34,14 +34,17 @@ Creates the **foundational architecture bet** — the platform's load-bearing te
    - This IS a bet (architecture as a wager)
    - Hypothesis, measurement window (typically multi-year), check-in cadence
    - Frontmatter: `type: foundational-architecture`, `status: proposed`
-8. **Scaffold the repo:**
-   - Boundary folders (apps/, services/, packages/, etc. — per choices)
-   - CI/CD pipeline files
-   - Base configs (tsconfig, eslint, package.json, etc.)
-9. **Populate `compass/config.yaml`** with team decisions from step 5
-10. **DRI log** seeded with technology decisions (rationale + alternatives + reversibility)
-11. **Mirror to Confluence** as strategic technical doc
-12. **HITL gate** — human reviews and marks `status: approved`
+8. **Plan scaffolding** — present to user:
+   - List every file that will be created
+   - Group by purpose (entrypoints, configs, CI, etc.)
+   - Wait for explicit user confirmation before writing
+9. **Scaffold the repo** (after confirmation):
+   - Boundary folders, CI/CD configs, base configs
+10. **Summarize what was written** — table of files + purpose, BEFORE marking workflow complete
+11. **Populate `compass/config.yaml`** with team decisions from step 5
+12. **DRI log** seeded with technology decisions (rationale + alternatives + reversibility)
+13. **Mirror to Confluence** as strategic technical doc
+14. **HITL gate** — human reviews and marks `status: approved`
 
 ## Output
 
