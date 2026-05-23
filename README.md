@@ -1,5 +1,5 @@
 > **Status:** Early. Used by the author on real projects. Public for transparency, not actively soliciting users. Feedback welcome via Discussions; no support promises.
-> 
+
 # Compass
 
 > Product development with direction.

@@ -51,21 +51,21 @@ Load the role's full definition when playing it. Do not pattern-match — read t
 
 ## The 13 workflows
 
-| Workflow                            | Command                 | Where defined                              |
-| ----------------------------------- | ----------------------- | ------------------------------------------ |
-| Setup foundational product bet      | `/setup product`        | `compass/workflows/setup-product.md`       |
-| Setup foundational architecture bet | `/setup architecture`   | `compass/workflows/setup-architecture.md`  |
-| Create a new bet (brief)            | `/create-brief`         | `compass/workflows/create-brief.md`        |
-| Create bet-level architecture       | `/create-architecture`  | `compass/workflows/create-architecture.md` |
-| Create a story under a bet          | `/create-story`         | `compass/workflows/create-story.md`        |
-| Build a story                       | `/build <story-id>`     | `compass/workflows/build.md`               |
-| Fix a bug                           | `/fix <ticket-or-text>` | `compass/workflows/fix.md`                 |
-| Respond to an incident              | `/triage <alert>`       | `compass/workflows/triage.md`              |
-| Make a non-code/ops change          | `/ops <description>`    | `compass/workflows/ops.md`                 |
-| Advance work to next phase          | `/advance`              | `compass/workflows/advance.md`             |
-| Project status                      | `/status`               | `compass/workflows/status.md`              |
-| Top-down metrics                    | `/metrics`              | `compass/workflows/metrics.md`             |
-| Measure a bet (cron)                | `/measure <bet-id>`     | `compass/workflows/measure.md`             |
+| Workflow                            | Command                 | Where defined                                        |
+| ----------------------------------- | ----------------------- | ---------------------------------------------------- |
+| Setup foundational product bet      | `/setup product`        | `compass/workflows/setup-product.md`                 |
+| Setup foundational architecture bet | `/setup architecture`   | `compass/workflows/setup-foundation-architecture.md` |
+| Create a new bet (brief)            | `/create-brief`         | `compass/workflows/create-brief.md`                  |
+| Create bet-level architecture       | `/create-architecture`  | `compass/workflows/create-bet-architecture.md`       |
+| Create a story under a bet          | `/create-story`         | `compass/workflows/create-story.md`                  |
+| Build a story                       | `/build <story-id>`     | `compass/workflows/build.md`                         |
+| Fix a bug                           | `/fix <ticket-or-text>` | `compass/workflows/fix.md`                           |
+| Respond to an incident              | `/triage <alert>`       | `compass/workflows/triage.md`                        |
+| Make a non-code/ops change          | `/ops <description>`    | `compass/workflows/ops.md`                           |
+| Advance work to next phase          | `/advance`              | `compass/workflows/advance.md`                       |
+| Project status                      | `/status`               | `compass/workflows/status.md`                        |
+| Top-down metrics                    | `/metrics`              | `compass/workflows/metrics.md`                       |
+| Measure a bet (cron)                | `/measure <bet-id>`     | `compass/workflows/measure.md`                       |
 
 ## Bet hierarchy
 

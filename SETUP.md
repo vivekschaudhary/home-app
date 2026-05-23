@@ -23,12 +23,15 @@ cp    path/to/compass/README.md   ./  # optional; rename your existing if presen
 ### 2. Install both AI tools
 
 **Claude Code:**
+
 ```bash
 npm install -g @anthropic-ai/claude-code
 ```
+
 Install the VS Code extension ("Claude Code") from the marketplace.
 
 **OpenAI Codex CLI:**
+
 ```bash
 npm install -g @openai/codex
 codex login
@@ -37,16 +40,20 @@ codex login
 ### 3. Authenticate MCP connectors
 
 **Claude Code (in VS Code panel):**
+
 ```
 /mcp
 ```
+
 Authenticate each: GitHub, Atlassian (Jira/Confluence), Sentry, Figma.
 
 **Codex CLI:**
 Codex reads `.codex/config.toml`. Verify in chat:
+
 ```
 List the MCP servers available to you.
 ```
+
 (Codex's MCP config format evolves — check `codex --help` if servers don't appear.)
 
 ### 4. Commit the bootstrap
@@ -61,6 +68,7 @@ git commit -m "chore: bootstrap Compass"
 ### Step 1 — foundational product bet
 
 In the Claude Code panel:
+
 ```
 /setup-product
 ```
@@ -72,7 +80,7 @@ You'll be asked for source material (Confluence link, GDrive doc, or free text d
 ### Step 2 — foundational architecture bet
 
 ```
-/setup-architecture
+/setup-foundation-architecture
 ```
 
 Compass asks ~12 stack questions (with smart defaults), scaffolds the repo with boundary folders + CI/CD config, populates `compass/config.yaml`, drafts `docs/foundation/architecture.md`.
@@ -116,11 +124,13 @@ Engineer implements + tests + opens PR. Story may produce multiple PRs.
 ### Step 7 — Codex reviews
 
 In your terminal:
+
 ```bash
 codex
 ```
 
 Then in Codex:
+
 ```
 Run the reviewer prompt at .codex/prompts/reviewer.md against the diff on PR #N.
 ```
@@ -138,6 +148,7 @@ Loop until clean, then merge.
 ### Step 9 — measure
 
 Cron auto-runs `/measure PROJ-XX` per the bet's `check_in_cadence`. Or run manually:
+
 ```
 /measure PROJ-XX
 ```
@@ -211,9 +222,10 @@ In an empty branch after install:
 ```
 /setup-product
 ```
+
 (Use defaults; this is just to verify the loop works.)
 
-After approving the product foundation, run `/setup-architecture`, then try `/create-brief "test feature"`.
+After approving the product foundation, run `/setup-foundation-architecture`, then try `/create-brief "test feature"`.
 
 If anything feels broken, look at the workflow file that's running — workflows are plain markdown you can edit.
 

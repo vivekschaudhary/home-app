@@ -13,7 +13,7 @@ Your active role at any moment is determined by the workflow phase you're in. Lo
 Skills in `.claude/skills/` map 1:1 to workflows in `compass/workflows/`:
 
 - `/setup-product` — `compass/workflows/setup-product.md`
-- `/setup-architecture` — `compass/workflows/setup-architecture.md`
+- `/setup-foundation-architecture` — `compass/workflows/setup-foundation-architecture.md`
 - `/create-brief` — `compass/workflows/create-brief.md`
 - `/create-architecture` — `compass/workflows/create-architecture.md`
 - `/create-story` — `compass/workflows/create-story.md`
@@ -39,6 +39,7 @@ Skills in `.claude/skills/` map 1:1 to workflows in `compass/workflows/`:
 ## Reading discipline at each role load
 
 When entering a phase, in order:
+
 1. `AGENTS.md`
 2. `compass/roles/<active-role>.md`
 3. `PROJECT.md`

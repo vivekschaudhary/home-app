@@ -1,6 +1,6 @@
 ---
 name: setup-product
-description: Create foundational product bet (PM + Researcher). Run on a new repo. Required before /setup-architecture.
+description: Create foundational product bet (PM + Researcher). Run on a new repo. Required before /setup-foundation-architecture.
 ---
 
 Execute the workflow at `compass/workflows/setup-product.md`.
