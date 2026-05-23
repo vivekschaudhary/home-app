@@ -1,10 +1,10 @@
-# Workflow: /setup product
+# Workflow: /setup-product
 
-Creates the **foundational product bet** — the company / product mission as a measurable bet. Must run before `/setup architecture`.
+Creates the **foundational product bet** — the company / product mission as a measurable bet. Must run before `/setup-foundation-architecture`.
 
 ## Trigger
 
-`/setup product` on a new repo (or to amend foundation with versioning).
+`/setup-product` on a new repo (or to amend foundation with versioning).
 
 ## Process
 

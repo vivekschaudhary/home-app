@@ -1,10 +1,10 @@
-# Workflow: /create-architecture
+# Workflow: /create-bet-architecture
 
 Drafts bet-level technical strategy. Architect leads; Enterprise/Solution Architect always engages for cross-system input.
 
 ## Trigger
 
-`/create-architecture <bet-id>` — after the bet's brief is `approved`.
+`/create-bet-architecture <bet-id>` — after the bet's brief is `approved`.
 
 ## Process
 

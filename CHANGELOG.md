@@ -57,3 +57,13 @@ Initial release. 72 files. 12 roles, 13 workflows, 10 templates, 3 cross-cutting
 
 ### Fixed
 - Closed an enforcement gap surfaced by a real `/setup-product` run where vision-only source material allowed the Researcher to ship Issues-as-deliverable rather than evidence-as-deliverable.
+
+## [0.1.10] — 2026-05-24
+
+### Changed
+- Completed the architecture rename: `compass/workflows/setup-architecture.md` → `setup-foundation-architecture.md` (file + skill directory). The earlier rename had updated docs and the create-architecture half but left this half on the old name.
+- All command references standardized on hyphen-slug form (`/setup-product`, `/setup-foundation-architecture`, `/create-bet-architecture`) across README, AGENTS, CLAUDE, PROJECT, SETUP, docs/status, and every role + workflow file. Space-form (`/setup product`, `/setup architecture`) eliminated.
+
+### Fixed
+- `.claude/skills/setup-foundation-architecture/SKILL.md` had `name: setup-architecture` while pointing at a workflow path that didn't exist — would have failed silently on first invocation. Skill name now matches its directory and the workflow file it executes.
+- Removed duplicate `compass/improvements.md`; merged its contents into the canonical `compass/workflows/improvements.md`.

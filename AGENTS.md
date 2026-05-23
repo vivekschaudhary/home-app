@@ -53,10 +53,10 @@ Load the role's full definition when playing it. Do not pattern-match — read t
 
 | Workflow                            | Command                 | Where defined                                        |
 | ----------------------------------- | ----------------------- | ---------------------------------------------------- |
-| Setup foundational product bet      | `/setup product`        | `compass/workflows/setup-product.md`                 |
-| Setup foundational architecture bet | `/setup architecture`   | `compass/workflows/setup-foundation-architecture.md` |
-| Create a new bet (brief)            | `/create-brief`         | `compass/workflows/create-brief.md`                  |
-| Create bet-level architecture       | `/create-architecture`  | `compass/workflows/create-bet-architecture.md`       |
+| Setup foundational product bet      | `/setup-product`                  | `compass/workflows/setup-product.md`                 |
+| Setup foundational architecture bet | `/setup-foundation-architecture`  | `compass/workflows/setup-foundation-architecture.md` |
+| Create a new bet (brief)            | `/create-brief`                   | `compass/workflows/create-brief.md`                  |
+| Create bet-level architecture       | `/create-bet-architecture`        | `compass/workflows/create-bet-architecture.md`       |
 | Create a story under a bet          | `/create-story`         | `compass/workflows/create-story.md`                  |
 | Build a story                       | `/build <story-id>`     | `compass/workflows/build.md`                         |
 | Fix a bug                           | `/fix <ticket-or-text>` | `compass/workflows/fix.md`                           |

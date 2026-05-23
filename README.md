@@ -22,11 +22,11 @@ A markdown-based framework that any AI tool can read. The framework lives in `co
 ## The flow
 
 ```
-/setup product       → Foundation product bet (PM)
-/setup architecture  → Foundation architecture bet (Enterprise/Solution Architect)
+/setup-product                  → Foundation product bet (PM)
+/setup-foundation-architecture  → Foundation architecture bet (Enterprise/Solution Architect)
 
-/create-brief        → A new bet (PM + Researcher)
-/create-architecture → Bet-level technical strategy (Architect + Enterprise Arch)
+/create-brief                   → A new bet (PM + Researcher)
+/create-bet-architecture        → Bet-level technical strategy (Architect + Enterprise Arch)
 /create-story        → A shippable slice under the bet (PM)
 /build <story>       → Implement (Engineer + Codex review + Architect compliance)
 /fix <ticket>        → Bug flow (Support → Engineer → Codex)

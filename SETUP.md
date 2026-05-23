@@ -100,7 +100,7 @@ PM + Researcher engage. Brief drafted at `docs/bets/PROJ-XX/brief.md`. Approve w
 ### Step 4 — bet-level architecture (if needed)
 
 ```
-/create-architecture PROJ-XX
+/create-bet-architecture PROJ-XX
 ```
 
 Architect + Enterprise/Solution Architect produce `docs/bets/PROJ-XX/architecture.md`. Skipped automatically for small bets.

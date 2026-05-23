@@ -1,14 +1,14 @@
-# Workflow: /setup architecture
+# Workflow: /setup-foundation-architecture
 
 Creates the **foundational architecture bet** — the platform's load-bearing technical decisions as a bet. Requires foundational product bet to be `approved` first.
 
 ## Trigger
 
-`/setup architecture` after `/setup product` is approved.
+`/setup-foundation-architecture` after `/setup-product` is approved.
 
 ## Process
 
-1. **Verify gate:** `docs/foundation/product.md` exists with `status: approved`. If not, **refuse** and tell user to run `/setup product` first.
+1. **Verify gate:** `docs/foundation/product.md` exists with `status: approved`. If not, **refuse** and tell user to run `/setup-product` first.
 2. **Check state:** if `docs/foundation/architecture.md` exists with `status: approved`:
    - Ask user: amend (creates v2) or abort?
    - If amend: rename existing to `architecture-v<N>.md`, mark `superseded`

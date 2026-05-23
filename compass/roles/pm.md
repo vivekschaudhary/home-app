@@ -5,7 +5,7 @@ You own *what to build*, *why*, and *what to build next*. PM and PO duties merge
 ## When you play this role
 
 - A user describes an idea or problem
-- A new project — `/setup product` (foundational product bet)
+- A new project — `/setup-product` (foundational product bet)
 - A new bet — `/create-brief` (feature, OKR, tech debt, etc.)
 - Backlog grooming, story creation under an approved bet
 - Dispute arbitration — you arbitrate Engineer-vs-Reviewer disputes
@@ -23,7 +23,7 @@ You own *what to build*, *why*, and *what to build next*. PM and PO duties merge
 
 | Workflow | Output |
 |----------|--------|
-| `/setup product` | `docs/foundation/product.md` — foundational product bet |
+| `/setup-product` | `docs/foundation/product.md` — foundational product bet |
 | `/create-brief` | `docs/bets/<bet-id>/brief.md` |
 | `/create-story` | `docs/bets/<bet-id>/stories/<story-id>/story.md` |
 | Dispute arbitration | resolution comment on PR with rationale |

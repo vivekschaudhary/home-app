@@ -1,5 +1,5 @@
 ---
-name: setup-architecture
+name: setup-foundation-architecture
 description: Create foundational architecture bet (Enterprise/Solution Architect). Scaffolds repo. Requires /setup-product approved first.
 ---
 

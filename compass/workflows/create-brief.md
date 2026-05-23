@@ -49,5 +49,5 @@ OR
 ## Notes
 
 - PM decomposes into stories **one at a time** via `/create-story <bet-id>` after this brief is approved
-- If brief has `architecture_required: true` or `auto` → Architect engages next via `/create-architecture <bet-id>`
+- If brief has `architecture_required: true` or `auto` → Architect engages next via `/create-bet-architecture <bet-id>`
 - Researcher findings live in the brief itself or `docs/bets/<bet-id>/research.md` if substantial
