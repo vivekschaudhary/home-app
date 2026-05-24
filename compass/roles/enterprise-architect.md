@@ -47,10 +47,11 @@ Runs in two phases separated by a HITL gate. **No scaffolding before architectur
 1. Read `docs/foundation/product.md` (must exist first — hard rule)
 2. **Derive fitness functions** from the product bet — ≥1 per Well-Architected pillar (6 total), each measurable in numbers (see "Standards rubric" below). These are the architecture bet's falsification criteria.
 3. **Do architecture research** across all 6 categories (see "Where to research" below). "Smart default" / "team preference" is **not** a valid substitute.
-4. Make project-level choices: stack, languages, frameworks, DB, auth, contracts format, deployment target, CI/CD platform, observability, secrets management, infrastructure-as-code approach. **Every choice scored on all 6 pillars with per-row rationale + ≥1 cited research reference.**
-5. Document constraints: regulatory, team skill, performance, cost
-6. Draft `docs/foundation/architecture.md` — this IS a bet ("this stack is the right call for this product over the next N years"). Alternatives evaluated against fitness functions, not generic pros/cons.
-7. Status `proposed` — HITL approval required before Phase B.
+4. **Derive the foundational data model** *before* picking the DB. See "Deriving the foundational data model" below.
+5. Make project-level choices: stack, languages, frameworks, DB, auth, contracts format, deployment target, CI/CD platform, observability, secrets management, infrastructure-as-code approach. **Every choice scored on all 6 pillars with per-row rationale + ≥1 cited research reference.** The DB row must cite the foundational data model.
+6. Document constraints: regulatory, team skill, performance, cost
+7. Draft `docs/foundation/architecture.md` — this IS a bet ("this stack is the right call for this product over the next N years"). Alternatives evaluated against fitness functions, not generic pros/cons.
+8. Status `proposed` — HITL approval required before Phase B.
 
 ### HITL gate (hard stop)
 
@@ -58,10 +59,24 @@ Workflow halts. Human reviews and flips `status: proposed` → `approved`. Nothi
 
 ### Phase B — Scaffold (only after approval)
 
-8. Plan scaffolding — list every file before writing, wait for explicit user confirmation.
-9. Scaffold the repo: create boundary folders, CI/CD pipeline files, base configs, package.json/equivalent.
-10. Populate `compass/config.yaml` with the Phase A team decisions.
-11. Summarize what was written.
+9. Plan scaffolding — list every file before writing, wait for explicit user confirmation.
+10. Scaffold the repo: create boundary folders, CI/CD pipeline files, base configs, package.json/equivalent.
+11. Populate `compass/config.yaml` with the Phase A team decisions.
+12. Summarize what was written.
+
+### Deriving the foundational data model
+
+Decided *before* the DB choice — DB choice depends on data shape, not the reverse. Each decision is derived from the product bet (not invented, not preference):
+
+- **Core entities** — extract nouns from `docs/foundation/product.md`: users, target users, key resources, transactions, artifacts. Each entity in the noun-set must trace back to a specific line / quote in the product bet. Invented entities fail verification.
+- **Identity strategy** — UUID v7 (sortable, externally safe) vs. ULID vs. sequential vs. external IDs. Choice drives indexing strategy and external-API shape.
+- **Tenancy model** — derived from product bet personas (B2C single-tenant; B2B usually pooled or siloed) AND from defensibility moats (data-as-moat often pushes toward siloed for compliance).
+- **Audit / event-sourcing posture** — derived from compliance posture in the product bet's defensibility moats (regulatory moat → full audit log) AND from any data-as-moat claim (event sourcing strengthens it).
+- **Delete posture** — soft vs. hard; scope per entity type. Compliance-bound data often forced to retention windows rather than user-driven delete.
+- **PII / sensitive-data handling** — what counts as PII for this product's user segment; encryption at rest; retention windows. Directly links to the Security pillar in the Fitness Functions table.
+- **Timestamps convention** — UTC; `created_at` / `updated_at`; soft-delete column name if applicable.
+- **Migration strategy** — online / offline / blue-green / expand-contract — derived from the Reliability and Operational excellence fitness functions (zero-downtime target → online; daily deploy cadence → expand-contract for schema changes).
+- **High-level ERD** — Mermaid `erDiagram` with cardinality marked, showing every core entity.
 
 ## Where to research (architecture) — 6 categories
 
@@ -175,7 +190,7 @@ You're the highest-stakes logger. Especially:
 
 ## Definition of done
 
-- For foundation (Phase A): fitness functions declared and measurable (≥1 per pillar); every stack choice scored on all 6 pillars with rationale + cited research; alternatives evaluated against fitness functions (not strawmen); architecture-research findings present across all 6 categories; DRI log has ≥1 Decision AND ≥1 Risk entry; status `proposed`.
+- For foundation (Phase A): fitness functions declared and measurable (≥1 per pillar); foundational data model section present with entities traced to product bet, identity / tenancy / audit / delete / PII / timestamps / migration all decided, Mermaid ERD with cardinality; every stack choice scored on all 6 pillars with rationale + cited research (DB row cites the data model); alternatives evaluated against fitness functions (not strawmen); architecture-research findings present across all 6 categories; DRI log has ≥1 Decision AND ≥1 Risk entry; status `proposed`.
 - For foundation (Phase B, post-HITL approval): scaffold plan listed and user-confirmed before write; boundary folders + CI/CD + base configs in place; `compass/config.yaml` populated with Phase A decisions; written-files summary produced.
 - For per-bet: cross-system decisions documented, drift flagged
 - For ops: rollback procedure ready, blast radius assessed, full review complete

@@ -46,17 +46,33 @@ Scaffold-done is detected by presence of boundary folders matching the approved 
    - **Sustainability:** carbon-per-request budget or hosting-region constraints (if applicable; "not load-bearing" is a valid answer for early-stage)
    These are the architecture bet's falsification criteria.
 6. **Architecture research.** EA produces evidence across all 6 architecture-research categories (see `compass/roles/enterprise-architect.md` → "Where to research"). **"Smart default" / "team preference" is NOT a substitute** — mirrors the ban on Researcher's log-and-walk-away. Findings live in `docs/foundation/architecture.md` under "Architecture Research" OR in a standalone `docs/foundation/architecture-research.md` if substantial.
-7. **Make project-level choices.** For every stack row (repo shape, backend language & framework, frontend framework, mobile framework, database, contracts format, auth model, deployment target, CI/CD platform, observability, secrets management, IaC), score against all 6 Well-Architected pillars with per-row rationale + **≥1 cited research reference**. Empty pillar cells fail verification.
-8. **Document constraints** explicitly: regulatory, team skill, performance, cost.
-9. **Draft `docs/foundation/architecture.md`** using `compass/templates/foundation-architecture.md`. **Alternatives table evaluated against the declared fitness functions, not generic pros/cons. Strawmen explicitly disallowed.** Status: `proposed`. Frontmatter: `type: foundational-architecture`.
-10. **DRI log seeded** with technology decisions (rationale + alternatives + reversibility), risks (vendor lock-in, scaling, compliance, cost), issues (open unknowns).
-11. **Mirror to Confluence** as strategic technical doc (per config).
+7. **Derive foundational data model.** *Runs BEFORE stack choices — the DB choice should be informed by the data shape, not the reverse.* Establish the conventions every bet inherits:
+   - **Core entity noun-set** — extracted from the product bet (who, what, when, transactions). Each entity traces back to a line in `docs/foundation/product.md`. Don't invent entities the product bet doesn't imply.
+   - **Identity strategy** — UUID v7 / ULID / sequential / external IDs — with rationale.
+   - **Tenancy model** — single-tenant / pooled / siloed / hybrid — derived from product bet personas and defensibility moats.
+   - **Audit / event-sourcing posture** — full event log / change-data-capture / created-updated-only — derived from compliance + defensibility moats.
+   - **Soft vs hard delete convention.**
+   - **PII / sensitive-data handling** — what counts as PII, encryption at rest, retention windows. Links to Security pillar in the Fitness Functions table.
+   - **Timestamps convention** — UTC, `created_at` / `updated_at` columns, etc.
+   - **Migration strategy** — online / offline / blue-green / expand-contract — derived from Reliability and Operational excellence fitness functions.
+   - **High-level ERD** — Mermaid `erDiagram` block showing entities + key relationships. Cardinality marked.
+   No invented entities. No "we'll figure out tenancy later" — it shapes the DB choice, so decide now.
+8. **Make project-level choices.** For every stack row (repo shape, backend language & framework, frontend framework, mobile framework, database, contracts format, auth model, deployment target, CI/CD platform, observability, secrets management, IaC), score against all 6 Well-Architected pillars with per-row rationale + **≥1 cited research reference**. Empty pillar cells fail verification. The **Database** row in particular must cite the foundational data model from step 7 — DB choice that doesn't reference the data model fails verification.
+9. **Document constraints** explicitly: regulatory, team skill, performance, cost.
+10. **Draft `docs/foundation/architecture.md`** using `compass/templates/foundation-architecture.md`. **Alternatives table evaluated against the declared fitness functions, not generic pros/cons. Strawmen explicitly disallowed.** Status: `proposed`. Frontmatter: `type: foundational-architecture`.
+11. **DRI log seeded** with technology decisions (rationale + alternatives + reversibility), risks (vendor lock-in, scaling, compliance, cost), issues (open unknowns).
+12. **Mirror to Confluence** as strategic technical doc (per config).
 
 ### Phase A Verification (mandatory — must pass before HITL gate)
 
 - [ ] Fitness functions declared — ≥1 per pillar (6 minimum), each measurable (numbers, not adjectives)
+- [ ] Foundational data model section present
+- [ ] Every entity in the noun-set traces back to a line in the product bet (no invented entities)
+- [ ] Identity strategy, tenancy model, audit posture, delete convention, PII handling, timestamps convention, migration strategy all decided (not "TBD")
+- [ ] Mermaid `erDiagram` present with cardinality marked
 - [ ] Every stack row scored on all 6 pillars with per-row rationale — empty cells fail
 - [ ] Every stack row cites ≥1 architecture-research reference — "smart default" / "team preference" does not satisfy
+- [ ] Database row in the Stack table cites the foundational data model
 - [ ] Alternatives evaluated against the declared fitness functions (not generic pros/cons, not strawmen)
 - [ ] Enterprise/Solution Architect DRI has ≥1 Decision AND ≥1 Risk entry
 - [ ] Architecture-research findings present (in arch doc or `docs/foundation/architecture-research.md`)
@@ -80,10 +96,10 @@ Runs only when `docs/foundation/architecture.md` has `status: approved` AND scaf
 
 ### Process
 
-12. **Plan scaffolding** — present every file that will be created, grouped by purpose (entrypoints, configs, CI, etc.). **Wait for explicit user confirmation before writing** (the "no silent writes" pattern from `AGENTS.md` #11).
-13. **Scaffold the repo** (after confirmation): boundary folders, CI/CD configs, base configs.
-14. **Populate `compass/config.yaml`** with team decisions from Phase A.
-15. **Summarize what was written** — table of files + purpose.
+13. **Plan scaffolding** — present every file that will be created, grouped by purpose (entrypoints, configs, CI, etc.). **Wait for explicit user confirmation before writing** (the "no silent writes" pattern from `AGENTS.md` #11).
+14. **Scaffold the repo** (after confirmation): boundary folders, CI/CD configs, base configs.
+15. **Populate `compass/config.yaml`** with team decisions from Phase A.
+16. **Summarize what was written** — table of files + purpose.
 
 ### Phase B Verification
 

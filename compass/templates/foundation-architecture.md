@@ -40,9 +40,71 @@ The measurable architectural targets this bet must satisfy. **≥1 per Well-Arch
 
 <One clear paragraph: the architectural posture chosen. A reader should know what we're building from this section alone.>
 
+## Foundational Data Model
+
+Conventions every bet inherits. Decided **before** the DB choice — DB row in the Stack table must cite this section. Empty subsections, "TBD" answers, or invented entities fail verification.
+
+### Core entities
+
+Each entity traces back to a line in `docs/foundation/product.md`. Don't invent entities the product bet doesn't imply.
+
+| Entity | Purpose | Traces back to (product bet line / quote) |
+|--------|---------|-------------------------------------------|
+| <e.g., User> | <auth + identity holder> | <e.g., "target users: senior developers" — product.md L23> |
+| | | |
+| | | |
+
+### Identity strategy
+
+<UUID v7 / ULID / sequential / external IDs — with rationale. Note implications for indexing, sortability, and external sharing.>
+
+### Tenancy model
+
+<single-tenant / pooled / siloed / hybrid — derived from product bet personas and defensibility moats. Name the rationale explicitly.>
+
+### Audit / event-sourcing posture
+
+<full event log / change-data-capture / created-updated only — derived from compliance posture and defensibility moats (data-as-moat → audit is stronger).>
+
+### Delete posture
+
+<soft vs hard; scope (which entities are soft-deletable, which are immutable). Retention windows where applicable.>
+
+### PII / sensitive-data handling
+
+<What counts as PII for this product. Encryption at rest. Retention windows. Links to the Security pillar in the Fitness Functions table above.>
+
+### Timestamps convention
+
+<UTC; `created_at` / `updated_at` columns; `deleted_at` if soft-delete; timezone handling.>
+
+### Migration strategy
+
+<online / offline / blue-green / expand-contract — derived from Reliability and Operational excellence fitness functions.>
+
+### High-level ERD
+
+```mermaid
+erDiagram
+    USER ||--o{ EXAMPLE_ENTITY : "owns"
+    EXAMPLE_ENTITY {
+        uuid id PK
+        uuid user_id FK
+        timestamptz created_at
+    }
+    USER {
+        uuid id PK
+        string email
+    }
+```
+
+<Replace the example. Show all core entities with key relationships and cardinality (one-to-many, many-to-many).>
+
 ## Stack
 
 Every row scored on all 6 Well-Architected pillars in the per-row evaluations below. Empty pillar cells fail verification. Reversibility is honest (evidence-backed via the "Reversibility honesty" research category).
+
+**The Database row must cite the Foundational Data Model section above** — DB choice that ignores entity shape, identity strategy, tenancy, and audit posture is the decide-before-derive anti-pattern and fails verification.
 
 | Concern | Choice | Reversibility |
 |---------|--------|---------------|
