@@ -132,4 +132,4 @@ Runs only when `docs/foundation/architecture.md` has `status: approved` AND scaf
 
 - This is the most consequential setup — technology choices here are hard to reverse.
 - Enterprise/Solution Architect documents reversibility honestly on every choice; the architecture-research framework requires evidence-backed reversibility claims (category 6).
-- After Phase B, `/create-brief` can run.
+- **After Phase B, for new projects: run `/create-bet-portfolio`** to draft the MVP bet wedge (3-6 stubs + dependency graph) before any single bet is fully scoped. For mid-project additions of a single bet, use `/create-brief` directly.

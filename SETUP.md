@@ -87,17 +87,33 @@ Compass asks ~12 stack questions (with smart defaults), scaffolds the repo with 
 
 **Approve** by flipping the status to `approved` and committing.
 
-### Step 3 — your first feature bet
+### Step 3 — MVP bet portfolio (bootstrap, new projects only)
 
 ```
-/create-brief <link-to-Confluence-doc>
-# or
-/create-brief "We need to let users export their dashboards to CSV"
+/create-bet-portfolio
 ```
 
-PM + Researcher engage. Brief drafted at `docs/bets/PROJ-XX/brief.md`. Approve when ready.
+PM + Researcher draft the **MVP wedge** — 3-6 stub briefs that together let one real user complete the core value loop once. You'll be asked the forcing question: "What does this product need to do for one real user to complete the core value loop once?" Anything beyond that goes into "Deliberately out of MVP" and waits.
 
-### Step 4 — bet-level architecture (if needed)
+Output: `docs/foundation/portfolio.md` (with Mermaid dependency graph + parallel-build candidates) + stub briefs at `docs/bets/<bet-id>/brief.md` with `portfolio_stub: true`.
+
+**Approve** the portfolio doc before promoting any stub.
+
+> Skip this step only if you're not bootstrapping (e.g., adding Compass to an existing project, or adding a single one-off bet to an in-flight project). For those, go straight to `/create-brief`.
+
+### Step 4 — promote each stub to a full brief
+
+For each MVP bet, when you're ready to fully scope it:
+
+```
+/create-brief PROJ-XX
+```
+
+Detects the portfolio stub at `docs/bets/PROJ-XX/brief.md` and promotes it: fills in problem, user, scope, research, guardrails. Clears `portfolio_stub`. Approve when ready.
+
+(For mid-project new bets — not from the portfolio — keep using `/create-brief <source>` or `/create-brief "<free text>"` as before.)
+
+### Step 5 — bet-level architecture (if needed)
 
 ```
 /create-bet-architecture PROJ-XX
@@ -105,7 +121,7 @@ PM + Researcher engage. Brief drafted at `docs/bets/PROJ-XX/brief.md`. Approve w
 
 Architect + Enterprise/Solution Architect produce `docs/bets/PROJ-XX/architecture.md`. Skipped automatically for small bets.
 
-### Step 5 — first story
+### Step 6 — first story
 
 ```
 /create-story PROJ-XX
@@ -113,7 +129,7 @@ Architect + Enterprise/Solution Architect produce `docs/bets/PROJ-XX/architectur
 
 PM identifies the first shippable slice. If UI, Designer + UX Writer engage in parallel for design + copy.
 
-### Step 6 — build it
+### Step 7 — build it
 
 ```
 /build PROJ-XX-1
@@ -121,7 +137,7 @@ PM identifies the first shippable slice. If UI, Designer + UX Writer engage in p
 
 Engineer implements + tests + opens PR. Story may produce multiple PRs.
 
-### Step 7 — Codex reviews
+### Step 8 — Codex reviews
 
 In your terminal:
 
@@ -137,7 +153,7 @@ Run the reviewer prompt at .codex/prompts/reviewer.md against the diff on PR #N.
 
 Codex reads `AGENTS.md`, the bet architecture, and the diff. Posts findings on the PR.
 
-### Step 8 — back to Claude
+### Step 9 — back to Claude
 
 ```
 Address the Codex findings on PR #N.
@@ -145,7 +161,7 @@ Address the Codex findings on PR #N.
 
 Loop until clean, then merge.
 
-### Step 9 — measure
+### Step 10 — measure
 
 Cron auto-runs `/measure PROJ-XX` per the bet's `check_in_cadence`. Or run manually:
 

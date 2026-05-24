@@ -102,3 +102,22 @@ Initial release. 72 files. 12 roles, 13 workflows, 10 templates, 3 cross-cutting
 
 ### Fixed
 - Closed the same decide-before-derive anti-pattern at the data-modeling layer: DB choice was being made as a stack preference rather than derived from the data shape it has to hold. Same pattern as fitness-functions-before-stack and HITL-before-scaffold, now applied at one finer grain.
+
+## [0.1.13] — 2026-05-24
+
+### Added
+- **`/create-bet-portfolio` workflow** (bootstrap-only). Runs once per project after foundation product + architecture are approved. PM + Researcher draft the MVP wedge as 3-6 stub briefs with a Mermaid dependency graph and parallel-build candidates. After portfolio HITL approval, individual stubs are promoted to full briefs via `/create-brief <bet-id>`.
+- **MVP forcing question** in the new workflow: "What does this product need to do for one real user to complete the core value loop once?" Verbatim user answer becomes the load-bearing scope statement.
+- **"Deliberately out of MVP" section** in the portfolio doc — captured one-liners for post-MVP items so they aren't lost, but no stub briefs created. Empty section logs a DRI Risk (MVP scope probably padded).
+- New template `compass/templates/portfolio.md`.
+- New skill `.claude/skills/create-bet-portfolio/SKILL.md`.
+- New brief frontmatter fields: `portfolio_stub` (boolean), `depends_on` (list of bet IDs), `parallel_with` (list of bet IDs).
+
+### Changed
+- `/create-brief` gained a **promote-stub mode**: when invoked with a bet ID that has a `portfolio_stub: true` brief, it fills in the full content and clears the flag (rather than refusing or creating fresh). Original "create fresh from source" mode is unchanged.
+- `/setup-foundation-architecture` final note now points at `/create-bet-portfolio` as the next step for new projects (with `/create-brief` as the path for non-bootstrap single-bet additions).
+- AGENTS.md workflow count: 13 → 14. New workflow inserted in the table between `/setup-foundation-architecture` and `/create-brief`.
+- SETUP.md "First run" section renumbered (new step 3 = portfolio; old step 3 = step 4; etc.) to slot the bootstrap portfolio between foundation arch and bet-level work.
+
+### Fixed
+- Closed the serialization gap during project bootstrap: PM was previously forced to decompose bets one-at-a-time, which meant foundational architecture had to decide knowing only bet 1's needs, teams sat idle waiting for the previous bet to clear, and cross-bet dependencies stayed invisible. The MVP portfolio surfaces the wedge upfront with a dependency graph so parallel build streams can start as soon as portfolio HITL passes.

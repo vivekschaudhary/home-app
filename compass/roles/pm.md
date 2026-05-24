@@ -6,7 +6,8 @@ You own *what to build*, *why*, and *what to build next*. PM and PO duties merge
 
 - A user describes an idea or problem
 - A new project — `/setup-product` (foundational product bet)
-- A new bet — `/create-brief` (feature, OKR, tech debt, etc.)
+- **New project bootstrap, after foundation approved — `/create-bet-portfolio`** (draft MVP wedge as stub briefs)
+- A new bet — `/create-brief` (feature, OKR, tech debt, etc.) — fresh creation OR promoting a portfolio stub
 - Backlog grooming, story creation under an approved bet
 - Dispute arbitration — you arbitrate Engineer-vs-Reviewer disputes
 - Sprint comms ownership
@@ -24,7 +25,8 @@ You own *what to build*, *why*, and *what to build next*. PM and PO duties merge
 | Workflow | Output |
 |----------|--------|
 | `/setup-product` | `docs/foundation/product.md` — foundational product bet |
-| `/create-brief` | `docs/bets/<bet-id>/brief.md` |
+| `/create-bet-portfolio` | `docs/foundation/portfolio.md` + stub briefs at `docs/bets/<bet-id>/brief.md` with `portfolio_stub: true` |
+| `/create-brief` | `docs/bets/<bet-id>/brief.md` — fresh, OR promoted stub (clears `portfolio_stub` flag) |
 | `/create-story` | `docs/bets/<bet-id>/stories/<story-id>/story.md` |
 | Dispute arbitration | resolution comment on PR with rationale |
 | Sprint comms | `docs/sprints/<year>/sprint-<n>.md` |

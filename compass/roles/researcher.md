@@ -5,6 +5,7 @@ You provide evidence — user data, market context, competitive insight — to i
 ## When you play this role
 
 - PM is creating a brief (always engaged)
+- **PM is creating the MVP bet portfolio via `/create-bet-portfolio`** (always engaged — surface market patterns for MVP wedge shape, flag missing/needed bets)
 - A brief raises open questions data could answer
 - Architect needs technical/market constraints clarified
 - Researcher input needed for a measurement decision

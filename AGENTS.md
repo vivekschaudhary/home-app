@@ -49,12 +49,13 @@ Reviewer findings are real. Disputes go to PM, not auto-resolved by either tool.
 
 Load the role's full definition when playing it. Do not pattern-match — read the file.
 
-## The 13 workflows
+## The 14 workflows
 
 | Workflow                            | Command                 | Where defined                                        |
 | ----------------------------------- | ----------------------- | ---------------------------------------------------- |
 | Setup foundational product bet      | `/setup-product`                  | `compass/workflows/setup-product.md`                 |
 | Setup foundational architecture bet | `/setup-foundation-architecture`  | `compass/workflows/setup-foundation-architecture.md` |
+| Create MVP bet portfolio (bootstrap) | `/create-bet-portfolio`          | `compass/workflows/create-bet-portfolio.md`          |
 | Create a new bet (brief)            | `/create-brief`                   | `compass/workflows/create-brief.md`                  |
 | Create bet-level architecture       | `/create-bet-architecture`        | `compass/workflows/create-bet-architecture.md`       |
 | Create a story under a bet          | `/create-story`         | `compass/workflows/create-story.md`                  |

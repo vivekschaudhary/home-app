@@ -24,8 +24,9 @@ A markdown-based framework that any AI tool can read. The framework lives in `co
 ```
 /setup-product                  → Foundation product bet (PM)
 /setup-foundation-architecture  → Foundation architecture bet (Enterprise/Solution Architect)
+/create-bet-portfolio           → MVP bet wedge — 3-6 stub briefs + dependency graph (PM + Researcher; bootstrap-only)
 
-/create-brief                   → A new bet (PM + Researcher)
+/create-brief                   → A new bet — fresh OR promote portfolio stub (PM + Researcher)
 /create-bet-architecture        → Bet-level technical strategy (Architect + Enterprise Arch)
 /create-story        → A shippable slice under the bet (PM)
 /build <story>       → Implement (Engineer + Codex review + Architect compliance)
