@@ -84,6 +84,17 @@ _To be filled by Support._
 
 _Decomposed one at a time via `/create-story`. Each lives under `stories/<story-id>/`._
 
+## Scan summary
+
+Latest scanner posture for this bet. Full report at `docs/bets/<bet-id>/scan-report.md`. Re-run `/scan <bet-id>` to refresh. Auto-invoked by `/advance` and at phase boundaries by `/build`.
+
+- **Last scanned:** YYYY-MM-DD HH:MM UTC
+- **Current phase:** <phase>
+- **Open findings:** N (X critical · Y high · Z medium · W low)
+- **Suppressed:** N
+- **Blocking advance:** yes | no
+- **Full report:** [`scan-report.md`](./scan-report.md)
+
 ## Check-in log
 
 _Populated automatically by `/measure` cron._

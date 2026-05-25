@@ -110,3 +110,23 @@ disputes:
 # Hard rule: product foundation must exist before architecture foundation.
 setup:
   enforce_product_before_architecture: true
+
+# ─── Continuous quality scanner ───────────────────────────────────────
+# Snyk-style continuous scanner across the six SDLC phases.
+# Findings, not failures. Severity + confidence + suppression.
+# Full check catalog lives in `compass/workflows/scan.md`.
+scanner:
+  mode: strict            # strict (block on Critical) | advisory (warn only)
+  per_phase:              # phase-level override of mode
+    product:           strict
+    architecture:      strict
+    build:             strict
+    production_ready:  strict
+    gtm:               advisory
+    operate:           advisory
+  suppression_policy:
+    critical: hitl_approval_required        # plus DRI risk-acceptance entry
+    high:     dri_justification_required    # auto-logged on suppression
+    medium:   owner_acceptance_logged       # auto-logged
+    low:      silent_dismissal_logged       # still logged for audit
+  cron: "0 6 * * 1"       # weekly Monday 6am scan of all active bets

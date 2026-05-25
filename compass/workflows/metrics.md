@@ -13,16 +13,18 @@ Top-down view: foundation → OKR → feature → story → engineering metrics.
 
 1. **Gather data:**
    - Read all bets from `docs/bets/` (including foundation)
+   - **Read all `docs/bets/*/scan-report.md`** for findings posture (open/suppressed by severity, top patterns, trends)
    - Read cached snapshots from `docs/metrics/` (JSON for machine, MD for human)
    - Pull live metrics from MCP sources (Sentry, observability, analytics) when staleness matters
    - Pull PR / commit data via GitHub MCP
    - Pull ticket data via Jira/Linear MCP
 2. **Compute aggregations:**
-   - TL;DR at top: bet outcome rollup, top trends, attention items
+   - TL;DR at top: bet outcome rollup, **scanner posture (open/suppressed by severity)**, top trends, attention items
+   - **Open findings roll-up** (see Output format below)
    - Per-bet drill-down (when filtered or `/metrics <bet-id>`)
    - Engineering metrics per story (PRs, merge time, review cycles, CI time, deploy success, test coverage, app perf)
    - DRI risk/issue rollups
-3. **Surface trends** — always: deltas over the chosen window
+3. **Surface trends** — always: deltas over the chosen window (including findings trends — Critical count, time-to-remediate)
 4. **Cache snapshots** to `docs/metrics/<bet-id>-<date>.{json,md}`
 
 ## Output format
@@ -35,14 +37,31 @@ Window: <selected>
 TL;DR
 ────────────────────────────────────────
 • 23 bets shipped: 14 won / 6 learning / 3 inconclusive (61% win rate)
+• Open scanner findings: 47 across 12 active bets (3 critical, 12 high)
 • Trends:
   - Review cycles ↑12% over 4 sprints
   - Deploy success steady at 98%
   - Hygiene work: 18% of capacity (↑ from 12% last quarter)
+  - Critical findings ↓40% over 4 sprints
 • Attention:
   - 2 briefs overdue for check-in
   - PROJ-127 learning rate above threshold (was a heavy bet)
   - 3 open P0 issues across active bets
+  - 3 blocking-Critical findings on bets in Production Ready
+
+────────────────────────────────────────
+Compass — Open Findings
+────────────────────────────────────────
+Total: 47 across 12 active bets
+• Critical: 3 · High: 12 · Medium: 22 · Low: 10
+Most common findings:
+  • Runbook missing (8 bets)
+  • SLO undefined (6 bets)
+  • Privacy review incomplete (4 bets)
+Suppressed (accepted risk): 12
+  • Mostly: cost monitoring deferred for internal-only bets
+Time-to-remediate (median): 4 days
+Trend: critical findings ↓40% over 4 sprints
 
 ────────────────────────────────────────
 Foundation

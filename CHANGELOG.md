@@ -141,3 +141,31 @@ Initial release. 72 files. 12 roles, 13 workflows, 10 templates, 3 cross-cutting
 
 ### Fixed
 - Closed the time-planning gap: the portfolio had a *logical* plan (dependency graph) but no *temporal* plan (dates, calendar, parallel streams visible on a timeline). "When can we ship the MVP?" was unanswerable in concrete dates; parallel-build candidates sat unused; estimates never tightened; slip detection was reactive. `/plan` makes the schedule first-class and refines it as each phase's output lands.
+
+## [0.2.0] — 2026-05-24
+
+> Major: continuous quality scanner for the product lifecycle. Modeled on Snyk / Semgrep / GitHub Advanced Security.
+
+### Added
+- **New `/scan` workflow** + **Scanner role** + **`scan-report.md` template**. Snyk-style continuous quality scanner across six SDLC phases (Product, Architecture, Build, **Production Ready** (new), GTM, Operate). Findings, not failures. Severity (Critical / High / Medium / Low) + confidence (High / Medium / Low) + location + reason + fix per finding. Read-only role — owners decide; the scanner informs.
+- **Production Ready phase formally introduced** — previously silent in Compass. Eight checks covering runbook, SLO, monitoring, rollback, on-call, backup, cost, compliance.
+- **Cross-cutting principle #13** in AGENTS.md: continuous quality scanning with confidence levels. Names the six phases, the finding shape, and the "measurement is automatic — no manual self-assessment" rule.
+- **Check catalog** (44 checks across six phases) lives in `compass/workflows/scan.md` as the single source of truth. New checks added there, not improvised by the role.
+- **Confidence derivation** is canonical: content depth + source freshness + cross-artifact corroboration. Each finding's Reason field states the reasoning briefly.
+- **Suppression policy** in `compass/config.yaml`: HITL-approval-required for Critical (with non-suppressible carve-outs for PII / legal); DRI-justification for High; owner-acceptance-logged for Medium; silent-dismissal-logged for Low.
+- **Open Findings section** in `/metrics` output — total by severity, top patterns, suppressions, time-to-remediate, trends.
+- **Scan summary section** in brief template — points at the latest `scan-report.md`, shows current open-findings count.
+- New skill `.claude/skills/scan/SKILL.md`.
+- Role count: 12 → **13** (Scanner). Workflow count: 15 → **16**.
+
+### Changed
+- **`/advance` now runs `/scan` before any phase transition.** In `strict` mode (default for Product / Architecture / Build / Production Ready), open Critical findings block advancement. In `advisory` mode (default for GTM / Operate), Critical findings warn loudly and auto-log as DRI Risks. Non-suppressible Critical findings always block.
+- **`/build` invokes `/scan` at phase boundaries** — Build → Production Ready, Production Ready → GTM, GTM → Operate. Catches missing production-readiness work *before* the bet is treated as shipped.
+- **`/metrics` reads all `docs/bets/*/scan-report.md`** for the new Open Findings posture roll-up.
+- **`compass/config.yaml`** gained a `scanner:` section: mode (strict/advisory), per-phase overrides, suppression policy, cron schedule.
+- **AGENTS.md** workflow count 15 → 16; role count 12 → 13; principle count 12 → 13.
+- **README.md** principles updated with the scanner framing; flow diagram includes `/scan`.
+
+### Fixed
+- Closed the "what gates production?" gap. Compass v0.1 had no explicit Production Ready phase — runbook, SLO, monitoring, rollback, backup, on-call, cost, compliance lived as vague intentions across role docs or in nobody's responsibility. v0.2 makes Production Ready a first-class scanned phase with eight checks, several non-suppressible for regulated data.
+- Closed the "rubric vs scanner" framing gap. Previous quality-checklist patterns in workflow verification gates were checklists the owner self-applies (boolean: did I do this?). The scanner replaces that for SDLC-wide quality with a Snyk-shaped output engineers already trust — findings with locations, fixes, severity, confidence, suppression with rationale.

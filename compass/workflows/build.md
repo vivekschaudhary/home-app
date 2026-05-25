@@ -78,6 +78,16 @@ Engineer implements an approved story. Codex reviews. Architect compliance enfor
 27. **Brief stays `in-build`** until ALL stories of the brief have shipped
 28. **When all stories ship:** brief status → `shipped`, Tech Writer finalizes consolidated changelog entry for the brief
 
+### Scanner at phase boundaries
+
+Invoke `/scan <bet-id>` at each phase boundary so the bet enters the next phase with a fresh findings snapshot:
+
+- **Build → Production Ready:** triggered when all stories of the brief ship (step 28). Surfaces runbook / SLO / monitoring / rollback / on-call / backup / cost / compliance gaps before the bet is treated as production-bound.
+- **Production Ready → GTM:** triggered when the Production Ready findings are resolved or suppressed. Surfaces user-docs / API-docs / sales / support / pricing / launch-comms / customer-comms / legal gaps.
+- **GTM → Operate:** triggered when GTM findings are clear. Surfaces measurement-cron / SLO-met / incident-rate / adoption / cost-actuals / defect-rate / outcome-resolved gaps.
+
+If `compass/config.yaml` `scanner.per_phase` is `strict` for the upcoming phase, any open Critical finding blocks the transition (matching `/advance` behavior). The point is to catch missing production-readiness work *before* the bet is treated as shipped, not after an incident reveals it.
+
 ## Story → multiple PRs
 
 A story may produce multiple PRs (implementation, tests, defect fixes). Each PR gets the SAME full review treatment. No shortcuts on subsequent PRs.

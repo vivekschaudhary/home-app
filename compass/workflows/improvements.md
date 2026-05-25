@@ -60,6 +60,36 @@ Each entry: what happened → what changed → what to watch for.
 
 ---
 
+### 2026-05-24 — Quality gates were rubric-shaped; engineers resent rubrics, trust scanners (v0.2.0)
+
+**Friction:** Compass v0.1 grew a lot of verification gates — each new workflow had its own checklist (Researcher must produce evidence in 3+ categories; Architect must score every stack row on 6 pillars; portfolio must have ≥1 post-MVP item; etc.). All useful, all framed as **rubrics the owner self-applies**: "did I do this?" boolean. That works at the foundational/wedge layer where the gates are big and infrequent, but it doesn't scale to SDLC-wide quality (Production Ready, GTM, Operate), and rubrics get political — they feel like grading, not informing. Meanwhile, the *Production Ready* phase was effectively silent in Compass: runbook, SLO, monitoring, rollback, on-call, backup, cost monitoring, compliance lived as vague intentions scattered across role docs, owned by nobody. Bets were getting "shipped" without runbooks; SLO files never existed; rollback was discussed in standup but never tested. Incidents revealed gaps that should have been caught structurally.
+
+The reframe: **engineers don't resent scanners.** Snyk, Semgrep, GitHub Advanced Security, Dependabot — all run continuously, produce *findings* (not failures), give each finding a severity + confidence + location + reason + fix, support suppressions with justification. Engineers triage findings without taking it personally. Same shape, applied to the product lifecycle.
+
+**Change:**
+- New `/scan` workflow, Scanner role (read-only), `scan-report.md` template.
+- Six SDLC phases formally documented: Product, Architecture, Build, **Production Ready** (new), GTM, Operate.
+- 44 checks across the six phases, catalogued in `compass/workflows/scan.md` (single source of truth — new checks added there, not improvised by role).
+- Finding shape: severity (Critical / High / Medium / Low) + confidence (High / Medium / Low) + location + reason + fix + applies-to + suppressible. Same vocabulary engineers already use from security tooling.
+- Confidence derivation is canonical (content depth + source freshness + cross-artifact corroboration) and the Reason field states the reasoning so owners see how the scanner concluded.
+- Suppression policy: HITL-approval for Critical (with non-suppressible carve-outs for PII / regulated data / breaking changes / legal), DRI-justification for High, owner-acceptance for Medium, silent-but-logged for Low.
+- `/advance` auto-runs `/scan` before any phase transition. `strict` mode blocks on Critical; `advisory` mode warns. Non-suppressible Critical always blocks.
+- `/build` auto-runs `/scan` at phase boundaries (Build → Production Ready → GTM → Operate). Catches missing production-readiness work *before* the bet is treated as shipped.
+- `/metrics` gained an Open Findings posture roll-up — counts by severity, top patterns, suppressions, time-to-remediate, trends.
+- AGENTS.md principle #13 codifies the model.
+
+**Files touched:** new — `compass/workflows/scan.md`, `compass/templates/scan-report.md`, `compass/roles/scanner.md`, `.claude/skills/scan/SKILL.md`. Edited — `AGENTS.md` (principle #13 + 13 roles + 16 workflows), `compass/workflows/advance.md` (scanner block semantics), `compass/workflows/build.md` (phase-boundary scans), `compass/workflows/metrics.md` (Open Findings section), `compass/config.yaml` (scanner: section), `compass/templates/brief.md` (Scan summary section), `README.md` (principle + flow), `CHANGELOG.md` (v0.2.0), `compass/workflows/improvements.md`.
+
+**Watch for:**
+- **Check fatigue.** 44 checks across 6 phases is a lot. The point is each check fires only when its evidence is missing, and Low/Medium findings don't block anything. If teams start treating Low findings as work, tighten the catalog or push more to `silent_dismissal_logged`.
+- **False positives on confidence.** The "content depth" signal is heuristic — minimal files are flagged Medium-confidence. Some legitimate "the doc is short because the bet is small" cases will get flagged. Watch suppression patterns; if a check is suppressed > 50% of the time, it's a bad check, not a bad team — rewrite it.
+- **Hand-edited scan reports** — anti-pattern; next scan overwrites. Suppressions are preserved by finding ID, not by hand-edit. If users start hand-editing reports, they're trying to express something the suppression model can't — add it as a first-class field.
+- **Scanner role drift.** Scanner is supposed to be read-only. If a future change has Scanner writing to product artifacts (brief, architecture, runbook), that breaks the model. Owners decide; scanner informs.
+- **Production Ready phase is new.** Existing in-flight bets won't have runbook/SLO/monitoring. First scan against any current bet will likely produce 5-8 Production Ready findings. Expect a triage wave; treat it as the value of the scanner, not noise.
+- **Aggregate posture in `/metrics`** can become a dashboard people optimize for instead of fix root causes for (Goodhart). If "critical findings count" becomes the metric, watch for teams gaming via suppression. The suppression rationale audit is the counter — if rationales become rote, the gate is failing.
+
+---
+
 ### 2026-05-24 — No time-bound plan; outputs didn't feed forward to scheduling
 
 **Friction:** The portfolio gave us a *logical* plan (dependency graph showing which bet depends on which). What it didn't give us was a *temporal* plan — when each bet starts, when it ends, who's on it, which streams run in parallel on the calendar. And while each workflow did load prior artifacts (architecture loads product bet, brief loads portfolio, etc.), the "output → input to next phase's plan" linkage was implicit in the read order, not explicit anywhere. Practical fallout: "when can we ship the MVP?" was unanswerable in concrete dates; the portfolio's parallel-build candidates sat unused because no calendar showed when each stream actually started; estimates never tightened because they lived in someone's head, not in an artifact; slip detection was reactive ("someone noticed we missed the date") rather than computed (the plan would have shown the slip the day after a phase finished late).

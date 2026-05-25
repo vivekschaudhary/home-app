@@ -30,7 +30,7 @@ Artifacts the framework produces live in `docs/`:
 
 Reviewer findings are real. Disputes go to PM, not auto-resolved by either tool.
 
-## The 12 roles
+## The 13 roles
 
 | Role                                       | Where defined                           |
 | ------------------------------------------ | --------------------------------------- |
@@ -46,10 +46,11 @@ Reviewer findings are real. Disputes go to PM, not auto-resolved by either tool.
 | Security Reviewer (Codex)                  | `compass/roles/security-reviewer.md`    |
 | Tech Writer                                | `compass/roles/tech-writer.md`          |
 | Project Manager                            | `compass/roles/project-manager.md`      |
+| Scanner (read-only; produces findings)     | `compass/roles/scanner.md`              |
 
 Load the role's full definition when playing it. Do not pattern-match — read the file.
 
-## The 15 workflows
+## The 16 workflows
 
 | Workflow                            | Command                 | Where defined                                        |
 | ----------------------------------- | ----------------------- | ---------------------------------------------------- |
@@ -59,6 +60,7 @@ Load the role's full definition when playing it. Do not pattern-match — read t
 | Create a new bet (brief)            | `/create-brief`                   | `compass/workflows/create-brief.md`                  |
 | Create bet-level architecture       | `/create-bet-architecture`        | `compass/workflows/create-bet-architecture.md`       |
 | Refresh the living project plan     | `/plan`                           | `compass/workflows/plan.md`                          |
+| Continuous quality scanner          | `/scan`                           | `compass/workflows/scan.md`                          |
 | Create a story under a bet          | `/create-story`         | `compass/workflows/create-story.md`                  |
 | Build a story                       | `/build <story-id>`     | `compass/workflows/build.md`                         |
 | Fix a bug                           | `/fix <ticket-or-text>` | `compass/workflows/fix.md`                           |
@@ -113,6 +115,19 @@ Every bet has an outcome: `won | learning | inconclusive`.
     - **Open questions or risks** (only if applicable)
 
     No walls of prose. No multi-paragraph narration. Use tables for lists, bullets for steps, code blocks for commands. The user should be able to scan the response in under 10 seconds and know exactly what to do next.
+
+13. **Continuous quality scanning with confidence levels** — Compass runs a **Snyk-style scanner** across six SDLC phases. The scanner produces **findings, not failures**: each finding has severity (Critical / High / Medium / Low) + confidence (High / Medium / Low) + location + reason + fix. Suppressions, not overrides — every suppression logged in DRI with rationale; some Critical findings are non-suppressible (e.g., PII without privacy review, missing legal review on T&C changes). **All measurement is automatic** — derived from artifact existence, content depth, CI data, or MCP corroboration. No manual self-assessment.
+
+    The **six phases** the scanner covers:
+
+    1. **Product** (Discovery) — brief, research, defensibility, HITL approval
+    2. **Architecture** — decision, alternatives, reversibility, cross-system review, test strategy, rollout
+    3. **Build** — AC↔test mapping, layer coverage, E2E, BLOCKERs, security review, architect compliance, perf budget
+    4. **Production Ready** *(new in v0.2 — previously silent in Compass)* — runbook, SLO, monitoring, rollback, on-call, backup, cost, compliance
+    5. **GTM** — user docs, API docs, sales, support, pricing, launch comms, customer comms, legal
+    6. **Operate** — measurement cron, SLO breach, incident rate, adoption, cost actuals, defect rate, outcome resolved
+
+    Phases are NOT strictly sequential — a bet can be "Built" but not yet "Production Ready"; the scanner tracks each phase independently. Check catalog lives in `compass/workflows/scan.md` (single source of truth). Owners decide; the scanner informs.
 
 ## HITL levels
 
