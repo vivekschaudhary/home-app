@@ -22,26 +22,60 @@ A markdown-based framework that any AI tool can read. The framework lives in `co
 
 ## The flow
 
+17 workflows, grouped by **when you reach for them**. Several Observe workflows are auto-invoked by others — marked `[auto]` and rarely called by hand.
+
+### 1. Bootstrap — once per project
+
+Sequenced. Run in order on a new repo.
+
 ```
-/setup-product                  → Foundation product bet (PM)
-/setup-foundation-architecture  → Foundation architecture bet (Enterprise/Solution Architect)
-/create-bet-portfolio           → MVP bet wedge — 3-6 stub briefs + dependency graph (PM + Researcher; bootstrap-only)
+/setup-product                  → Foundation product bet (PM + Researcher)
+/setup-foundation-architecture  → Foundation architecture bet + data model (Enterprise Architect)
+/create-bet-portfolio           → MVP wedge: 3-6 stub briefs + dependency graph (PM + Researcher)
+```
 
-/create-brief                   → A new bet — fresh OR promote portfolio stub (PM + Researcher)
+### 2. Plan — per bet
+
+Define what a bet is, design it, decompose into shippable slices.
+
+```
+/create-brief                   → New bet — fresh OR promote portfolio stub (PM + Researcher)
 /create-bet-architecture        → Bet-level technical strategy (Architect + Enterprise Arch)
-/create-story        → A shippable slice under the bet (PM)
-/build <story>       → Implement (Engineer + Codex review + Architect compliance)
-/fix <ticket>        → Bug flow (Support → Engineer → Codex)
-/triage <alert>      → Incident response (Engineer + Support + PO awareness)
-/ops <change>        → Infra / config / non-code changes (Enterprise Arch + Codex)
+/create-story                   → One shippable slice under the bet (PM, +Designer/UX Writer if UI)
+```
 
-/advance             → Move current work to next phase (auto-runs /scan + /plan + /dashboard)
-/scan <bet>          → Continuous quality scanner — findings across 6 SDLC phases (Snyk-style)
-/status              → Project Manager's rolling status
-/plan                → Refresh the living project plan (dates + dependencies)
-/dashboard           → Generate docs/dashboard.html — single-file browser view of all living artifacts
-/metrics             → Top-down view: foundation → OKR → feature → engineering + open findings
-/measure <bet>       → Cron-driven check-ins toward bet outcome
+### 3. Execute — per story / event
+
+Do the work. Build for stories; the others for the reactive cases.
+
+```
+/build <story>                  → Engineer implements + Codex reviews + Architect compliance
+/fix <ticket>                   → Bug flow (Support → Engineer → Codex)
+/triage <alert>                 → Incident response (Engineer + Support + PO awareness)
+/ops <change>                   → Infra / config / non-code changes (Enterprise Arch + Codex)
+```
+
+### 4. Navigate — drives flow
+
+The single command that progresses work and triggers the visibility chain.
+
+```
+/advance                        → Move active work to next phase
+                                  (auto-runs /scan + /plan + /dashboard)
+```
+
+### 5. Observe — rolling visibility
+
+You invoke `/status`, `/scan`, `/metrics` on demand. `/plan`, `/dashboard`, `/measure` typically run themselves.
+
+```
+/status                         → Project Manager's rolling status
+/scan <bet>                     → Snyk-style continuous quality scanner — 6 SDLC phases
+/metrics                        → Outcomes (won/learning/inconclusive) + open-findings posture
+/plan                  [auto]   → Living time-bound schedule (refreshed by /advance)
+/dashboard             [auto]   → Single-file HTML view of all living artifacts
+                                  (refreshed by /scan, /metrics, /plan, /status)
+/measure <bet>         [cron]   → Cron-driven bet outcome resolution
 ```
 
 ## Get started
