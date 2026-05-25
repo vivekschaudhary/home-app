@@ -186,3 +186,25 @@ Initial release. 72 files. 12 roles, 13 workflows, 10 templates, 3 cross-cutting
 ### Notes
 - **Zero-toolchain.** No Node, no Python, no Pandoc, no `node_modules`. AI agent (Claude running `/dashboard`) reads markdown reports and inlines them into the HTML template via the Write tool. Browser renders client-side from CDN-loaded dependencies.
 - **Mermaid diagrams** (dependency graphs, ERDs, future Gantt) inside the inlined markdown render as actual diagrams in the dashboard — same Mermaid that GitHub/Confluence render.
+
+## [0.2.2] — 2026-05-24
+
+### Changed
+- **`docs/dashboard.html` now gitignored by convention.** Added to the Compass framework's root `.gitignore` and documented the same recommendation in `SETUP.md` for consuming projects. First real `/dashboard` run produced a ~2500-line HTML file inlining 9 artifacts; every `/scan`, `/plan`, `/metrics`, `/status` rewrites it. Committing produced large, non-meaningful diffs that grow linearly with project size and risked review fatigue masking real template bugs.
+
+### Added
+- Explicit rule in the dashboard workflow notes + improvements log: **gitignore only pure views derived from other tracked files with no user-relevant state of their own.** Dashboard fits; other living artifacts (`plan.md` with refinement log, `scan-report.md` with suppressions, dated metrics snapshots, `status.md` history) stay tracked because they carry user state.
+- Root `.gitignore` created (didn't exist before).
+
+## [0.2.3] — 2026-05-25
+
+### Changed
+- **`/dashboard` workflow now forbids silent summarization.** First real `/dashboard` run in a consuming project (aura-app) produced a 42 KB HTML file with 4 of 9 artifacts silently summarized ("executive summaries of the larger sections") to "keep file size manageable." That's a spec violation, not an optimization — summaries make the dashboard a second source of truth that drifts from the underlying markdown. Workflow step 7 now says verbatim is **load-bearing**: do NOT summarize, do NOT truncate, do NOT reword (even for clarity). The only permitted transformation is escaping `</script>` to `<\/script>` inside inlined content.
+
+### Added
+- New Verification item in `/dashboard`: every inlined artifact must match source byte-for-byte. Spot-check by `diff`-ing inlined blocks against source `.md` files.
+- New anti-pattern in dashboard workflow Notes: "Silent summarization is the failure mode." Names the framing trap ("small file is reviewable") and points at `/dashboard --summary` as a future opt-in if size genuinely becomes a problem.
+
+### Notes
+- **No `--summary` flag added yet.** Deferred until real friction emerges at very large project scale (30+ bets, hundreds of artifacts). Don't pre-build escape hatches before the constraint has been tested.
+- **No other workflows touched.** `/scan`, `/metrics`, `/plan`, `/status`, `/advance`, `/create-bet-portfolio` are unaffected; the fix is strictly inside `dashboard.md`.

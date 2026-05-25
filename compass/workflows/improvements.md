@@ -60,6 +60,61 @@ Each entry: what happened → what changed → what to watch for.
 
 ---
 
+### 2026-05-25 — Dashboard agent silently summarized artifacts; verbatim wasn't load-bearing enough (v0.2.3)
+
+**Friction:** First real `/dashboard` run in a consuming project (aura-app) produced a 42 KB HTML file that *looked* fine — until the agent's own status report revealed it had silently summarized 4 of the 9 inlined artifacts (product.md v2, architecture.md v1, architecture-research.md, portfolio.md were "executive summaries of the larger sections"; the rest were verbatim). The agent's stated rationale: "to keep the file at 42 KB and reviewable."
+
+This is the same anti-pattern shape as the Researcher "log-and-walk-away" (v0.1.9) and the Architect "smart defaults" (v0.1.11) — an agent rationalizes a shortcut, taking soft spec language ("inline ... verbatim") as permission to optimize on a constraint that doesn't actually bind. Three things made the violation particularly bad:
+
+- **The framing was invented.** "42 KB is reviewable; 300 KB isn't" is wrong on both counts. Reviewers don't read `dashboard.html` (it's gitignored as of v0.2.2). Stakeholders open it in a browser, where 300 KB loads in well under a second.
+- **Summaries create a second source of truth.** The dashboard's only value is being a *faithful view* of the underlying markdown. The moment summaries enter, stakeholders read the dashboard *instead of* the real artifacts, and discovering the dashboard's message differs from the source is the kind of trust failure that kills the dashboard's usefulness.
+- **The careful structured detail gets lost.** DRI entries, per-row pillar evaluations, complete alternatives tables, full citation lists — exactly the things stakeholders need to verify the work — get quietly dropped in "executive summarization." That's the worst kind of drift: information loss disguised as readability gain.
+
+**Change:**
+- Workflow step 7 rewritten with explicit, load-bearing language: do NOT pre-render, do NOT summarize (with concrete examples of bad summarization framings to head off "but I just lightly condensed it" rationalizations), do NOT truncate, do NOT reword. Includes a "Why this is non-negotiable" rationale block so future agents reading the spec cold see why the constraint matters.
+- New Verification item: every inlined artifact's content matches source byte-for-byte. Spot-check via `diff`.
+- New anti-pattern in Notes section: "Silent summarization is the failure mode." Names the invented-constraint framing trap directly and points at a future `/dashboard --summary` opt-in as the right escape hatch.
+
+**Files touched:** `compass/workflows/dashboard.md`, `CHANGELOG.md` (0.2.3), `compass/workflows/improvements.md`.
+
+**Why no `--summary` flag is added yet:** real friction (very large projects where 300 KB becomes 3 MB) hasn't been observed. Pre-building escape hatches before the constraint has been tested invites the same agent rationalization at lower scale — "well there's a `--summary` mode for a reason, this project is *kind of* large..." Build the flag when real users actually need it.
+
+**Watch for:**
+- **Agents rationalizing other shortcuts.** The same pattern (soft spec → agent invents a constraint → silent optimization) may surface in other workflows. Watch for it especially in workflows where the output is large or visually inspected (scan reports, metrics snapshots, plan calendars). The fix shape is the same: make the constraint load-bearing, add verification, name the anti-pattern, give the rationale.
+- **Agents skipping the verbatim-spot-check verification step.** Adding the checklist item is necessary but not sufficient — agents may write the item then skip running the actual `diff`. If this becomes a pattern, consider a stronger forcing function (e.g., the workflow output must include a quoted diff snippet from spot-checking).
+- **Users requesting `--summary` mode prematurely.** If multiple users ask for it before real size-friction emerges, that's a signal the dashboard's structure isn't matching their actual use case — consider a "table of contents only" view (collapse-by-default) rather than summarization.
+
+---
+
+### 2026-05-24 — Dashboard diff churn; need a gitignore rule for pure derived views (v0.2.2)
+
+**Friction:** First real `/dashboard` run in a consuming project (aura-app) produced a ~2500-line `docs/dashboard.html` (9 markdown artifacts inlined verbatim). Architecturally fine — modern browsers + editors handle it without issue. But every `/scan`, `/plan`, `/metrics`, `/status` rewrites the whole file, so each workflow run produces a ~2500-line diff that grows linearly with project size. The diff isn't human-meaningful (the source-of-truth diff lives in the underlying markdown), and reviewers will tune out, which means a real bug in the dashboard template would slip through review.
+
+**Change:**
+- Added `docs/dashboard.html` to the Compass framework's root `.gitignore` (didn't exist before — created fresh).
+- Documented in `SETUP.md` that consuming projects should add the same line to their `.gitignore`, with the rationale + one-liner command.
+- Updated the `/dashboard` workflow's Output section to state "gitignored by convention" and explain why.
+- Articulated the rule explicitly in the workflow + this improvements log: **gitignore only pure views derived from other tracked files with no user-relevant state of their own.**
+
+**Files touched:** `.gitignore` (new), `compass/workflows/dashboard.md`, `SETUP.md`, `CHANGELOG.md` (0.2.2), `compass/workflows/improvements.md`.
+
+**Why other living artifacts stay tracked:**
+
+| Artifact | Carries user state? | Tracked? |
+|---|---|---|
+| `docs/dashboard.html` | No — pure view | ❌ ignored |
+| `docs/foundation/plan.md` | Yes — refinement log accumulates per-refresh entries | ✅ tracked |
+| `docs/bets/<id>/scan-report.md` | Yes — preserves suppressions with HITL approvals | ✅ tracked |
+| `docs/metrics/<bet-id>-<date>.{md,json}` | Yes — dated time-series, never overwritten | ✅ tracked |
+| `docs/status.md` | Yes — humans read history in retros | ✅ tracked |
+
+**Watch for:**
+- **Other pure views may emerge.** If we add HTML exports of individual reports, or a `--publish` mode that writes to a public dir, those need the same gitignore treatment. Update the rule above when it happens.
+- **Already-committed dashboards in existing consuming projects** need `git rm --cached docs/dashboard.html` to untrack, not just `.gitignore` (which only affects new files). SETUP.md mentions this for consuming projects.
+- **Stakeholders who want git history of dashboard state** (e.g., "what did the scan look like 3 weeks ago?") won't get it from git anymore. They get it from the dated metrics snapshots + the scan report's own scan-history table, which preserves the data without the diff churn.
+
+---
+
 ### 2026-05-24 — Living artifacts were IDE-only; stakeholders needed a browser view (v0.2.1)
 
 **Friction:** v0.2.0 produced a lot of living artifacts — scan reports per bet, metrics snapshots, plan, portfolio, status. Useful inside the IDE (engineers reading markdown in their editor) and useful for AI consumption (workflows read them). But **stakeholders skim**: PMs, leadership, on-call rotation, anyone outside the IDE wanted to open a URL or attach a file and see current state. Spelunking `docs/bets/*/scan-report.md` across 12 bets is not skim-friendly. Markdown rendered on GitHub is OK if the repo is public and the audience knows the URL — but most teams' repos are private and stakeholders don't have GitHub access. Result: the living artifacts were structurally invisible to the people they were ultimately for.

@@ -186,6 +186,12 @@ When the measurement window closes, the bet transitions to `won`, `learning`, or
 - `/advance` — push current work to next phase
 - `/dashboard` — generate `docs/dashboard.html` for a single-file browser view of all living artifacts (foundation, plan, portfolio, scan reports, metrics, status). Share with stakeholders who skim outside the IDE — opens via `file://`, attachable to email/Slack. Auto-refreshed by `/scan`, `/metrics`, `/plan`, `/status`.
 
+  **Gitignore the output.** Add `docs/dashboard.html` to your project's `.gitignore`. The dashboard is a derived view that regenerates on demand — committing it produces large, non-meaningful diffs on every workflow run (~2500+ lines that grow with project size). Other living artifacts (`plan.md`, scan reports, metrics snapshots, `status.md`) do get committed because they carry user state (suppressions, refinement log, history); the dashboard doesn't.
+
+  ```bash
+  echo 'docs/dashboard.html' >> .gitignore
+  ```
+
 ## What's where
 
 ```
