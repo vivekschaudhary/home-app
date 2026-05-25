@@ -32,6 +32,7 @@ Surfaces current state of all in-flight work. Invokes Project Manager role.
    - Notable risks
    - Plan freshness flag if `last_refreshed` is stale
    - Brief health summary
+5. **Auto-run `/dashboard`** to refresh `docs/dashboard.html` so the latest status is visible in the browser view.
 
 ## Output
 

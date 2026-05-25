@@ -26,6 +26,7 @@ Top-down view: foundation → OKR → feature → story → engineering metrics.
    - DRI risk/issue rollups
 3. **Surface trends** — always: deltas over the chosen window (including findings trends — Critical count, time-to-remediate)
 4. **Cache snapshots** to `docs/metrics/<bet-id>-<date>.{json,md}`
+5. **Auto-run `/dashboard`** to refresh `docs/dashboard.html` so the latest metrics snapshot is visible in the browser view. Skip only if `docs/foundation/product.md` is missing.
 
 ## Output format
 

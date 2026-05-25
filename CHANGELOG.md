@@ -169,3 +169,20 @@ Initial release. 72 files. 12 roles, 13 workflows, 10 templates, 3 cross-cutting
 ### Fixed
 - Closed the "what gates production?" gap. Compass v0.1 had no explicit Production Ready phase — runbook, SLO, monitoring, rollback, backup, on-call, cost, compliance lived as vague intentions across role docs or in nobody's responsibility. v0.2 makes Production Ready a first-class scanned phase with eight checks, several non-suppressible for regulated data.
 - Closed the "rubric vs scanner" framing gap. Previous quality-checklist patterns in workflow verification gates were checklists the owner self-applies (boolean: did I do this?). The scanner replaces that for SDLC-wide quality with a Snyk-shaped output engineers already trust — findings with locations, fixes, severity, confidence, suppression with rationale.
+
+## [0.2.1] — 2026-05-24
+
+### Added
+- **`/dashboard` workflow** + **`docs/dashboard.html`** single-file browser view of all living Compass artifacts (foundation, plan, portfolio, scan reports, metrics, status). One self-contained HTML file. Opens via `file://`. Shareable as an attachment. Six tabs, marked.js + mermaid.js via jsDelivr CDN. CORS-safe — markdown content inlined at generation time, no `fetch()` of local files.
+- New template `compass/templates/dashboard.html.template` with `<!-- COMPASS-INSERT:* -->` markers the `/dashboard` workflow fills in.
+- New skill `.claude/skills/dashboard/SKILL.md`.
+- Project Manager role gained `/dashboard` ownership (fits the rolling-visibility mandate alongside `/status` and `/plan`).
+
+### Changed
+- **`/scan`, `/metrics`, `/plan`, `/status` auto-invoke `/dashboard`** as their final step. `/advance` triggers it transitively via its `/plan` step. Browser view never goes stale during normal workflow usage.
+- AGENTS.md workflow count: 16 → **17**.
+- README.md flow diagram + SETUP.md "Anytime" section mention `/dashboard` for stakeholder sharing.
+
+### Notes
+- **Zero-toolchain.** No Node, no Python, no Pandoc, no `node_modules`. AI agent (Claude running `/dashboard`) reads markdown reports and inlines them into the HTML template via the Write tool. Browser renders client-side from CDN-loaded dependencies.
+- **Mermaid diagrams** (dependency graphs, ERDs, future Gantt) inside the inlined markdown render as actual diagrams in the dashboard — same Mermaid that GitHub/Confluence render.

@@ -72,7 +72,7 @@ If any unchecked, workflow is NOT complete. **HITL approval cannot pass while an
 - `docs/foundation/portfolio.md` with status `proposed` → `approved` after HITL
 - 3-6 stub briefs at `docs/bets/<bet-id>/brief.md` with `portfolio_stub: true` (each with a default `estimate` block: `duration_weeks: 2, confidence: low, refined_by: stub`)
 - Mirrored to ticketing system per config
-- **After portfolio HITL approval, run `/plan`** to seed `docs/foundation/plan.md` with the initial time-bound schedule (coarse dates from dep graph + default 2-week durations). `/plan` will then refresh automatically on every `/advance` as estimates sharpen.
+- **After portfolio HITL approval, run `/plan`** to seed `docs/foundation/plan.md` with the initial time-bound schedule (coarse dates from dep graph + default 2-week durations). `/plan` will then refresh automatically on every `/advance` as estimates sharpen. (`/plan` auto-runs `/dashboard`, so the browser view will reflect the new portfolio + initial schedule immediately.)
 
 ## Refusal cases
 

@@ -50,7 +50,7 @@ Reviewer findings are real. Disputes go to PM, not auto-resolved by either tool.
 
 Load the role's full definition when playing it. Do not pattern-match — read the file.
 
-## The 16 workflows
+## The 17 workflows
 
 | Workflow                            | Command                 | Where defined                                        |
 | ----------------------------------- | ----------------------- | ---------------------------------------------------- |
@@ -61,6 +61,7 @@ Load the role's full definition when playing it. Do not pattern-match — read t
 | Create bet-level architecture       | `/create-bet-architecture`        | `compass/workflows/create-bet-architecture.md`       |
 | Refresh the living project plan     | `/plan`                           | `compass/workflows/plan.md`                          |
 | Continuous quality scanner          | `/scan`                           | `compass/workflows/scan.md`                          |
+| Generate single-file HTML dashboard | `/dashboard`                      | `compass/workflows/dashboard.md`                     |
 | Create a story under a bet          | `/create-story`         | `compass/workflows/create-story.md`                  |
 | Build a story                       | `/build <story-id>`     | `compass/workflows/build.md`                         |
 | Fix a bug                           | `/fix <ticket-or-text>` | `compass/workflows/fix.md`                           |

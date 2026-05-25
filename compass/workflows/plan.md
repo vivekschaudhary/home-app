@@ -39,7 +39,8 @@ Maintains the **living project plan** — a time-bound schedule derived from per
    - Calendar view (week-by-week markdown grid)
    - Refinement log — append one row per date that moved this run
 7. **Bump version** in plan frontmatter; set `last_refreshed: <today>`.
-8. **No HITL gate.** Plan is `status: living` always.
+8. **Auto-run `/dashboard`** to refresh `docs/dashboard.html` so the latest plan is visible in the browser view.
+9. **No HITL gate.** Plan is `status: living` always.
 
 ## Estimate model
 

@@ -35,10 +35,11 @@ A markdown-based framework that any AI tool can read. The framework lives in `co
 /triage <alert>      → Incident response (Engineer + Support + PO awareness)
 /ops <change>        → Infra / config / non-code changes (Enterprise Arch + Codex)
 
-/advance             → Move current work to next phase (auto-runs /scan + /plan)
+/advance             → Move current work to next phase (auto-runs /scan + /plan + /dashboard)
 /scan <bet>          → Continuous quality scanner — findings across 6 SDLC phases (Snyk-style)
 /status              → Project Manager's rolling status
 /plan                → Refresh the living project plan (dates + dependencies)
+/dashboard           → Generate docs/dashboard.html — single-file browser view of all living artifacts
 /metrics             → Top-down view: foundation → OKR → feature → engineering + open findings
 /measure <bet>       → Cron-driven check-ins toward bet outcome
 ```

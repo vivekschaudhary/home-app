@@ -184,6 +184,7 @@ When the measurement window closes, the bet transitions to `won`, `learning`, or
 - `/status` — what's in flight
 - `/metrics` — top-down outcomes view
 - `/advance` — push current work to next phase
+- `/dashboard` — generate `docs/dashboard.html` for a single-file browser view of all living artifacts (foundation, plan, portfolio, scan reports, metrics, status). Share with stakeholders who skim outside the IDE — opens via `file://`, attachable to email/Slack. Auto-refreshed by `/scan`, `/metrics`, `/plan`, `/status`.
 
 ## What's where
 

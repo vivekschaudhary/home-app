@@ -60,6 +60,32 @@ Each entry: what happened → what changed → what to watch for.
 
 ---
 
+### 2026-05-24 — Living artifacts were IDE-only; stakeholders needed a browser view (v0.2.1)
+
+**Friction:** v0.2.0 produced a lot of living artifacts — scan reports per bet, metrics snapshots, plan, portfolio, status. Useful inside the IDE (engineers reading markdown in their editor) and useful for AI consumption (workflows read them). But **stakeholders skim**: PMs, leadership, on-call rotation, anyone outside the IDE wanted to open a URL or attach a file and see current state. Spelunking `docs/bets/*/scan-report.md` across 12 bets is not skim-friendly. Markdown rendered on GitHub is OK if the repo is public and the audience knows the URL — but most teams' repos are private and stakeholders don't have GitHub access. Result: the living artifacts were structurally invisible to the people they were ultimately for.
+
+The user named the gap: "we should have the scan and metrics open in an html view." Extended in brainstorm to all derived/living artifacts (plan, portfolio, status too) — same audience, same shape.
+
+**Change:**
+- New `/dashboard` workflow + `compass/templates/dashboard.html.template` + `.claude/skills/dashboard/SKILL.md`.
+- Output: single self-contained `docs/dashboard.html`. Opens via `file://`. Six tabs: Foundation / Plan / Portfolio / Scan / Metrics / Status. Marked.js + Mermaid.js via jsDelivr CDN.
+- **Key implementation insight: AI agent as generator.** Compass is markdown-as-prompt for AI tools. Claude running `/dashboard` reads the markdown reports and inlines them into the HTML template via the Write tool. No Node, no Python, no Pandoc. Zero new toolchain dependencies.
+- **CORS-safe by inlining.** Browsers block `fetch()` over `file://`. Inlining markdown into `<script type="text/markdown">` blocks at generation time avoids needing a server.
+- `/scan`, `/metrics`, `/plan`, `/status` auto-invoke `/dashboard` at the end of their process. `/advance` triggers it transitively via `/plan`. The browser view never goes stale during normal workflow usage.
+- Project Manager role owns `/dashboard` (rolling-visibility mandate alongside `/status` and `/plan`).
+- AGENTS.md workflow count: 16 → 17.
+
+**Files touched:** new — `compass/workflows/dashboard.md`, `compass/templates/dashboard.html.template`, `.claude/skills/dashboard/SKILL.md`. Edited — `compass/workflows/scan.md`, `metrics.md`, `plan.md`, `status.md`, `create-bet-portfolio.md`, `advance.md`, `compass/roles/project-manager.md`, `AGENTS.md`, `CLAUDE.md`, `README.md`, `SETUP.md`, `CHANGELOG.md` (0.2.1), `compass/workflows/improvements.md`.
+
+**Watch for:**
+- **Diff churn.** Every `/scan`, `/metrics`, `/plan`, `/status` run rewrites the entire `docs/dashboard.html`. Diffs will be large because the file inlines all artifacts. Consider git-ignoring `docs/dashboard.html` if reviewers find the noise unhelpful (the file regenerates anyway).
+- **Mermaid via CDN at runtime.** ~600KB gzipped on first open. Works offline only if cached. Consider self-hosting the JS deps in the repo if offline-first becomes a requirement.
+- **Stakeholder-facing content.** Now that markdown gets surfaced to non-engineering audiences, internal-only language ("DRI", "HITL gate", "blocking_advance") may need glossing. Watch for confused stakeholder questions; consider adding a "What this means" tooltip for jargon if it becomes friction.
+- **Scale.** AI-driven HTML generation works at small/early project scale (3-6 MVP bets, ~20 living artifacts). At 30+ bets the inlined HTML becomes large and AI generation slows. At that point, replace with a Node/Python script generator — same template + COMPASS-INSERT marker convention, just faster.
+- **`/dashboard --publish <target>` is deferred.** If hosted (Confluence / Notion / GitHub Pages) becomes useful, add a publish mode that pushes via MCP. The single-file approach handles the most common need (share an attachment) first.
+
+---
+
 ### 2026-05-24 — Quality gates were rubric-shaped; engineers resent rubrics, trust scanners (v0.2.0)
 
 **Friction:** Compass v0.1 grew a lot of verification gates — each new workflow had its own checklist (Researcher must produce evidence in 3+ categories; Architect must score every stack row on 6 pillars; portfolio must have ≥1 post-MVP item; etc.). All useful, all framed as **rubrics the owner self-applies**: "did I do this?" boolean. That works at the foundational/wedge layer where the gates are big and infrequent, but it doesn't scale to SDLC-wide quality (Production Ready, GTM, Operate), and rubrics get political — they feel like grading, not informing. Meanwhile, the *Production Ready* phase was effectively silent in Compass: runbook, SLO, monitoring, rollback, on-call, backup, cost monitoring, compliance lived as vague intentions scattered across role docs, owned by nobody. Bets were getting "shipped" without runbooks; SLO files never existed; rollback was discussed in standup but never tested. Incidents revealed gaps that should have been caught structurally.

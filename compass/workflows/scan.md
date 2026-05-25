@@ -39,7 +39,8 @@ Continuous quality scanner for the product lifecycle. Modeled on Snyk / Semgrep 
 9. **Append a Scan history row** in the report.
 10. **Output summary in chat** — open-findings counts by severity, blocking status, link to full report.
 11. **Log DRI Issues** on the bet for any Critical / High findings (severity-matched).
-12. **No HITL gate on the scan itself.** HITL only applies to suppressions of Critical findings.
+12. **Auto-run `/dashboard`** to refresh `docs/dashboard.html` so the latest findings are visible in the browser view. Skip only if `docs/foundation/product.md` is missing (dashboard would refuse anyway).
+13. **No HITL gate on the scan itself.** HITL only applies to suppressions of Critical findings.
 
 ## Verification (mandatory)
 
