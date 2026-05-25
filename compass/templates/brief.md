@@ -24,6 +24,11 @@ measurement_window_days: 30
 check_in_cadence: weekly        # weekly | biweekly | monthly
 sprint_target: <sprint-id>      # optional
 area_tags: [frontend, backend, mobile, payments, etc.]
+estimate:                       # refined by /plan as phases complete (do not hand-edit)
+  duration_weeks: 2
+  confidence: low               # low | medium | high
+  refined_by: stub              # stub | brief-approval | architecture | stories | build-actuals
+  refined_at: YYYY-MM-DD
 ---
 
 # <Title>

@@ -27,6 +27,7 @@ Move the active work item to its next phase. Handles HITL gates. One call → on
 5. **Load next role's context** (`compass/roles/<role>.md`)
 6. **Execute next phase** per that role's process
 7. **Update `docs/status.md`** to reflect new phase
+8. **Auto-run `/plan`** to refresh the living project plan. The phase that just advanced is now an input to the plan for the next phase — `/plan` re-reads artifacts, recomputes dates, and appends to the refinement log. This is the load-bearing mechanic that makes "output → input" real instead of aspirational. Skip only if `docs/foundation/portfolio.md` is not yet approved (no plan exists yet to refresh).
 
 ## Special cases
 

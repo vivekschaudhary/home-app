@@ -121,3 +121,23 @@ Initial release. 72 files. 12 roles, 13 workflows, 10 templates, 3 cross-cutting
 
 ### Fixed
 - Closed the serialization gap during project bootstrap: PM was previously forced to decompose bets one-at-a-time, which meant foundational architecture had to decide knowing only bet 1's needs, teams sat idle waiting for the previous bet to clear, and cross-bet dependencies stayed invisible. The MVP portfolio surfaces the wedge upfront with a dependency graph so parallel build streams can start as soon as portfolio HITL passes.
+
+## [0.1.14] — 2026-05-24
+
+### Added
+- **`/plan` workflow** + **living `docs/foundation/plan.md`** artifact. Derived from per-bet artifacts (portfolio, briefs, architectures, stories, build state). Refreshed on every `/advance`. Sections: Currently in flight / Next up / Blocked / Done / Full schedule / Calendar view / Refinement log. Status is `living` — never `proposed` or `approved`.
+- **Estimate model** that sharpens as phases complete: stub → brief approval (scope) → architecture approval (effort) → stories (count) → build PRs (actuals). Each refinement writes a new `estimate` block to the bet's `brief.md` frontmatter (`duration_weeks`, `confidence`, `refined_by`, `refined_at`).
+- **Refinement log** in `plan.md` — every date that moves writes a row naming the triggering artifact. This is the audit trail for "output → input" causality.
+- New template `compass/templates/plan.md`.
+- New skill `.claude/skills/plan/SKILL.md`.
+- `estimate` block added to `compass/templates/brief.md` frontmatter.
+- Project Manager role gained `/plan` ownership (alongside `/status` and sprint comms).
+
+### Changed
+- `/advance` now auto-runs `/plan` as its final step. This is the load-bearing mechanic that makes "each phase's output is an input to the next phase's plan" real instead of aspirational — users don't have to remember to refresh the plan.
+- `/status` now reads `docs/foundation/plan.md` for ETAs / in-flight / next-up rather than recomputing schedule data. Adds a plan-freshness signal (`last_refreshed` age) to the health metrics.
+- `/create-bet-portfolio` Output section now points at `/plan` as the next step after portfolio HITL approval (seeds the initial schedule).
+- AGENTS.md workflow count: 14 → 15.
+
+### Fixed
+- Closed the time-planning gap: the portfolio had a *logical* plan (dependency graph) but no *temporal* plan (dates, calendar, parallel streams visible on a timeline). "When can we ship the MVP?" was unanswerable in concrete dates; parallel-build candidates sat unused; estimates never tightened; slip detection was reactive. `/plan` makes the schedule first-class and refines it as each phase's output lands.

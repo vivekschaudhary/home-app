@@ -24,6 +24,7 @@ Skills in `.claude/skills/` map 1:1 to workflows in `compass/workflows/`:
 - `/ops` — `compass/workflows/ops.md`
 - `/advance` — `compass/workflows/advance.md`
 - `/status` — `compass/workflows/status.md`
+- `/plan` — `compass/workflows/plan.md`
 - `/metrics` — `compass/workflows/metrics.md`
 - `/measure` — `compass/workflows/measure.md`
 

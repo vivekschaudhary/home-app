@@ -99,7 +99,15 @@ Output: `docs/foundation/portfolio.md` (with Mermaid dependency graph + parallel
 
 **Approve** the portfolio doc before promoting any stub.
 
-> Skip this step only if you're not bootstrapping (e.g., adding Compass to an existing project, or adding a single one-off bet to an in-flight project). For those, go straight to `/create-brief`.
+After approval, run:
+
+```
+/plan
+```
+
+Seeds `docs/foundation/plan.md` with the initial time-bound schedule (coarse dates from dep graph + default 2-week durations). The plan is a **living artifact** — it auto-refreshes on every `/advance` as estimates sharpen with each phase (brief approval refines scope; architecture approval refines effort; build start writes actuals).
+
+> Skip portfolio + plan steps only if you're not bootstrapping (e.g., adding Compass to an existing project, or adding a single one-off bet to an in-flight project). For those, go straight to `/create-brief`.
 
 ### Step 4 — promote each stub to a full brief
 

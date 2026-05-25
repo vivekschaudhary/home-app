@@ -60,6 +60,30 @@ Each entry: what happened → what changed → what to watch for.
 
 ---
 
+### 2026-05-24 — No time-bound plan; outputs didn't feed forward to scheduling
+
+**Friction:** The portfolio gave us a *logical* plan (dependency graph showing which bet depends on which). What it didn't give us was a *temporal* plan — when each bet starts, when it ends, who's on it, which streams run in parallel on the calendar. And while each workflow did load prior artifacts (architecture loads product bet, brief loads portfolio, etc.), the "output → input to next phase's plan" linkage was implicit in the read order, not explicit anywhere. Practical fallout: "when can we ship the MVP?" was unanswerable in concrete dates; the portfolio's parallel-build candidates sat unused because no calendar showed when each stream actually started; estimates never tightened because they lived in someone's head, not in an artifact; slip detection was reactive ("someone noticed we missed the date") rather than computed (the plan would have shown the slip the day after a phase finished late).
+
+The user named the deeper principle: **each phase's output should be an input to the plan for the next phase.** The plan should sharpen as evidence lands (brief approval refines scope estimate; architecture approval refines effort estimate; build start writes actuals).
+
+**Change:**
+- New `/plan` workflow + `docs/foundation/plan.md` living artifact. Status is `living` — never `proposed` or `approved`. Derived from per-bet artifacts; PM owns the rolling refresh.
+- Estimate model: each bet's `estimate` frontmatter (`duration_weeks`, `confidence`, `refined_by`, `refined_at`) sharpens through the phases — stub default 2wk → brief approval (scope-sized 1/2/4wk) → architecture approval (+1wk if arch required) → stories (count × per-story size) → build PRs merged (actuals).
+- Refinement log inside `plan.md` writes a row every time a date moves, naming the triggering artifact. This is the audit trail for "output → input" causality.
+- **`/advance` auto-runs `/plan` as its final step.** This is the load-bearing mechanic — users never have to remember to refresh the plan; every phase advance does it.
+- `/status` now reads the plan rather than recomputing schedule data; adds plan-freshness signal to health metrics.
+- `/create-bet-portfolio` Output section points at `/plan` as the immediate next step after portfolio HITL approval (seeds the schedule).
+
+**Files touched:** new — `compass/workflows/plan.md`, `compass/templates/plan.md`, `.claude/skills/plan/SKILL.md`. Edited — `compass/workflows/advance.md` (auto-trigger), `compass/workflows/status.md` (reads plan), `compass/workflows/create-bet-portfolio.md` (next-step pointer), `compass/templates/brief.md` (estimate block), `compass/roles/project-manager.md`, `AGENTS.md`, `CLAUDE.md`, `SETUP.md`, `README.md`, `CHANGELOG.md` (0.1.14), `compass/workflows/improvements.md`.
+
+**Watch for:**
+- **Hand-editing `plan.md`** — anti-pattern; the next `/plan` run will overwrite. If users start hand-editing, they're probably trying to express something the estimate model can't capture (custom override, manual lock). Watch for it and consider an `override` field on the bet's `estimate` block rather than letting plan-edits land.
+- **Stale plan + `/status` divergence** — if `/advance` is bypassed (user edits artifact status directly), the plan goes stale and `/status` flags it. If this becomes common, consider adding a hook that fires `/plan` on any artifact `status:` change, not only on `/advance`.
+- **Estimate accuracy** — the default duration_weeks (2 for stub; 1/2/4 for small/medium/large brief; +1 for architecture; 3 days per story) are coarse heuristics. After a few projects, look at refinement log → actuals deltas and tune. Don't tune from a single project.
+- **Auto-trigger from `/advance` may be noisy** if `/advance` is called many times per day. Acceptable for now (plan refresh is cheap). If it gets expensive at scale (large bet count + git+MCP reads each time), consider debouncing or marking the plan stale instead of refreshing eagerly.
+
+---
+
 ### 2026-05-24 — Bootstrap forced bets serial; teams idle, deps invisible
 
 **Friction:** The methodology said "PM decomposes bets one at a time." That's correct in steady state — ship a bet, learn, file the next. But for new projects, the MVP is rarely one bet — it's typically a wedge of 3-6 bets (auth + core capability + persistence + engagement loop, etc.) that together form a viable product slice. Forcing them serial during bootstrap meant: foundational architecture got decided knowing only bet 1's needs (bets 2-6 then kept breaking it); teams sat idle waiting for the previous bet to clear; cross-bet dependencies stayed invisible until they bit; no parallel build streams were possible.

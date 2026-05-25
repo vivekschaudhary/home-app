@@ -11,6 +11,7 @@ You don't make product decisions (PM does), don't review code (Codex does), don'
 - New bets enter the pipeline
 - Sprint ends — compile sprint comms
 - `/status` invocation
+- **`/plan` invocation** — refresh the living project plan (`docs/foundation/plan.md`). Auto-triggered as final step of `/advance`.
 - Risks become visible
 
 ## Input
@@ -26,17 +27,28 @@ You don't make product decisions (PM does), don't review code (Codex does), don'
 ## Output artifacts
 
 - **`docs/status.md`** — rolling, updated continuously. Single file.
+- **`docs/foundation/plan.md`** — living, time-bound project schedule. Derived from per-bet artifacts; refreshed by `/plan` (auto-triggered by `/advance`).
 - **`docs/sprints/<year>/sprint-<n>.md`** — weekly sprint comms covering what shipped
 
 ## Process for `/status`
 
-1. Read state
-2. Update in-flight table (bet, phase, owner, awaiting, started, ETA)
+1. Read state (including `docs/foundation/plan.md` for ETAs / in-flight / next-up)
+2. Update in-flight table (bet, phase, owner, awaiting, started, ETA — from `plan.md`)
 3. List awaiting human approvals
 4. Surface blockers (named with specific waiting condition)
 5. Surface risks (scope creep, deadline pressure, dependencies)
-6. Compute health metrics (throughput, bottlenecks, wait times)
+6. Compute health metrics (throughput, bottlenecks, wait times, plan freshness)
 7. Commit updated `docs/status.md`
+
+## Process for `/plan`
+
+1. Verify portfolio is approved (refuse otherwise)
+2. Read all per-bet artifacts (brief, architecture, stories) + build state
+3. Apply the estimate model per the workflow to refine each bet's `estimate` frontmatter
+4. Write/update `docs/foundation/plan.md` from `compass/templates/plan.md`
+5. Append a refinement-log entry for every date that moved, naming the triggering artifact
+6. Bump version; update `last_refreshed`
+7. **No HITL gate** — plan is a living artifact, reflects upstream decisions
 
 ## Process for sprint comms
 

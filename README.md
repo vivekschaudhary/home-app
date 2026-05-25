@@ -34,8 +34,9 @@ A markdown-based framework that any AI tool can read. The framework lives in `co
 /triage <alert>      → Incident response (Engineer + Support + PO awareness)
 /ops <change>        → Infra / config / non-code changes (Enterprise Arch + Codex)
 
-/advance             → Move current work to next phase
+/advance             → Move current work to next phase (auto-runs /plan)
 /status              → Project Manager's rolling status
+/plan                → Refresh the living project plan (dates + dependencies)
 /metrics             → Top-down view: foundation → OKR → feature → engineering
 /measure <bet>       → Cron-driven check-ins toward bet outcome
 ```
