@@ -28,7 +28,7 @@ Engineer implements an approved story. Codex reviews. Architect compliance enfor
    - Copy verbatim from copy doc
    - All states (default, empty, loading, error, success)
    - Accessibility checks if UI
-7. **Engineer runs local checks:** typecheck, lint, all test suites, format. Fix anything before opening PR.
+7. **Engineer runs local checks:** typecheck, lint, all test suites, format, **AND production build** (e.g., `pnpm build`, `npm run build`, or the framework-equivalent production target). Fix anything before opening PR. **The production build is load-bearing** — it catches issues that typecheck + unit tests genuinely can't see: bundling errors, dead-import elimination breaking runtime, env-var requirements, asset pipeline issues, monorepo workspace resolution. Opening a PR without a green production build is the failure mode that ships broken builds to staging.
 
 ### Phase 3 — Codex writes E2E
 

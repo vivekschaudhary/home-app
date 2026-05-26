@@ -208,3 +208,21 @@ Initial release. 72 files. 12 roles, 13 workflows, 10 templates, 3 cross-cutting
 ### Notes
 - **No `--summary` flag added yet.** Deferred until real friction emerges at very large project scale (30+ bets, hundreds of artifacts). Don't pre-build escape hatches before the constraint has been tested.
 - **No other workflows touched.** `/scan`, `/metrics`, `/plan`, `/status`, `/advance`, `/create-bet-portfolio` are unaffected; the fix is strictly inside `dashboard.md`.
+
+## [0.2.4] — 2026-05-26
+
+> Two fixes from real-world aura-app friction, both same anti-pattern shape (load-bearing checks that weren't load-bearing in the spec).
+
+### Changed
+- **`/build` Phase 2 step 7 + Engineer Definition of Done now require a green production build** (`pnpm build` or framework-equivalent) before opening a PR. Typecheck + unit tests genuinely can't see bundling errors, dead-import elimination, env-var requirements, asset pipeline issues, or monorepo workspace resolution. Real PR from aura-app shipped because these checks weren't required.
+- **`/create-bet-architecture` gained a foundational-stack deviation gate** (new step 7). If a bet introduces tools/services/frameworks/data stores/runtimes/dependencies not in `docs/foundation/architecture.md` Stack table, the Architect **must refuse to draft bet architecture** and tell the user to run `/setup-foundation-architecture` in amend mode first. Foundational scope decisions live at foundational level by design; bet architecture is constrained to operate within the foundational stack.
+- **`/setup-foundation-architecture` Phase A gained a 4-category signal-consultation step** (production observability / recent PR feedback / prior architectural decisions across bets / bet-architecture deviation pressure). Especially load-bearing for amend flows. Each category produces a citation OR explicit "n/a — <reason>" note. Mirrors Researcher 6-category and Architect 6-pillar enforcement shape.
+- **Architect role's Input and Definition of Done** updated to reference the foundational Stack table as canonical and require an explicit "no deviation from foundational stack" assertion (or escalation note).
+
+### Added
+- New **`ADR / Amendments` section in `foundation-architecture.md` template** — Architecture Decision Record entries with structured shape (Triggered by / What changed / Why / Reversibility / Cited signal). Required to have ≥1 entry for any foundational version > 1. The foundational arch IS the ADR ledger; no separate ADR file convention.
+- Phase A Verification gate items: signal consultation present across all 4 categories; ADR / Amendments entry required when version > 1.
+
+### Fixed
+- Closed the "Architect quietly widened the foundational stack inside a bet doc" failure mode. Bets that need new tooling now hit a refuse-and-escalate path that produces a proper foundational ADR — drift becomes structurally impossible without a recorded decision.
+- Closed the "Architect made recommendations without consulting available signal" failure mode. Same anti-pattern shape as Researcher v0.1.9 (log-and-walk-away) and dashboard v0.2.3 (silent summarization): soft spec → agent rationalization → fix is making the constraint load-bearing + adding verification + naming the anti-pattern.

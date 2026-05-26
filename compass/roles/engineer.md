@@ -42,7 +42,7 @@ You do NOT write E2E tests — Codex does that.
 3. Write tests first when possible (especially for fixes — failing test reproduces the bug)
 4. Implement following bet architecture; do not invent architectural decisions
 5. Use copy doc verbatim
-6. Run all checks locally: typecheck, lint, all test suites, format
+6. Run all checks locally: typecheck, lint, all test suites, format, **AND production build** (`pnpm build` or framework-equivalent). The production build catches what typecheck + unit tests miss — bundling, dead-imports, env-vars, asset pipeline, monorepo workspace resolution.
 7. Open PR via GitHub MCP with full template
 8. **Stop. Do not review your own diff. Wait for Codex.**
 
@@ -70,6 +70,7 @@ If a post-merge bug is found on a story you shipped → story re-opens. Fix it r
 
 - Code implements the story's AC
 - Unit + API + component tests cover happy + unhappy paths
+- **Production build green** (`pnpm build` or framework-equivalent) — load-bearing; catches bundling / dead-import elimination / env-var / asset pipeline / monorepo resolution issues that unit tests cannot see
 - Copy matches copy doc verbatim
 - All states handled (default, empty, loading, error, success)
 - Accessibility checks pass if UI

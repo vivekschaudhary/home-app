@@ -60,6 +60,41 @@ Each entry: what happened → what changed → what to watch for.
 
 ---
 
+### 2026-05-26 — Engineer skipped prod build; Architect quietly widened foundational stack (v0.2.4)
+
+**Friction:** Two real-world failures from the aura-app project surfaced on the same day, both the same anti-pattern shape.
+
+**Issue 1 — Engineer DoD missing prod build.** PR 2 opened after `pnpm typecheck` + `pnpm test` passed. Production build (`pnpm build`) was never run because it wasn't in the spec. Three downstream issues hit staging that the production build would have caught locally: bundling errors, dead-import elimination, env-var resolution. User correctly identified the missing constraint: "the story-Tests section calls for component tests but no production-build smoke test." Production build is genuinely uncatchable by typecheck + unit tests.
+
+**Issue 2 — Architect recommended without checking foundational fit or existing signal.** The bet architecture introduced new tooling without checking whether the foundational stack already had a solution, whether prior bets had decided on this, whether observability showed the actual baseline. User reframed the diagnosis crisply:
+
+> *"Ideally the arch check should be in foundational. If arch is changing or adding new tools in the bet architecture then we need to update the foundational — ADR etc."*
+
+That reframe is the load-bearing insight. The fix isn't "bet architects should consult more signal" — it's "bet architects can't unilaterally widen the foundational stack." Foundational scope is the canonical home for tooling decisions. Bet architecture is constrained to operate within it. Deviations escalate to foundational amendments with structured ADR entries.
+
+**Change:**
+
+*Issue 1 (Engineer prod-build):*
+- `/build` Phase 2 step 7: production build added as required local check, with explicit *why* (catches bundling / dead-imports / env-vars / asset pipeline / monorepo workspace resolution — things typecheck + unit tests can't see).
+- Engineer role Definition of Done: "Production build green" added as a required item.
+
+*Issue 2 (Foundational-first signal consultation + bet-arch deviation gate):*
+- `/create-bet-architecture` new step 7: **foundational-stack deviation gate.** Refuses to proceed if the bet needs tools/services/frameworks/data stores/runtimes/dependencies outside `docs/foundation/architecture.md` Stack table. Tells user to run `/setup-foundation-architecture` amend first. Logs the deviation as a DRI Issue on the bet.
+- `/setup-foundation-architecture` Phase A: 4-category signal-consultation framework (production observability / recent PR feedback / prior architectural decisions across bets / bet-arch deviation pressure). Each cite-or-mark-n/a-with-reason. Especially load-bearing on amend flows.
+- Architect role: Input list extended to call out foundational Stack table as canonical; DoD requires explicit "no deviation" assertion or escalation note.
+- `foundation-architecture.md` template: new **ADR / Amendments** section with structured entry shape (Triggered by / What changed / Why / Reversibility / Cited signal). Required to have ≥1 entry on any foundational version > 1.
+
+**Files touched:** `compass/workflows/build.md`, `compass/roles/engineer.md`, `compass/workflows/create-bet-architecture.md`, `compass/workflows/setup-foundation-architecture.md`, `compass/roles/architect.md`, `compass/templates/foundation-architecture.md`, `CHANGELOG.md` (0.2.4), `compass/workflows/improvements.md`.
+
+**Watch for:**
+
+- **The deviation gate may feel punitive at first.** Bets that genuinely need new tooling now have to round-trip through a foundational amendment. That round-trip *is the point* — but if users start trying to characterize legitimate new dependencies as "not really tooling," consider tightening the deviation-gate definition with a concrete list ("major dependency" = anything that needs a config file, runs in its own process, has its own backup strategy, or costs >$50/month).
+- **ADR sprawl.** If amendments happen frequently, the ADR section grows long. Today's inline approach is fine for small/early projects; at scale (50+ ADRs) consider splitting into `docs/foundation/adrs/<ADR-NNN>.md` files with an index in foundational arch. Defer until friction is real.
+- **Signal-consultation citations rot.** Sentry links, PR numbers, MCP URLs all decay over time. The DRI log preserves the *reasoning*; the citation is the *receipt*. If reviewers start finding dead citations during audits, add a citation-freshness sub-check to the scanner.
+- **Engineer prod-build catches a class of bug; doesn't catch all classes.** Production build verifies the build pipeline; it doesn't verify runtime correctness in a production-like environment. Future improvement: add a staging-smoke step to the build workflow (separate from prod-build) that exercises the deployed artifact. Out of scope for this round.
+
+---
+
 ### 2026-05-25 — Dashboard agent silently summarized artifacts; verbatim wasn't load-bearing enough (v0.2.3)
 
 **Friction:** First real `/dashboard` run in a consuming project (aura-app) produced a 42 KB HTML file that *looked* fine — until the agent's own status report revealed it had silently summarized 4 of the 9 inlined artifacts (product.md v2, architecture.md v1, architecture-research.md, portfolio.md were "executive summaries of the larger sections"; the rest were verbatim). The agent's stated rationale: "to keep the file at 42 KB and reviewable."

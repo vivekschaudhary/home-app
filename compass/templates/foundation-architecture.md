@@ -208,6 +208,30 @@ Findings from the 6-category architecture-research framework (see `compass/roles
 - [ ] Base configs (tsconfig, eslint, etc.)
 - [ ] `compass/config.yaml` populated with team decisions
 
+## ADR / Amendments
+
+Architecture Decision Record. **Required to have ≥1 entry for any version > 1** (every amendment writes one entry). The foundational architecture IS the ADR ledger — no separate ADR file convention.
+
+Each entry uses the shape below. ADR numbers are sequential and never reused (even if an ADR is later superseded — supersession is noted in a new ADR).
+
+### ADR-001 — <Short title> (YYYY-MM-DD)
+
+**Triggered by:** <bet ID + reason, OR foundational research finding, OR ops incident, OR external mandate>. Most commonly: a bet hit the deviation gate in `/create-bet-architecture` and needs new tooling in the foundational stack.
+
+**What changed:** <Specific changes to the foundational doc — Stack table entries added/modified, fitness functions updated, data-model conventions amended, boundaries shifted. Be concrete: "Stack table gained `Cache layer: Redis`. Fitness function for cost-per-user adjusted +$0.02/MAU to absorb Redis infra cost.">
+
+**Why:** <Decision rationale. Cite the foundational fitness function pressured (e.g., "Profile endpoint p95 350ms exceeds <200ms fitness function"). Cite the alternatives evaluated and why rejected.>
+
+**Reversibility:** <easy | medium | hard | one-way> + concrete migration / exit path. If `hard` or `one-way`, name the operational handle that would force a future amendment.
+
+**Cited signal:** <Specific sources consulted: observability MCP links, prior PR numbers, bet architecture doc paths, foundational fitness function table version. The 4 signal-consultation categories in `setup-foundation-architecture.md` step 6 are the canonical sources.>
+
+---
+
+### ADR-002 — <Next amendment> (YYYY-MM-DD)
+
+<...>
+
 ## Check-in log
 
 _Populated automatically by `/measure` cron._

@@ -16,14 +16,20 @@ Drafts bet-level technical strategy. Architect leads; Enterprise/Solution Archit
 4. **Load Enterprise/Solution Architect role context** (`compass/roles/enterprise-architect.md`) — joins always
 5. **Architect reads:**
    - Brief
-   - Foundation product + architecture docs
+   - Foundation product + architecture docs (**Stack table is the canonical list of tooling — anything outside it triggers the deviation gate below**)
    - Researcher findings
    - Existing code (read-only) for current architecture in relevant boundaries
    - Prior bet architectures (if any)
 6. **If `auto`**, Architect first decides whether architecture is needed:
    - Small change, no new boundaries, no contract change → mark `architecture_required: false` in brief, log decision, exit
    - Touches boundaries, contracts, dependencies, or invariants → proceed
-7. **Joint draft of `docs/bets/<bet-id>/architecture.md`** using `compass/templates/architecture.md`:
+7. **Foundational-stack deviation gate (load-bearing).** Before drafting bet architecture, answer: *Does this bet introduce tools, services, frameworks, data stores, runtimes, or major dependencies not in `docs/foundation/architecture.md` Stack table?*
+   - **NO** → proceed to step 8 with the existing foundational stack as the constraint.
+   - **YES** → **STOP.** Refuse to silently widen the foundational stack inside a bet doc. Tell the user explicitly:
+     > "This bet needs `<tool / service / framework>`, which isn't in the foundational stack. Run `/setup-foundation-architecture` in amend mode to add it (with an ADR / Amendments entry citing this bet as the trigger). Then resume `/create-bet-architecture <bet-id>`."
+
+     Log the deviation as a DRI Issue on the bet (severity High, owner Enterprise/Solution Architect). Do not draft bet architecture that quietly adds tooling — foundational scope decisions live at foundational level by design. Bet architecture is constrained to operate **within** the foundational stack.
+8. **Joint draft of `docs/bets/<bet-id>/architecture.md`** using `compass/templates/architecture.md`:
    - Decision (clear, unambiguous statement)
    - Context (technical situation, constraints)
    - Approach (file/module names, interfaces, data flow)
@@ -36,9 +42,9 @@ Drafts bet-level technical strategy. Architect leads; Enterprise/Solution Archit
    - Test strategy (categories)
    - Rollout (feature flag, migration, staged)
    - DRI Log
-8. **Status `proposed`** on architecture doc
-9. **HITL gate** — human reviews and marks `status: approved`
-10. **Update brief frontmatter:** `architecture_status: approved`
+9. **Status `proposed`** on architecture doc
+10. **HITL gate** — human reviews and marks `status: approved`
+11. **Update brief frontmatter:** `architecture_status: approved`
 
 ## Output
 

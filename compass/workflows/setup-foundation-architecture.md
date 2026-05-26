@@ -46,6 +46,15 @@ Scaffold-done is detected by presence of boundary folders matching the approved 
    - **Sustainability:** carbon-per-request budget or hosting-region constraints (if applicable; "not load-bearing" is a valid answer for early-stage)
    These are the architecture bet's falsification criteria.
 6. **Architecture research.** EA produces evidence across all 6 architecture-research categories (see `compass/roles/enterprise-architect.md` → "Where to research"). **"Smart default" / "team preference" is NOT a substitute** — mirrors the ban on Researcher's log-and-walk-away. Findings live in `docs/foundation/architecture.md` under "Architecture Research" OR in a standalone `docs/foundation/architecture-research.md` if substantial.
+
+   **Signal consultation (load-bearing on amend; mostly n/a on initial draft).** In addition to *external* prior-art research above, consult **existing project signal**. Especially load-bearing for amend flows (v2+) — on the initial v1 draft, most categories will be trivially "n/a — greenfield" and that's expected. The 4 canonical categories:
+
+   1. **Production observability (if applicable)** — current baselines via configured MCP (Sentry / Datadog / etc.). Current p95 / error rate / throughput for services in the foundational scope. Cite source URL or note "n/a — greenfield / no MCP configured".
+   2. **Recent PR feedback** — Codex BLOCKERs / ISSUEs in foundational scope across the last ~10 PRs. Drift patterns? Repeated mistakes? Cite PR numbers or note "n/a — no PRs yet in this scope".
+   3. **Prior architectural decisions across all bets** — search `docs/bets/*/architecture.md` for prior decisions that touch foundational scope. Reversibility flags honored? Any contradictions to flag? Cite the bet IDs or note "n/a — no bets yet".
+   4. **Bet-architecture deviation pressure** — any open bet that triggered the deviation gate (step 7 of `/create-bet-architecture`) and is waiting on this foundational amend? Cite those bet IDs. On amend, the triggering bet usually appears here.
+
+   **Each consultation produces a citation in the Decision rationale OR an explicit "n/a — <reason>" note.** Empty findings are fine; uncited consultation is the violation (same enforcement shape as Researcher 6-category and Architect 6-pillar). Anti-pattern: "n/a" without a reason — must explain why the category doesn't apply.
 7. **Derive foundational data model.** *Runs BEFORE stack choices — the DB choice should be informed by the data shape, not the reverse.* Establish the conventions every bet inherits:
    - **Core entity noun-set** — extracted from the product bet (who, what, when, transactions). Each entity traces back to a line in `docs/foundation/product.md`. Don't invent entities the product bet doesn't imply.
    - **Identity strategy** — UUID v7 / ULID / sequential / external IDs — with rationale.
@@ -76,6 +85,8 @@ Scaffold-done is detected by presence of boundary folders matching the approved 
 - [ ] Alternatives evaluated against the declared fitness functions (not generic pros/cons, not strawmen)
 - [ ] Enterprise/Solution Architect DRI has ≥1 Decision AND ≥1 Risk entry
 - [ ] Architecture-research findings present (in arch doc or `docs/foundation/architecture-research.md`)
+- [ ] **Signal consultation present** — all 4 categories (production observability, recent PR feedback, prior architectural decisions across bets, bet-architecture deviation pressure) have either a citation OR an explicit "n/a — <reason>" note. Blank cells fail. "n/a" without a reason fails.
+- [ ] **If `version > 1` (amend flow):** the `ADR / Amendments` section in `docs/foundation/architecture.md` has at least one new ADR entry for this amendment, with the triggering bet (or other source) cited.
 - [ ] Status: `proposed`
 
 If any unchecked, Phase A is NOT complete. **HITL approval cannot pass while any verification item is unchecked.**

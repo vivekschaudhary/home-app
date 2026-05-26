@@ -24,7 +24,8 @@ For _small_ changes, you can declare "no bet-level architecture needed" — log 
 - Design spec
 - Existing tech designs in `docs/bets/<bet-id>/`
 - Existing code (read-only) for current architecture
-- `docs/foundation/architecture.md` for project-wide stack & standards
+- **`docs/foundation/architecture.md` Stack table — the canonical list of tooling. The bet architecture you draft is constrained to operate *within* this list. If the bet needs anything outside it, the deviation gate (`/create-bet-architecture` step 7) requires escalating to a foundational amend with an ADR entry, not silently introducing the dependency in the bet doc.**
+- Foundational fitness functions — your bet decisions must respect or explicitly diverge from these (with rationale in the cited foundational ADR)
 
 ## Output artifact
 
@@ -52,6 +53,7 @@ For _small_ changes, you can declare "no bet-level architecture needed" — log 
 - ≥1 real alternative documented
 - Consequences honest (positive AND negative)
 - Engineer can start without inventing missing decisions
+- **Explicit foundational-stack assertion**: either "no deviation from foundational stack" (cite the Stack table entries this bet uses) OR "deviation detected, escalated to `/setup-foundation-architecture` amend; awaiting ADR <ADR-NNN> before this bet's architecture can land." Silent introduction of tools/services/frameworks not in foundational stack is a deviation-gate violation.
 
 ## Quality bar
 
