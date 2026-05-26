@@ -226,3 +226,22 @@ Initial release. 72 files. 12 roles, 13 workflows, 10 templates, 3 cross-cutting
 ### Fixed
 - Closed the "Architect quietly widened the foundational stack inside a bet doc" failure mode. Bets that need new tooling now hit a refuse-and-escalate path that produces a proper foundational ADR — drift becomes structurally impossible without a recorded decision.
 - Closed the "Architect made recommendations without consulting available signal" failure mode. Same anti-pattern shape as Researcher v0.1.9 (log-and-walk-away) and dashboard v0.2.3 (silent summarization): soft spec → agent rationalization → fix is making the constraint load-bearing + adding verification + naming the anti-pattern.
+
+## [0.2.5] — 2026-05-26
+
+> Three fixes from real-world aura-app friction (13 issues triaged → 3 Compass-relevant gaps; the other 10 were app-specific Expo/pnpm/Metro tooling concerns).
+
+### Added
+- **`/build` step 7 + Engineer DoD gained a runtime-config audit.** All public-namespace env vars (`*_PUBLIC_*` / `NEXT_PUBLIC_*` / `EXPO_PUBLIC_*` / `VITE_*` / etc.) must have explicit values for the target deploy environment. Dev-only defaults (`localhost`, mock-mode toggles) must **fail loudly at module load** rather than silently fall back. Catches the "default works in dev, app boots into broken state on real device / deployed function" failure mode that prod-build can't see.
+- **`/setup-foundation-architecture` Phase B gained a deploy-canary gate** (new step 16). After scaffolding completes, deploy a hello-world from the freshly scaffolded repo to the target environment. URL captured in `compass/config.yaml` under `ci_cd.deploy_canary_url`. If deploy fails, return to Phase A with an ADR entry naming the cause — the architecture doesn't actually deploy yet. Catches the "Turborepo + pnpm + Vercel doesn't compose; doubled output path; missing pnpm-lock; no Next.js detected" multi-round-debug failure mode that burns days mid-project.
+- **New scanner check `PROD_READY-09`: Vendor capability claims unverified for deployment context** (High severity, suppressible with DRI). Every vendor feature the architecture depends on — DB extensions, region-specific services, plan-tier features, SDK capabilities — needs a doc citation that confirms availability for the *specific* deployment context (region, SKU, plan-tier, runtime version). Not "Supabase has it" if you mean "Supabase US-East has it." Catches the `pg_uuidv7 missing in ap-south-1` class of failure.
+- `compass/config.yaml` `ci_cd` section gained `deploy_canary_url` field.
+
+### Changed
+- Phase B Verification gate updated to require deploy-canary green before workflow completes.
+- Production Ready scanner check count: 8 → 9.
+
+### Notes
+- **Out of scope (per user):** the other 10 aura-app issues — Babel runtime / Metro module resolution / React 18 vs 19 / Expo SDK pinning / pnpm strict isolation interactions — are app-specific tooling choices, not Compass's concern.
+- **Deferred:** "stack composition matrix" (issues #1, #2, #4, #5, #8 reveal a meta-pattern of foundational stack choices not composing). The deploy-canary gate catches most of this at integration time; revisit if it doesn't catch enough.
+- **Same anti-pattern as v0.2.4:** load-bearing checks that weren't load-bearing in the spec. Fix shape is consistent — explicit constraint + verification gate + named anti-pattern.

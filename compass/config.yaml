@@ -92,6 +92,11 @@ ci_cd:
   pipeline_command:       "make deploy"      # or "pnpm deploy", etc.
   deploy_on_merge:        true
   rollback_command:       "make rollback"
+  deploy_canary_url:      ""                 # set by /setup-foundation-architecture Phase B step 16.
+                                             # Hello-world deployment to the target environment that
+                                             # validates the full architecture stack actually composes.
+                                             # Empty = canary not yet run. Required to be non-empty
+                                             # before /create-brief can proceed for the first bet.
 
 # ─── DRI logging ──────────────────────────────────────────────────────
 dri:

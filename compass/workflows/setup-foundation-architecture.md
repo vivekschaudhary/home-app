@@ -110,7 +110,10 @@ Runs only when `docs/foundation/architecture.md` has `status: approved` AND scaf
 13. **Plan scaffolding** — present every file that will be created, grouped by purpose (entrypoints, configs, CI, etc.). **Wait for explicit user confirmation before writing** (the "no silent writes" pattern from `AGENTS.md` #11).
 14. **Scaffold the repo** (after confirmation): boundary folders, CI/CD configs, base configs.
 15. **Populate `compass/config.yaml`** with team decisions from Phase A.
-16. **Summarize what was written** — table of files + purpose.
+16. **Deploy canary (load-bearing).** Deploy a hello-world from the freshly scaffolded repo to the **target environment chosen in Phase A** (Vercel / Fly / Render / AWS / on-prem / wherever the foundational deployment target points). Confirm it lands and responds. Capture the URL in `compass/config.yaml` under `ci_cd.deploy_canary_url`. **If deploy fails, treat as a Phase A blocker** — the architecture choice doesn't actually deploy yet, which means a downstream feature bet will discover the same failure at the worst possible time. Loop: fix the Phase A architecture (additional ADR / Amendments entry naming what changed), re-scaffold the affected pieces, re-canary. Don't proceed to step 17 until canary is green.
+
+    *Why this is load-bearing:* foundational architecture choices that look fine on paper (Turborepo + pnpm + Vercel + Next.js; or Expo + EAS + App Store TestFlight; or Postgres + region X + extension Y) often don't compose on first contact with the actual deploy pipeline. Multi-round deploy debugging mid-project is the most expensive class of failure this gate prevents. A stack that doesn't deploy isn't a stack.
+17. **Summarize what was written** — table of files + purpose, plus the deploy canary URL.
 
 ### Phase B Verification
 
@@ -118,6 +121,7 @@ Runs only when `docs/foundation/architecture.md` has `status: approved` AND scaf
 - [ ] User explicitly confirmed the plan
 - [ ] Written-files summary table produced
 - [ ] `compass/config.yaml` populated with Phase A decisions
+- [ ] **Deploy canary green** — hello-world deployed to target environment; URL captured in `compass/config.yaml` `ci_cd.deploy_canary_url`. If deploy failed, returned to Phase A with an ADR entry naming the cause; did not proceed.
 
 ---
 

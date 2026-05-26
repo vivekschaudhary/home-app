@@ -107,6 +107,7 @@ Each check has: ID · phase · severity · confidence-derivation hints · suppre
 | PROD_READY-06 | Backup unverified (new data store + no backup/restore test in ops DRI) | Critical | No (non-suppressible) | bets introducing new data stores |
 | PROD_READY-07 | Cost monitoring absent (no cost threshold alerts configured) | Medium | Yes (owner accept) — High if cost guardrail in brief | all production-bound bets |
 | PROD_READY-08 | Compliance unverified (privacy / security / regulatory check for data category not complete) | Critical | No (non-suppressible) for PII / HIPAA / financial data | bets handling regulated data |
+| PROD_READY-09 | Vendor capability claims unverified for deployment context (every vendor feature the architecture depends on — DB extensions, region-specific services, plan-tier features, SDK capabilities — must have a doc citation that confirms availability for the *specific* deployment context: region, SKU, plan-tier, runtime version. Not just "the vendor supports it") | High | Yes (DRI with explicit "verified manually on <date>" rationale) | all bets that rely on vendor features beyond the foundational stack baseline |
 
 ### Phase 5: GTM (Go-to-Market)
 

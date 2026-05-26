@@ -60,6 +60,42 @@ Each entry: what happened → what changed → what to watch for.
 
 ---
 
+### 2026-05-26 — Three Compass gaps from a 13-issue aura-app triage (v0.2.5)
+
+**Friction:** User finished a sprint in aura-app and produced a 13-issue retrospective covering: pnpm strict isolation × Metro module resolution (#1, #2, #4, #8); React 19 vs 18.3.1 version mismatch (#5, #10); react-native-screens / safe-area-context / expo-secure-store version drift (#3, #7); missing expo-constants peer deps (#6); New Architecture app.json flag (#9); `EXPO_PUBLIC_API_BASE_URL` defaulting to localhost on real device (#11); 4+ rounds of Vercel deploy failures (#12); Supabase `pg_uuidv7` missing in ap-south-1 (#13).
+
+10 of 13 were app-specific Expo/pnpm/Metro/React tooling choices — explicitly out of scope per user ("expo and other are the app choices — we are not going into those yet"). Three issues, though, revealed Compass-shaped gaps:
+
+- **#11 — env-var default works in dev, breaks elsewhere.** Prod build passes; the app boots into a broken state because `localhost` was the default and the device can't reach it. Engineer's spec didn't require auditing for this.
+- **#12 — Vercel deploy failures discovered mid-project after multiple feature bets had started.** The foundational architecture committed to Turborepo + pnpm + Vercel + Next.js but never validated the full pipeline end-to-end. First deploy attempt was the discovery vector; took 4+ rounds of debugging (doubled output path, missing pnpm-lock, no Next.js detected, monorepo dashboard overrides interacting with vercel.ts).
+- **#13 — Supabase `pg_uuidv7` extension assumed available; missing in ap-south-1.** Architect assumed vendor capability without verifying for the specific region. Same anti-pattern shape as the broader Architect-must-consult-signal fix (v0.2.4) but at finer grain — vendor capability per *deployment context* (region/SKU/plan-tier), not just per vendor.
+
+**Change:**
+
+*Improvement 1 — env-var / runtime-config audit:*
+- `/build` step 7: added runtime-config audit block with explicit ban on silent `localhost` fallbacks. Defaults that only work in dev must throw at module load.
+- Engineer DoD: added "Runtime-config audit clean" item with the same language.
+
+*Improvement 2 — Phase B deploy-canary gate:*
+- `/setup-foundation-architecture` Phase B: new step 16 — deploy hello-world from the scaffolded repo to the target environment. If fails, return to Phase A with ADR entry. Don't proceed to summary until canary green.
+- Phase B Verification: added deploy-canary green check.
+- `compass/config.yaml` `ci_cd`: new `deploy_canary_url` field populated by the canary.
+
+*Improvement 3 — Production Ready scanner check PROD_READY-09:*
+- New scanner check: vendor capability claims must have a doc citation that confirms availability for the specific deployment context (region, SKU, plan-tier, runtime version), not just generic vendor support.
+- Severity High, suppressible with DRI rationale that includes manual-verification date.
+
+**Files touched:** `compass/workflows/build.md`, `compass/roles/engineer.md`, `compass/workflows/setup-foundation-architecture.md`, `compass/config.yaml`, `compass/workflows/scan.md`, `CHANGELOG.md` (0.2.5), `compass/workflows/improvements.md`.
+
+**Watch for:**
+
+- **Deploy canary becomes a friction point at large scale.** For complex monorepos, the canary deploy might itself take 10+ minutes. If teams start skipping it (with bad rationale), tighten with a scanner check that gates `/create-brief` until `deploy_canary_url` is non-empty. Today: enforce via the verification checklist, but allow user-override if they really know what they're doing.
+- **Runtime-config audit needs framework-aware tooling to actually enforce.** The spec says "fail loudly at module load" but Compass doesn't ship a lint rule for it. Each project's stack needs its own enforcement (e.g., `zod` schema for env vars, throwing at boot). Spec calls for the behavior; doesn't enforce mechanically. Worth a future "config helper" pattern across stacks.
+- **Vendor capability check (PROD_READY-09) is verbose to satisfy.** Every vendor feature needs a citation. If teams find this punishing for stacks with many vendor features (e.g., 20+ AWS services), the check becomes noise. Watch suppression patterns; if >50% suppressed, the check is too broad — tighten to "non-baseline vendor features" only.
+- **The deferred stack-composition matrix may surface again.** If issues like #1, #2, #4, #5, #8 keep recurring in spite of deploy-canary, the foundational arch template needs a section explicitly enumerating compatibility constraints between stack rows. Defer until evidence is clear.
+
+---
+
 ### 2026-05-26 — Engineer skipped prod build; Architect quietly widened foundational stack (v0.2.4)
 
 **Friction:** Two real-world failures from the aura-app project surfaced on the same day, both the same anti-pattern shape.

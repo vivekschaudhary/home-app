@@ -71,6 +71,7 @@ If a post-merge bug is found on a story you shipped → story re-opens. Fix it r
 - Code implements the story's AC
 - Unit + API + component tests cover happy + unhappy paths
 - **Production build green** (`pnpm build` or framework-equivalent) — load-bearing; catches bundling / dead-import elimination / env-var / asset pipeline / monorepo resolution issues that unit tests cannot see
+- **Runtime-config audit clean** — all public-namespace env vars (`*_PUBLIC_*` / `NEXT_PUBLIC_*` / `EXPO_PUBLIC_*` / `VITE_*` / etc.) have explicit values for the target deploy environment; dev-only defaults (e.g., `localhost`) fail loudly at module load when running outside dev rather than silently falling back into a broken runtime
 - Copy matches copy doc verbatim
 - All states handled (default, empty, loading, error, success)
 - Accessibility checks pass if UI

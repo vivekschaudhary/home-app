@@ -30,6 +30,10 @@ Engineer implements an approved story. Codex reviews. Architect compliance enfor
    - Accessibility checks if UI
 7. **Engineer runs local checks:** typecheck, lint, all test suites, format, **AND production build** (e.g., `pnpm build`, `npm run build`, or the framework-equivalent production target). Fix anything before opening PR. **The production build is load-bearing** — it catches issues that typecheck + unit tests genuinely can't see: bundling errors, dead-import elimination breaking runtime, env-var requirements, asset pipeline issues, monorepo workspace resolution. Opening a PR without a green production build is the failure mode that ships broken builds to staging.
 
+   **Runtime-config audit (load-bearing).** In addition to the build itself, verify:
+   - All public-namespace env vars (`*_PUBLIC_*` / `NEXT_PUBLIC_*` / `EXPO_PUBLIC_*` / `VITE_*` / etc.) have **explicit values** for the target deploy environment (`.env.production`, `.env.local` for native, or framework-equivalent).
+   - Runtime-config defaults that "just work" in dev (e.g., `localhost`, dev-only feature flags, mock-mode toggles) **fail loudly at module load** when running outside dev — not silently fall back. A `localhost` default that ships and breaks on a real device / deployed function / mobile app is the failure mode this check exists to catch. If a default would only work in dev, throw with a clear error rather than letting the app boot into a broken state.
+
 ### Phase 3 — Codex writes E2E
 
 8. **Load Reviewer role context** (`compass/roles/reviewer.md`) — Codex
