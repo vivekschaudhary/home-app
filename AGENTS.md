@@ -50,6 +50,25 @@ Reviewer findings are real. Disputes go to PM, not auto-resolved by either tool.
 
 Load the role's full definition when playing it. Do not pattern-match — read the file.
 
+## Workflow structure
+
+Every v0.3+ workflow follows the canonical shape defined in `compass/templates/workflow-template.md`. This is the structural instantiation of Principle #14 — making the constraint that "load-bearing checks must be mechanically verifiable" structural rather than aspirational.
+
+The template enforces:
+
+- **Header** — `status` (active / deprecated / experimental), `owner` role, `auto_invokes`, `invoked_by`, `version`.
+- **Purpose** — one sentence naming what the workflow does and the artifact it produces.
+- **Preconditions (workflow-level GATE)** — mechanically-checkable conditions checked once at start; each failure case has an explicit refuse-and-redirect.
+- **Roles invoked** — role files loaded during execution.
+- **Steps as gate/work/postcondition triplets** — every step has (a) a Precondition gate before the work runs, (b) the Work itself with a specific output contract, (c) a Postcondition gate that's mechanically checkable.
+- **Verification checklist (final GATE)** — mirrors every step's postcondition + workflow invariants; references cross-cutting principles (#14, #15, #16) specifically where applicable; the workflow cannot complete until every item is checked.
+- **Output summary contract** — same shape across all workflows (per principle #12); TL;DR + files-modified table + next-recommended-command + open-questions.
+- **Notes** — named anti-patterns + edge cases + migration notes.
+
+**Hardening rollout:** workflows translate to the template one at a time, deliberate pace. `/setup-product` was hardened first (v0.3.0-alpha) — already the most disciplined workflow, ideal for validating the template on the easy case before harder workflows (`/build`, `/create-brief`) translate. Each translation is structural-only by rule — same steps, same artifacts, same gates, same refusal cases.
+
+If a step genuinely resists clean triplet separation, document the friction in the workflow's Notes → Edge cases (don't bend the triplet to fit). Template ergonomics get re-evaluated periodically based on accumulated friction.
+
 ## The 17 workflows
 
 | Workflow                            | Command                 | Where defined                                        |

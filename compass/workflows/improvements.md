@@ -70,7 +70,52 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 
 ---
 
-### 2026-05-26 — `/advance` deprecated (v0.3.0) — first action on a retro-surfaced drift signal
+### 2026-05-26 — Workflow hardening template established + `/setup-product` translated (v0.3.0-alpha part 2)
+
+**Goal:** Validate that the v0.3 gate/work/postcondition template can express a real workflow without ceremony bloat or behavior change. Pick `/setup-product` first — already the most disciplined workflow (had Verification gate from v0.1.9, named anti-patterns inline). Low translation risk → ideal for validating template on the easy case before harder workflows translate.
+
+**What was done:**
+- `compass/templates/workflow-template.md` created with all required sections + inline HTML commentary explaining each section's purpose (so future translators inherit intent).
+- `compass/workflows/setup-product.md` translated step-by-step to the new template.
+- Diff against v0.2.8 setup-product confirmed: **same 9 steps, same order, same artifacts, same HITL gate, same refusal cases. No behavior changes.** Implicit preconditions made explicit (the "source material required" check was inline in old Step 4; now in workflow-level Preconditions with refuse-and-redirect). Missing postconditions added (each step now has a mechanically-checkable output, not just the v0.1.9 Verification gate at end). Cross-cutting principle references in Verification are specific — each cite points at exactly what to enforce.
+- `AGENTS.md` gained a "Workflow structure" section explaining the gate/work/postcondition pattern and pointing at the template.
+
+**What the translation surfaced (template-validation findings):**
+
+1. **Hardened length: 149 lines vs original 72 = 2.07x.** Just over the 2x hard-fail threshold the validation criteria called out. The template adds ~30 lines of fixed structural overhead per workflow (3-line triplets per step × 9 steps + new Roles/Migration/Output-contract/Anti-patterns sections + principle-referenced Verification expansion). **Fixed overhead = short workflows blow the budget; longer workflows likely fit.** /setup-product is on the shorter end of the workflow surface; /build, /create-brief, /scan are longer (90-150 lines original) and will land in much better ratios.
+
+2. **Triplet structure: mostly natural, two friction spots.**
+   - **Context-loading steps (Step 2 "Load PM role", Step 9 "Load PM role for status update")** resist clean triplet separation. The "Work" is "load this file as active context"; the "Postcondition" is "Claude understands the role" — trusted, not file-verifiable. Triplet ceremony for these steps adds 5 lines for what was a 1-line bullet. Worth tolerating (consistency wins) but a candidate for a **lighter "context-load" sub-pattern** in v0.3.0-beta.
+   - **Optional/config-gated steps (Step 7 "Mirror to Confluence/Jira")** — the Postcondition needs to handle both "epic exists" and "skip logged" cases. Triplet handled it cleanly but reads slightly clunky.
+
+3. **Cross-cutting principle references: signal, not noise — when scoped specifically.** The Verification items that reference #14, #15, #16 by number point at the exact output (e.g., "Per Principle #15 — 6-category Researcher framework: remaining 3 categories cited or n/a"). That's useful — future translators reading the workflow understand WHY the gate is mechanical. If we instead wrote "Verification per Principles #14, #15, #16" without specifics, it would be ceremony — and we'd lose the value. **Rule for translators: cite the principle AND name the specific output it enforces. No bare citations.**
+
+**Template adjustments needed (v0.3.0-beta candidates):**
+
+- **Shorten triplet ceremony for trivial steps.** Consider a single-line variant for context-loading steps: `### N. <Title> — Pre: <one-liner>. Work: <one-liner>. Post: <one-liner>.` Reserve the full triplet block for steps with non-trivial Work. Would save ~10-15 lines per short workflow. Defer until 2nd workflow translation confirms the friction is real (`/create-brief` likely the next translation).
+- **Lighter Migration section for first hardenings.** Current Migration section is 6 lines for /setup-product. After 5+ workflows have been hardened, the convention is established and Migration sections can be shorter ("Translated per v0.3.0-alpha; no behavior change" + bullet list of changes). Don't over-trim while the convention is still new.
+- **Decide whether `Output summary contract` is per-workflow or framework-wide.** It's identical across workflows (per principle #12). Could become a one-liner pointing at AGENTS.md #12 instead of repeating the contract. Defer — keep redundancy until pattern stabilizes.
+
+**Diff confirmation (behavior preservation):**
+
+| Aspect | Before (v0.2.x) | After (v0.3.0-alpha) | Changed? |
+|---|---|---|---|
+| Step count | 9 numbered Process steps | 9 numbered Steps | No |
+| Step order | Check state → PM → Researcher → Source → Draft → DRI → Mirror → HITL → status update | identical | No |
+| Roles invoked | PM, Researcher, Project Manager | PM, Researcher, Project Manager | No |
+| Artifacts produced | `product.md`, optional `research.md`, `status.md` update | identical | No |
+| HITL gate | After Verification passes | After Verification passes | No |
+| Refusal cases | 2 (proposed-pending; no source) | Same 2, now workflow-level Preconditions | Structural only |
+| Verification items | 7 | 12 (each step's postcondition mirrored + invariants + principle cites) | Structural; same enforcement, more checks made explicit |
+| Named anti-patterns | Inline in Step 3 prose | Notes → Anti-patterns section | Surfaced explicitly |
+
+**Pattern:** First v0.3 workflow hardened. Establishes the template; surfaces ergonomics friction; doesn't expand behavior. One workflow at a time per the slow-pace commitment.
+
+**Next:** Wait. Don't translate the next workflow until v0.3.0-beta ships template adjustments based on the findings above. Second translation (likely `/create-brief`) pressure-tests the template against a less-disciplined workflow — that's where the real ergonomics signal comes from.
+
+---
+
+### 2026-05-26 — `/advance` deprecated (v0.3.0-alpha part 1) — first action on a retro-surfaced drift signal
 
 **Friction:** Retro #003 (shipped hours earlier in v0.2.8) flagged `/advance: 0 uses in aura-app over 4 days of active dev` as a drift signal. The framework had been over-engineering a "canonical phase advance" command that real users don't invoke — phase transitions happen naturally via status-field flips (`proposed` → `approved` → `in-build` → `shipped`), and the elaborate auto-trigger chain we built (`/advance` → `/plan` → `/scan` → `/dashboard`) was load-bearing in the spec but irrelevant in practice.
 

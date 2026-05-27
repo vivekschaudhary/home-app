@@ -320,9 +320,13 @@ Initial release. 72 files. 12 roles, 13 workflows, 10 templates, 3 cross-cutting
 - **First *live* retro fires after improvement #20** (v0.2.8 is improvement #16; 4 more entries needed before automatic fire). The retro workflow as-written will meet reality then; today's backfilled retros are the proof-of-shape.
 - **No new role added.** Retros are owned by Project Manager (for project retros) or framework-Architect persona (for framework retros — Compass on Compass). Existing roles cover the work.
 
-## [0.3.0] — 2026-05-26
+## [0.3.0-alpha] — 2026-05-26
 
-> **`/advance` deprecated.** First action on a retro-surfaced drift signal. Convention-discovery lag = hours, not 17 improvements. Principle #14 applied recursively to framework design.
+> **Two-part alpha for the v0.3 line.** Part 1: `/advance` deprecated (first retro-driven decision, framework subtracts surface). Part 2: workflow hardening template established + `/setup-product` translated as the first validation. Together these establish v0.3 as the *hardening-by-structure* line — every workflow eventually translates to the gate/work/postcondition template.
+
+### Part 1 — `/advance` deprecated
+
+> First action on a retro-surfaced drift signal. Convention-discovery lag = hours, not 17 improvements. Principle #14 applied recursively to framework design.
 
 ### Changed
 - **`/advance` workflow deprecated.** Retro #003 (shipped in v0.2.8) flagged `/advance: 0 uses in aura-app over 4 days of active dev` as a drift signal. The framework was over-engineering a "canonical phase advance" command that real users don't invoke — phase transitions happen naturally via status-field flips, and the auto-trigger chain (`/advance` → `/plan` → `/scan` → `/dashboard`) was load-bearing in the spec but irrelevant in practice. **This is itself an instance of Principle #14 applied to framework design** — the framework designer rationalized that a canonical advance command was needed; reality showed it wasn't.
@@ -344,6 +348,19 @@ Initial release. 72 files. 12 roles, 13 workflows, 10 templates, 3 cross-cutting
 
 ### Notes
 - **No replacement command.** The whole insight from the drift signal is that this command was unneeded. Replacing it with a renamed equivalent would re-introduce the same loophole.
-- **Drift-signal-to-action lag = hours.** Retro #003 (shipped 2026-05-26) → v0.3.0 (same day). The retro cadence's promised lag-shrinking is real on its first try.
+- **Drift-signal-to-action lag = hours.** Retro #003 (shipped 2026-05-26) → v0.3.0-alpha (same day). The retro cadence's promised lag-shrinking is real on its first try.
 - **Files NOT touched:** all 3 retro archives, historical CHANGELOG entries (v0.1.14 through v0.2.8), historical improvements.md entries — they reference `/advance` as an active workflow because it *was* active when they were written. Editing history retroactively would violate the archive-immutability convention established for retros.
 - **`scanner.per_phase` config + `blocking_advance` field on scan reports retained** — they're informational signal for users reading scan reports, not enforcement mechanisms tied to `/advance`. The user (or `/build`) consumes them to decide whether to advance.
+
+### Part 2 — Workflow hardening template + `/setup-product` translated (first validation)
+
+### Added
+- **Workflow hardening template established.** New `compass/templates/workflow-template.md` defines the gate/work/postcondition structure every v0.3+ workflow adopts. Sections: Header (status / owner / auto_invokes / invoked_by / version) · Purpose · Workflow-level Preconditions (GATE) · Roles invoked · Steps as gate/work/postcondition triplets · Verification checklist (final GATE) · Output summary contract · Notes (anti-patterns + edge cases + migration). Template includes inline `<!-- … -->` commentary so future translators inherit intent.
+- **`/setup-product` hardened as first translation.** `compass/workflows/setup-product.md` rewritten to template shape. **Structural change only — same steps, same artifacts, same HITL gates, same refusal cases.** Implicit preconditions made explicit (e.g., "source material provided" was inline in old Step 4 free-text; now a workflow-level Precondition with refuse-and-redirect). Missing postconditions added (every step now has a mechanically-checkable output, not just the v0.1.9-era Verification gate at the end). Verification items now reference Principles #14 (Researcher log-and-walk-away ban), #15 (cite-or-mark-n/a for 6-category framework + 9-moat sub-framework), #16 (refuse + escalate on HITL gate failure) specifically — each cite points at the exact output it enforces, not generic ceremony.
+- **`AGENTS.md` new section "Workflow structure"** between "The 13 roles" and "The 17 workflows" — explains the gate/work/postcondition pattern, points at `compass/templates/workflow-template.md` as canonical, articulates the hardening rollout (deliberate pace, one workflow at a time, structural-only by rule).
+
+### Notes
+- **Template ergonomics observation (v0.3.0-beta candidate):** hardened `setup-product.md` is 149 lines vs original 72 = **2.07x — just over the 2x hard-fail threshold** the validation criteria called out. The template adds ~30 lines of fixed structural overhead (3-line triplets per step × 9 steps + new Roles/Migration/Output-contract/Anti-patterns sections + principle-referenced Verification expansion). Fixed overhead means short workflows blow the budget; longer workflows (e.g., `/build` at ~100 lines original) will likely fit. Full observations and v0.3.0-beta adjustment direction in `compass/workflows/improvements.md`.
+- **`/setup-product` picked first** because it was already the most-disciplined workflow (had Verification gate from v0.1.9, named anti-patterns inline). Low translation risk → ideal for validating the template on the easy case before harder workflows (`/build`, `/create-brief`) translate.
+- **No behavior changes.** Diff against v0.2.8 setup-product confirms: same 9 steps in the same order, same artifacts (`docs/foundation/product.md` + optional `docs/foundation/research.md` + `docs/status.md` update), same HITL gate, same refusal cases (now expressed as workflow-level Preconditions).
+- **v0.3 hardening rollout will proceed one workflow per session, deliberate pace** — per the slow-pace commitment from this conversation. Next candidate likely `/create-brief` (less disciplined, tests template against weaker baseline) — wait for v0.3.0-beta to ship template adjustments first.
