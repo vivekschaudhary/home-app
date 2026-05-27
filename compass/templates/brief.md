@@ -86,7 +86,7 @@ _Decomposed one at a time via `/create-story`. Each lives under `stories/<story-
 
 ## Scan summary
 
-Latest scanner posture for this bet. Full report at `docs/bets/<bet-id>/scan-report.md`. Re-run `/scan <bet-id>` to refresh. Auto-invoked by `/advance` and at phase boundaries by `/build`.
+Latest scanner posture for this bet. Full report at `docs/bets/<bet-id>/scan-report.md`. Re-run `/scan <bet-id>` to refresh. Auto-invoked at phase boundaries by `/build`.
 
 - **Last scanned:** YYYY-MM-DD HH:MM UTC
 - **Current phase:** <phase>

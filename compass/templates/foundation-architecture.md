@@ -207,6 +207,7 @@ Findings from the 6-category architecture-research framework (see `compass/roles
 - [ ] CI/CD pipeline files in place
 - [ ] Base configs (tsconfig, eslint, etc.)
 - [ ] `compass/config.yaml` populated with team decisions
+- [ ] `docs/playbooks/` directory created (with a `README.md` pointing at `compass/templates/playbook.md`). Stays empty until the team has stack-specific learnings worth capturing — populated lazily via `/measure` soft prompts when bets resolve with notable technical learnings. Future Architects consult this directory as **signal-consultation category 5** in `/setup-foundation-architecture` step 6.
 
 ## ADR / Amendments
 

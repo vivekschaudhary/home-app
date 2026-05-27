@@ -10,7 +10,6 @@ Generates a **single self-contained `docs/dashboard.html`** that renders all liv
 
 - `/dashboard` — manual full refresh
 - Auto-invoked at the end of `/scan`, `/metrics`, `/plan`, `/status`
-- Auto-invoked by `/advance` (transitively via its `/plan` step)
 
 ## State detection
 

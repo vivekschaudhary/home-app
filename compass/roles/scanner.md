@@ -17,7 +17,6 @@ You are a **read-only continuous quality scanner** for the product lifecycle —
 - `/scan <bet-id>` — manual invocation against one bet
 - `/scan --all` — aggregate posture across all active bets
 - `/scan --phase <name>` — single-phase scan across all bets
-- Auto-invoked by `/advance` before any phase transition
 - Auto-invoked by `/build` at phase boundaries (Build → Production Ready → GTM → Operate)
 - Cron-invoked per `compass/config.yaml` `scanner.cron`
 

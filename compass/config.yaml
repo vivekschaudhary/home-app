@@ -92,11 +92,26 @@ ci_cd:
   pipeline_command:       "make deploy"      # or "pnpm deploy", etc.
   deploy_on_merge:        true
   rollback_command:       "make rollback"
-  deploy_canary_url:      ""                 # set by /setup-foundation-architecture Phase B step 16.
-                                             # Hello-world deployment to the target environment that
-                                             # validates the full architecture stack actually composes.
-                                             # Empty = canary not yet run. Required to be non-empty
-                                             # before /create-brief can proceed for the first bet.
+
+  # Canary artifacts — one per deploy target in the foundational stack.
+  # Set by /setup-foundation-architecture Phase B step 16. Multi-target
+  # projects (web + mobile + service + ...) get one entry per target.
+  # Required: every target named in the foundational architecture's Stack
+  # table has a corresponding entry here with `verified_at` populated.
+  # Empty list = canaries not yet run; Phase B Verification fails.
+  #
+  # Example:
+  #   canary_artifacts:
+  #     - kind: web
+  #       url: "https://aura-web-canary.vercel.app"
+  #       verified_at: "2026-05-24T14:30:00Z"
+  #     - kind: mobile
+  #       url: "https://expo.dev/accounts/aura/projects/.../builds/abc123"
+  #       verified_at: "2026-05-26T19:15:00Z"
+  #       notes: "EAS dev-build profile; installs on iOS sim + Pixel emulator"
+  #
+  # kind: web | mobile | container | other  (free-form via `other` + notes)
+  canary_artifacts: []
 
 # ─── DRI logging ──────────────────────────────────────────────────────
 dri:

@@ -7,7 +7,6 @@ Continuous quality scanner for the product lifecycle. Modeled on Snyk / Semgrep 
 - `/scan <bet-id>` — scan one bet
 - `/scan --all` — aggregate posture across all active bets (one report per bet + aggregate roll-up in chat)
 - `/scan --phase <name>` — single-phase scan across all bets (e.g., `/scan --phase production-ready`)
-- **Auto-invoked** by `/advance` before any phase transition
 - **Auto-invoked** by `/build` at phase boundaries (Build → Production Ready, → GTM, → Operate)
 - **Cron-invoked** per `compass/config.yaml` `scanner.cron`
 
@@ -178,8 +177,8 @@ Trend: critical findings <↑|↓>X% over N sprints
 
 ## Auto-trigger contract
 
-- **`/advance`** runs `/scan` before any phase transition. If `blocking_advance: true` per the resulting report and config mode is `strict`, refuse advance and emit pointer to findings. If mode is `advisory`, warn but allow advance.
-- **`/build`** runs `/scan` at phase boundaries (Build → Production Ready, → GTM, → Operate). Same blocking semantics.
+- **`/build`** runs `/scan` at phase boundaries (Build → Production Ready, → GTM, → Operate). In `strict` mode (per `compass/config.yaml` `scanner.per_phase`), any open Critical finding blocks the phase transition; in `advisory` mode, Critical findings warn loudly and auto-log as DRI Risks.
+- The `blocking_advance` field on scan reports remains for informational purposes (e.g., consumed by `/dashboard` to surface phase-readiness state). No workflow currently *consumes* `blocking_advance` to block on it — phase transitions happen via direct status-field flips by the user, who reads the scan report to decide.
 - **Cron** runs `/scan --all` per `scanner.cron`. Posts roll-up to status channel (per config).
 
 ## Refusal cases

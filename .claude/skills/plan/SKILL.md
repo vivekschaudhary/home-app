@@ -1,6 +1,6 @@
 ---
 name: plan
-description: Refresh the living project plan (docs/foundation/plan.md) — derived from current per-bet artifacts. Auto-triggered by /advance after every phase advance. Project Manager owns it. Requires portfolio approved.
+description: Refresh the living project plan (docs/foundation/plan.md) — derived from current per-bet artifacts. Run manually after brief/architecture approval or build PR merge, or via cron per compass/config.yaml. Project Manager owns it. Requires portfolio approved.
 ---
 
 Execute the workflow at `compass/workflows/plan.md`.

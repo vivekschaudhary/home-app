@@ -1,6 +1,6 @@
 ---
 name: scan
-description: Continuous quality scanner for the product lifecycle (Snyk-style). Findings, not failures. Severity + confidence + location + reason + fix per finding. Read-only. Auto-invoked by /advance and /build at phase boundaries. Owners decide; the scanner informs.
+description: Continuous quality scanner for the product lifecycle (Snyk-style). Findings, not failures. Severity + confidence + location + reason + fix per finding. Read-only. Auto-invoked by /build at phase boundaries. Owners decide; the scanner informs.
 ---
 
 Execute the workflow at `compass/workflows/scan.md`.

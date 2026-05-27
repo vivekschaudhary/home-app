@@ -105,7 +105,7 @@ After approval, run:
 /plan
 ```
 
-Seeds `docs/foundation/plan.md` with the initial time-bound schedule (coarse dates from dep graph + default 2-week durations). The plan is a **living artifact** — it auto-refreshes on every `/advance` as estimates sharpen with each phase (brief approval refines scope; architecture approval refines effort; build start writes actuals).
+Seeds `docs/foundation/plan.md` with the initial time-bound schedule (coarse dates from dep graph + default 2-week durations). The plan is a **living artifact** — re-run `/plan` whenever you want it refreshed (after a brief is approved to refine scope, after architecture is approved to refine effort, after a build PR merges to write actuals). Cron-driven refresh available via `compass/config.yaml`.
 
 > Skip portfolio + plan steps only if you're not bootstrapping (e.g., adding Compass to an existing project, or adding a single one-off bet to an in-flight project). For those, go straight to `/create-brief`.
 
@@ -183,7 +183,6 @@ When the measurement window closes, the bet transitions to `won`, `learning`, or
 
 - `/status` — what's in flight
 - `/metrics` — top-down outcomes view
-- `/advance` — push current work to next phase
 - `/dashboard` — generate `docs/dashboard.html` for a single-file browser view of all living artifacts (foundation, plan, portfolio, scan reports, metrics, status). Share with stakeholders who skim outside the IDE — opens via `file://`, attachable to email/Slack. Auto-refreshed by `/scan`, `/metrics`, `/plan`, `/status`.
 
   **Gitignore the output.** Add `docs/dashboard.html` to your project's `.gitignore`. The dashboard is a derived view that regenerates on demand — committing it produces large, non-meaningful diffs on every workflow run (~2500+ lines that grow with project size). Other living artifacts (`plan.md`, scan reports, metrics snapshots, `status.md`) do get committed because they carry user state (suppressions, refinement log, history); the dashboard doesn't.

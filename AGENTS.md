@@ -62,12 +62,12 @@ Load the role's full definition when playing it. Do not pattern-match — read t
 | Refresh the living project plan     | `/plan`                           | `compass/workflows/plan.md`                          |
 | Continuous quality scanner          | `/scan`                           | `compass/workflows/scan.md`                          |
 | Generate single-file HTML dashboard | `/dashboard`                      | `compass/workflows/dashboard.md`                     |
+| Batch retro of improvements         | `/retro`                          | `compass/workflows/retro.md`                         |
 | Create a story under a bet          | `/create-story`         | `compass/workflows/create-story.md`                  |
 | Build a story                       | `/build <story-id>`     | `compass/workflows/build.md`                         |
 | Fix a bug                           | `/fix <ticket-or-text>` | `compass/workflows/fix.md`                           |
 | Respond to an incident              | `/triage <alert>`       | `compass/workflows/triage.md`                        |
 | Make a non-code/ops change          | `/ops <description>`    | `compass/workflows/ops.md`                           |
-| Advance work to next phase          | `/advance`              | `compass/workflows/advance.md`                       |
 | Project status                      | `/status`               | `compass/workflows/status.md`                        |
 | Top-down metrics                    | `/metrics`              | `compass/workflows/metrics.md`                       |
 | Measure a bet (cron)                | `/measure <bet-id>`     | `compass/workflows/measure.md`                       |
@@ -118,6 +118,18 @@ Every bet has an outcome: `won | learning | inconclusive`.
     No walls of prose. No multi-paragraph narration. Use tables for lists, bullets for steps, code blocks for commands. The user should be able to scan the response in under 10 seconds and know exactly what to do next.
 
 13. **Continuous quality scanning with confidence levels** — Compass runs a **Snyk-style scanner** across six SDLC phases. The scanner produces **findings, not failures**: each finding has severity (Critical / High / Medium / Low) + confidence (High / Medium / Low) + location + reason + fix. Suppressions, not overrides — every suppression logged in DRI with rationale; some Critical findings are non-suppressible (e.g., PII without privacy review, missing legal review on T&C changes). **All measurement is automatic** — derived from artifact existence, content depth, CI data, or MCP corroboration. No manual self-assessment.
+
+14. **Soft spec → AI rationalization is a vulnerability surface, not flexibility.** Anywhere an agent has interpretive room, it will exercise judgment that diverges from intent under load. Constraints described as "implied," "obvious," "best practice," "ensure," "consider," or "verify" get rationalized away. **The fix is never "tell the agent to be better."** Every load-bearing constraint requires three structural elements in the workflow file:
+
+    1. **Explicit imperative language** — "do NOT" / "must" / "required" — with the failure mode spelled out concretely (not "be careful with X" but "do NOT X; X is a spec violation, not an optimization")
+    2. **Mechanical verification gate** — a checklist item in Verification (mandatory) that blocks status advance and cannot be hand-waved
+    3. **Named anti-pattern** — the failure mode gets a short, memorable name in the workflow's Notes or Anti-patterns section so future agents reading the workflow inherit the vocabulary
+
+    Specs that depend on agent judgment will eventually be wrong. Specs with these three elements survive contact with the next invocation. **This is the foundational principle that the other hardening principles (#15, #16) instantiate.** Periodic retros (`/retro` every 5 improvements) exist precisely to surface where the framework still has interpretive room that recurred across multiple patches.
+
+15. **N-category `cite-or-mark-n/a` enforcement for structured consultation.** When a role's deliverable depends on consulting multiple kinds of evidence (research sources, architectural pillars, signal sources, UX coverage dimensions), the spec enumerates N named categories and requires each to produce **either a citation OR an explicit `n/a — <reason>` note**. **Empty cells fail. Unjustified `n/a` fails.** Current instances: Researcher 6-category (user pain / competitive / technical / quantitative / trends / moat); Architect 6 Well-Architected pillars + 6 architecture-research categories; Architect 5-category signal consultation; Story 6-category Standard Experience checklist. New roles that gather structured evidence should adopt this shape — N varies by domain, but the cite-or-n/a-with-reason enforcement is invariant.
+
+16. **Refuse + escalate to upstream artifact.** When a workflow detects an attempt to silently widen the scope of an upstream decision (foundational stack, foundational data model, foundational fitness function, portfolio scope, etc.), it **refuses to proceed** and **escalates to the workflow that owns that decision** — with a clear pointer telling the user which upstream workflow to run first. No silent in-place widening; no quietly adding a foundational decision inside a bet artifact. Current instances: Researcher refuses log-and-walk-away (escalates to filling the gap in the brief); `/setup-foundation-architecture` HITL hard gate before scaffold (escalates to user approval); foundational data model derived before DB choice (escalates DB row to cite data model); `/create-bet-architecture` deviation gate (escalates to foundational amend with ADR); `/create-story` Standard Experience checklist gates `status: ready`. Foundational decisions live at foundational level by design — refuse mechanisms make this structurally enforceable.
 
     The **six phases** the scanner covers:
 

@@ -6,8 +6,8 @@ Maintains the **living project plan** — a time-bound schedule derived from per
 
 ## Trigger
 
-- Manual: `/plan`
-- Automatic: `/advance` runs `/plan` as its final step after every phase advance.
+- **Manual:** `/plan` whenever you want the schedule refreshed — typically after a brief is approved (refines scope estimate), after architecture is approved (refines effort), after a build PR merges (writes actuals).
+- **Cron:** configurable per `compass/config.yaml` for periodic refresh.
 
 ## State detection
 
@@ -79,11 +79,9 @@ estimate:
 - `docs/foundation/plan.md` — refreshed or seeded
 - Each affected bet's `docs/bets/<bet-id>/brief.md` frontmatter `estimate` block updated
 
-## Auto-trigger contract
+## Freshness
 
-`/advance` runs `/plan` as its final step after every phase advance. This is the load-bearing mechanic that makes "each output is an input to the next phase's plan" real instead of aspirational — the user never has to remember to refresh the plan.
-
-If `/advance` is skipped (e.g., user directly edits artifact status), the plan goes stale until the next manual `/plan` invocation. `/status` (which reads the plan) will show the staleness via `last_refreshed`.
+The plan can go stale between manual `/plan` invocations. `/status` (which reads `plan.md`) surfaces staleness via the `last_refreshed` timestamp — if it's > 3 days old during active development, that's a flag to re-run `/plan`. Cron-driven refresh per `compass/config.yaml` is the recommended mechanism for keeping freshness automatic.
 
 ## Refusal cases
 

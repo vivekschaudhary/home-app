@@ -55,16 +55,7 @@ Do the work. Build for stories; the others for the reactive cases.
 /ops <change>                   → Infra / config / non-code changes (Enterprise Arch + Codex)
 ```
 
-### 4. Navigate — drives flow
-
-The single command that progresses work and triggers the visibility chain.
-
-```
-/advance                        → Move active work to next phase
-                                  (auto-runs /scan + /plan + /dashboard)
-```
-
-### 5. Observe — rolling visibility
+### 4. Observe — rolling visibility
 
 You invoke `/status`, `/scan`, `/metrics` on demand. `/plan`, `/dashboard`, `/measure` typically run themselves.
 
@@ -72,11 +63,13 @@ You invoke `/status`, `/scan`, `/metrics` on demand. `/plan`, `/dashboard`, `/me
 /status                         → Project Manager's rolling status
 /scan <bet>                     → Snyk-style continuous quality scanner — 6 SDLC phases
 /metrics                        → Outcomes (won/learning/inconclusive) + open-findings posture
-/plan                  [auto]   → Living time-bound schedule (refreshed by /advance)
+/plan                           → Living time-bound schedule (run manually or via cron)
 /dashboard             [auto]   → Single-file HTML view of all living artifacts
                                   (refreshed by /scan, /metrics, /plan, /status)
 /measure <bet>         [cron]   → Cron-driven bet outcome resolution
 ```
+
+> **Phase transitions:** flip the artifact's `status:` field directly (`proposed` → `approved` → `in-build` → `shipped` → etc.). No canonical "advance" command — that's what status fields are for.
 
 ## Get started
 

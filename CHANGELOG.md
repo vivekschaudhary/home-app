@@ -273,3 +273,77 @@ Initial release. 72 files. 12 roles, 13 workflows, 10 templates, 3 cross-cutting
 ### Notes
 - **Aura-app trigger:** PM was correct that the UX cleanups weren't just "app-specific" — they revealed a structural gap in story AC completeness. I initially miscategorized; user corrected.
 - **Out of scope (deferred from earlier triage rounds):** team playbooks signal-consultation category, stack-aware canary artifact, cross-story E2E pattern. Each warrants its own focused patch.
+
+## [0.2.7] — 2026-05-26
+
+> Two improvements promoted from earlier deferrals after the aura-app 2026-05-26 state-of-play update gave direct evidence both gaps were real.
+
+### Added
+- **Stack-aware canary artifacts.** `compass/config.yaml` `ci_cd.deploy_canary_url` (single string) → `ci_cd.canary_artifacts[]` (list of `{kind, url, verified_at, notes?}`). Kinds: `web | mobile | container | other`. Multi-target projects (web + mobile + service + …) now require one canary entry per target. Catches the "web canary green, mobile canary missing" failure mode that blocked aura-app's AC4 on the first feature bet.
+- **Team playbooks signal-consultation category.** `/setup-foundation-architecture` step 6 signal consultation gained a 5th category — search `docs/playbooks/*` for prior stack-specific learnings; cite or mark `n/a — empty directory` (valid for first-project bootstrap). Mandatory citation once the team has accumulated playbooks across projects. Same `cite-or-mark-n/a` enforcement shape as the prior 4 categories (Researcher 6, Architect 6, signal-consultation now 5, story standard-experience 6 — **5th instance of the pattern; codify in AGENTS.md when a 6th lands**).
+- **New `docs/playbooks/` convention** — per-stack-combo or per-topic learnings, distinct from per-bet runbooks and per-incident postmortems. Living artifacts; `last_validated` date bumped each re-use.
+- **New template `compass/templates/playbook.md`** — frontmatter with `stack_combo` tags, `related_bets`, `last_validated`; sections: When this applies / Symptoms / Steps / Gotchas / References / Maintainer note.
+- **`/measure` Phase 4 step 11a soft prompt** — when a bet's outcome resolves with notable technical learnings, prompt for playbook capture while the learning is freshest. Soft prompt, not gate.
+- **Foundation architecture template** Boundaries/Scaffolding now creates `docs/playbooks/` as an empty directory (with a README pointing at the template). Stays empty until learnings accumulate.
+
+### Changed
+- **`/setup-foundation-architecture` Phase B step 16** rewritten from single-URL deploy-canary to **multi-target deploy canaries** — one per deploy target in the foundational stack. Phase B Verification updated to require every target in `canary_artifacts[]` with `verified_at` populated; partial coverage fails.
+- **`/setup-foundation-architecture` Phase A Verification** updated: signal consultation is now 5 categories (was 4).
+
+### Notes
+- **aura-app evidence** for both improvements: AC4 dev-build sprint (Improvement 1); proposed 3 runbooks (`pnpm-monorepo-rn`, `vercel-pnpm-monorepo`, `expo-go-vs-dev-build`) framed as "captures today's learnings for the next Compass project" (Improvement 2).
+- **Out of scope (still deferred):** cross-story E2E pattern; stack composition matrix; playbook-coverage scanner check.
+
+## [0.2.8] — 2026-05-26
+
+> **Framework self-instrumenting.** First patch about Compass's own learning cadence rather than a specific workflow gap. Codifies the foundational pattern shaping ~70% of the framework's 15 prior improvements; institutes retro cadence; backfills 3 retros covering all prior work.
+
+### Added
+- **New `/retro` workflow + Scanner-role skill + `compass/templates/retro.md`.** Periodic batch retro of improvements, fires every 5 entries in `compass/workflows/improvements.md`. Reports patterns (positive), recurring anti-patterns (soft-spec-rationalization surfaces), convention candidates, drift signals, watch-for list. **Reports — does not prescribe.** No HITL gate.
+- **New `compass/workflows/retros/` directory convention** — archived retros (`status: archive`, immutable once written).
+- **Three backfilled retros covering improvements 1-15:**
+  - Retro #001 (v0.1.8 → v0.1.12) — surfaced N-category, refuse-escalate, soft-spec-recipe as convention-ready at improvement #5.
+  - Retro #002 (v0.1.13 → v0.2.2) — surfaced `status: living`, state-detection-table, auto-trigger-chain. Major capability expansion.
+  - Retro #003 (v0.2.3 → v0.2.7) — confirmed soft-spec-rationalization at 18+ cumulative instances; flagged `/advance: 0 uses` drift signal; flagged aura-app trigger-origin concentration risk.
+- **Three new cross-cutting principles in AGENTS.md** (now 16 principles, was 13):
+  - **#14 (foundational): Soft spec → AI rationalization is a vulnerability surface, not flexibility.** User's verbatim formulation: *"Anywhere an AI agent has interpretive room, it will exercise judgment that diverges from intent. The fix is never 'tell the AI to be better' — it's explicit constraint + mechanical verification gate + named anti-pattern in the workflow file."* This is the foundational principle that #15 and #16 instantiate. ~18 instances across the framework's history. Worst convention-discovery lag observed (17 improvements between visible and codified).
+  - **#15: N-category `cite-or-mark-n/a` enforcement** for structured consultation. 5+ instances (Researcher 6, Architect 6-pillar + 6-research, Architect signal 5-category, Story standard-experience 6, playbook frontmatter).
+  - **#16: Refuse + escalate to upstream artifact.** 5+ instances (Researcher refuse, HITL before scaffold, data model before DB, bet-arch deviation gate, Story Standard Experience gates `status: ready`).
+- **`compass/workflows/improvements.md` header** now tracks retro cadence + next-retro-fires-after counter (currently #20).
+
+### Changed
+- **AGENTS.md workflow count:** 17 → 18 (`/retro` added). Cross-cutting principle count: 13 → 16.
+
+### Notes
+- **Meta-observation:** The convention-discovery lag of v0.1.8 → v0.2.8 (17 improvements to name the dominant pattern) was the worst it will ever be. Every retro from here forward should shrink it.
+- **The user's verbatim formulation is preserved in Principle #14.** The user crystallized the pattern more precisely than the framework had named it; honoring the wording maintains attribution and accuracy.
+- **First *live* retro fires after improvement #20** (v0.2.8 is improvement #16; 4 more entries needed before automatic fire). The retro workflow as-written will meet reality then; today's backfilled retros are the proof-of-shape.
+- **No new role added.** Retros are owned by Project Manager (for project retros) or framework-Architect persona (for framework retros — Compass on Compass). Existing roles cover the work.
+
+## [0.3.0] — 2026-05-26
+
+> **`/advance` deprecated.** First action on a retro-surfaced drift signal. Convention-discovery lag = hours, not 17 improvements. Principle #14 applied recursively to framework design.
+
+### Changed
+- **`/advance` workflow deprecated.** Retro #003 (shipped in v0.2.8) flagged `/advance: 0 uses in aura-app over 4 days of active dev` as a drift signal. The framework was over-engineering a "canonical phase advance" command that real users don't invoke — phase transitions happen naturally via status-field flips, and the auto-trigger chain (`/advance` → `/plan` → `/scan` → `/dashboard`) was load-bearing in the spec but irrelevant in practice. **This is itself an instance of Principle #14 applied to framework design** — the framework designer rationalized that a canonical advance command was needed; reality showed it wasn't.
+- **`compass/workflows/advance.md`** rewritten with deprecation notice at top + migration table + historical Process section preserved for archaeology. Skill registered (don't fail silently) but the workflow now prints the migration table on invocation rather than performing any phase advance, scan, or refresh.
+- **Auto-chain references removed** from active surface across `/plan`, `/scan`, `/dashboard`, `/status`, `/create-bet-portfolio`, `/build`, Project Manager role, Scanner role, scan-report template, brief template, plan template, and `/plan` + `/scan` skill descriptions. What remains independent of `/advance`: `/build` phase-boundary auto-invocation of `/scan`; `/dashboard` auto-refresh from `/scan` + `/plan` + `/metrics` + `/status`; cron-driven `/scan` per `compass/config.yaml`.
+- **AGENTS.md workflow table:** 18 → 17 (removed `/advance` row).
+- **README.md flow diagram:** removed the "Navigate" bucket (which had `/advance` as its only member); now 4 buckets (Bootstrap / Plan / Execute / Observe). Added note: phase transitions are direct `status:` field flips — no canonical "advance" command.
+- **CLAUDE.md + SETUP.md:** removed `/advance` references.
+
+### Migration
+
+| What you used to do | What to do now |
+|---|---|
+| `/advance` to move to next phase | Flip the artifact's `status:` field directly (`proposed` → `approved` → `in-build` → `shipped` → etc.) |
+| `/advance` to refresh the plan | `/plan` directly |
+| `/advance` to run the scanner | `/scan <bet-id>` directly (auto-invoked at `/build` phase boundaries) |
+| `/advance` to refresh the dashboard | `/dashboard` directly (auto-invoked by `/scan`, `/plan`, `/metrics`, `/status`) |
+| `/advance` to see current state | `/status` directly (auto-refreshes `/dashboard`) |
+
+### Notes
+- **No replacement command.** The whole insight from the drift signal is that this command was unneeded. Replacing it with a renamed equivalent would re-introduce the same loophole.
+- **Drift-signal-to-action lag = hours.** Retro #003 (shipped 2026-05-26) → v0.3.0 (same day). The retro cadence's promised lag-shrinking is real on its first try.
+- **Files NOT touched:** all 3 retro archives, historical CHANGELOG entries (v0.1.14 through v0.2.8), historical improvements.md entries — they reference `/advance` as an active workflow because it *was* active when they were written. Editing history retroactively would violate the archive-immutability convention established for retros.
+- **`scanner.per_phase` config + `blocking_advance` field on scan reports retained** — they're informational signal for users reading scan reports, not enforcement mechanisms tied to `/advance`. The user (or `/build`) consumes them to decide whether to advance.

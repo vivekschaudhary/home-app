@@ -122,4 +122,4 @@ Choose one (and reflect the decision in the bet's DRI):
 
 ---
 
-_Living artifact — re-run `/scan <BET-ID>` to refresh. Auto-invoked by `/advance` and at phase boundaries by `/build`._
+_Living artifact — re-run `/scan <BET-ID>` to refresh. Auto-invoked at phase boundaries by `/build`._

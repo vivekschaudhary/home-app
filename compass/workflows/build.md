@@ -90,7 +90,7 @@ Invoke `/scan <bet-id>` at each phase boundary so the bet enters the next phase 
 - **Production Ready → GTM:** triggered when the Production Ready findings are resolved or suppressed. Surfaces user-docs / API-docs / sales / support / pricing / launch-comms / customer-comms / legal gaps.
 - **GTM → Operate:** triggered when GTM findings are clear. Surfaces measurement-cron / SLO-met / incident-rate / adoption / cost-actuals / defect-rate / outcome-resolved gaps.
 
-If `compass/config.yaml` `scanner.per_phase` is `strict` for the upcoming phase, any open Critical finding blocks the transition (matching `/advance` behavior). The point is to catch missing production-readiness work *before* the bet is treated as shipped, not after an incident reveals it.
+If `compass/config.yaml` `scanner.per_phase` is `strict` for the upcoming phase, any open Critical finding blocks the transition (matching the scanner's strict-mode block semantics). The point is to catch missing production-readiness work *before* the bet is treated as shipped, not after an incident reveals it.
 
 ## Story → multiple PRs
 

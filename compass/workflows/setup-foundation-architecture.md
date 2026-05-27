@@ -53,6 +53,7 @@ Scaffold-done is detected by presence of boundary folders matching the approved 
    2. **Recent PR feedback** — Codex BLOCKERs / ISSUEs in foundational scope across the last ~10 PRs. Drift patterns? Repeated mistakes? Cite PR numbers or note "n/a — no PRs yet in this scope".
    3. **Prior architectural decisions across all bets** — search `docs/bets/*/architecture.md` for prior decisions that touch foundational scope. Reversibility flags honored? Any contradictions to flag? Cite the bet IDs or note "n/a — no bets yet".
    4. **Bet-architecture deviation pressure** — any open bet that triggered the deviation gate (step 7 of `/create-bet-architecture`) and is waiting on this foundational amend? Cite those bet IDs. On amend, the triggering bet usually appears here.
+   5. **Team playbooks** — search `docs/playbooks/*` for prior stack-specific learnings relevant to this foundational scope (initial draft) or this amendment (amend flow). Match by `stack_combo` tags and topic. Each relevant playbook gets a citation in the Decision rationale. **"n/a — empty `docs/playbooks/` directory" is valid for first-project bootstrap.** Once the team has accumulated playbooks across projects, citing them is **mandatory** when stack overlap exists — playbooks are how hard-won learnings transfer between projects and Architects. Future-you reading this directory should never have to re-discover something a past sprint already learned the hard way.
 
    **Each consultation produces a citation in the Decision rationale OR an explicit "n/a — <reason>" note.** Empty findings are fine; uncited consultation is the violation (same enforcement shape as Researcher 6-category and Architect 6-pillar). Anti-pattern: "n/a" without a reason — must explain why the category doesn't apply.
 7. **Derive foundational data model.** *Runs BEFORE stack choices — the DB choice should be informed by the data shape, not the reverse.* Establish the conventions every bet inherits:
@@ -85,7 +86,7 @@ Scaffold-done is detected by presence of boundary folders matching the approved 
 - [ ] Alternatives evaluated against the declared fitness functions (not generic pros/cons, not strawmen)
 - [ ] Enterprise/Solution Architect DRI has ≥1 Decision AND ≥1 Risk entry
 - [ ] Architecture-research findings present (in arch doc or `docs/foundation/architecture-research.md`)
-- [ ] **Signal consultation present** — all 4 categories (production observability, recent PR feedback, prior architectural decisions across bets, bet-architecture deviation pressure) have either a citation OR an explicit "n/a — <reason>" note. Blank cells fail. "n/a" without a reason fails.
+- [ ] **Signal consultation present** — all 5 categories (production observability, recent PR feedback, prior architectural decisions across bets, bet-architecture deviation pressure, team playbooks) have either a citation OR an explicit "n/a — <reason>" note. Blank cells fail. "n/a" without a reason fails.
 - [ ] **If `version > 1` (amend flow):** the `ADR / Amendments` section in `docs/foundation/architecture.md` has at least one new ADR entry for this amendment, with the triggering bet (or other source) cited.
 - [ ] Status: `proposed`
 
@@ -110,9 +111,13 @@ Runs only when `docs/foundation/architecture.md` has `status: approved` AND scaf
 13. **Plan scaffolding** — present every file that will be created, grouped by purpose (entrypoints, configs, CI, etc.). **Wait for explicit user confirmation before writing** (the "no silent writes" pattern from `AGENTS.md` #11).
 14. **Scaffold the repo** (after confirmation): boundary folders, CI/CD configs, base configs.
 15. **Populate `compass/config.yaml`** with team decisions from Phase A.
-16. **Deploy canary (load-bearing).** Deploy a hello-world from the freshly scaffolded repo to the **target environment chosen in Phase A** (Vercel / Fly / Render / AWS / on-prem / wherever the foundational deployment target points). Confirm it lands and responds. Capture the URL in `compass/config.yaml` under `ci_cd.deploy_canary_url`. **If deploy fails, treat as a Phase A blocker** — the architecture choice doesn't actually deploy yet, which means a downstream feature bet will discover the same failure at the worst possible time. Loop: fix the Phase A architecture (additional ADR / Amendments entry naming what changed), re-scaffold the affected pieces, re-canary. Don't proceed to step 17 until canary is green.
+16. **Deploy canaries (load-bearing — one per target).** For **each deploy target** named in the foundational architecture's Stack table — web (URL), mobile (dev-build artifact link), container (registry image), service endpoint, or other — produce a canary that proves the stack actually composes for *that target*. Capture each in `compass/config.yaml` `ci_cd.canary_artifacts[]` with `{kind, url, verified_at, notes?}`. Kinds: `web` | `mobile` | `container` | `other`.
 
-    *Why this is load-bearing:* foundational architecture choices that look fine on paper (Turborepo + pnpm + Vercel + Next.js; or Expo + EAS + App Store TestFlight; or Postgres + region X + extension Y) often don't compose on first contact with the actual deploy pipeline. Multi-round deploy debugging mid-project is the most expensive class of failure this gate prevents. A stack that doesn't deploy isn't a stack.
+    **Multi-target projects need one entry per target.** A typical full-stack consumer app (web + mobile) needs both a web URL and a mobile dev-build link. A backend service needs both a deployed endpoint and (if shipping client SDKs) a published-package link. Single-target projects need exactly one entry.
+
+    **If any target's canary fails, treat as a Phase A blocker** — that target's architecture choice doesn't actually deploy yet, which means a downstream feature bet on that target will discover the same failure at the worst possible time (e.g., AC blocked on missing dev-build mid-sprint). Loop: fix the Phase A architecture (additional ADR / Amendments entry naming what changed), re-scaffold the affected pieces for that target, re-canary. Don't proceed to step 17 until **all targets** are green.
+
+    *Why this is load-bearing:* foundational architecture choices that look fine on paper (Turborepo + pnpm + Vercel + Next.js; or Expo SDK 52 + EAS + dev-build + AASA + assetlinks; or Postgres + region X + extension Y) often don't compose on first contact with the actual deploy pipeline — and the failure can hide on one target while another target ships fine. Multi-round deploy debugging mid-project is the most expensive class of failure this gate prevents. A stack that doesn't deploy on every claimed target isn't a stack.
 17. **Summarize what was written** — table of files + purpose, plus the deploy canary URL.
 
 ### Phase B Verification
@@ -121,7 +126,7 @@ Runs only when `docs/foundation/architecture.md` has `status: approved` AND scaf
 - [ ] User explicitly confirmed the plan
 - [ ] Written-files summary table produced
 - [ ] `compass/config.yaml` populated with Phase A decisions
-- [ ] **Deploy canary green** — hello-world deployed to target environment; URL captured in `compass/config.yaml` `ci_cd.deploy_canary_url`. If deploy failed, returned to Phase A with an ADR entry naming the cause; did not proceed.
+- [ ] **Deploy canaries green for every target** — every deploy target named in the foundational architecture's Stack table has a corresponding entry in `compass/config.yaml` `ci_cd.canary_artifacts[]` with `{kind, url, verified_at}` populated. Multi-target projects (web + mobile + service + …) must have one entry per target — partial coverage fails. If any target's canary failed, returned to Phase A with an ADR entry naming the cause; did not proceed.
 
 ---
 

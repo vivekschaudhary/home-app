@@ -44,4 +44,4 @@ Surfaces current state of all in-flight work. Invokes Project Manager role.
 - Read-mostly. Doesn't advance work or make decisions.
 - Run regularly (daily / weekly) for visibility.
 - Different from `/metrics` — `/status` is operational (what's happening now); `/metrics` is analytical (outcomes, trends).
-- Different from `/plan` — `/plan` writes the schedule (and refines per-bet `estimate` frontmatter); `/status` reads `plan.md` for the time-bound view. If `plan.md` is stale, run `/plan` first or `/advance` (which auto-runs `/plan`).
+- Different from `/plan` — `/plan` writes the schedule (and refines per-bet `estimate` frontmatter); `/status` reads `plan.md` for the time-bound view. If `plan.md` is stale (per `last_refreshed`), run `/plan` first.

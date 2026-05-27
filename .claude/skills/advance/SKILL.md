@@ -1,10 +1,10 @@
 ---
 name: advance
-description: Move the active work item to its next phase. Handles HITL gates. One call = one phase advance.
+description: DEPRECATED (v0.3.0). Use direct status flips + /plan + /scan + /status instead. See compass/workflows/advance.md migration table. Skill kept registered so invocations don't fail silently — opening this workflow shows the migration path.
 ---
 
 Execute the workflow at `compass/workflows/advance.md`.
 
-Read that workflow file now and follow it step by step. Load the role context files it references when entering each phase. Respect HITL gates per `compass/config.yaml`. Log decisions, risks, and issues to artifact DRI sections per `compass/templates/dri-log-section.md`.
+**This workflow is deprecated as of v0.3.0.** When invoked, read the deprecation notice + migration table at the top of `advance.md` and print it to the user. Do not perform any phase advance, scan, plan refresh, or dashboard refresh. The user's correct next action is one of: flip the artifact's `status:` field directly; run `/plan`; run `/scan <bet-id>`; run `/dashboard`; run `/status`. See the migration table for the full mapping.
 
 $ARGUMENTS

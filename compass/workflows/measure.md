@@ -55,6 +55,11 @@ If measurement window closes:
 11. **Prompt PM** for "what we learned" entry if status is `learning`:
     - Mandatory paragraph
     - Becomes input to surfacing-recent-learnings in `/metrics`
+11a. **Soft prompt — stack learnings (for the next Compass project).** When outcome is `learning` OR `won` with notable technical surprises along the way (Architect or Engineer flagged DRI Issues during the bet that turned into hard-won knowledge), ask the PM/Architect/Engineer:
+
+    > *"Any stack / tooling insights from this bet worth capturing as `docs/playbooks/<slug>.md` for future Architects? Examples: tool-combination gotchas you spent hours debugging, version-pin discoveries, configuration patterns that aren't obvious from vendor docs, region / SKU / plan-tier caveats."*
+
+    Soft prompt, **not** a gate — outcome resolves regardless. The point is to capture the learning while it's freshest (the day the bet resolves), not to force a playbook for every bet. If yes, draft using `compass/templates/playbook.md`; tag `stack_combo` so future `/setup-foundation-architecture` signal-consultation runs (category 5) surface it; commit to `docs/playbooks/`. If no, log a DRI Decision: *"no playbook needed — <reason>"* (e.g., "all learnings already captured in existing playbook X" or "no novel tool-combination friction").
 12. **DRI log** final decision with rationale (data → outcome)
 13. **Notify** stakeholders via configured channel (sprint comms next cycle will surface)
 14. **Roll up** to parent bet's metrics (if `parent:` set in frontmatter)

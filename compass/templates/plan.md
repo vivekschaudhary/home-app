@@ -10,7 +10,7 @@ parent: FOUNDATION-PRODUCT
 
 # Project Plan
 
-> Living, time-bound schedule for the MVP bet wedge and beyond. Derived from per-bet artifacts; refreshed by `/plan` (auto-triggered by `/advance`). Never hand-edited — re-run `/plan` to refresh.
+> Living, time-bound schedule for the MVP bet wedge and beyond. Derived from per-bet artifacts; refreshed by `/plan` (run manually or via cron per `compass/config.yaml`). Never hand-edited — re-run `/plan` to refresh.
 
 **Last refreshed:** YYYY-MM-DD (version <N>)
 
@@ -98,4 +98,4 @@ Things that could shift the schedule materially.
 
 ---
 
-_Living artifact — re-run `/plan` to refresh. Auto-triggered by `/advance`._
+_Living artifact — re-run `/plan` to refresh. Cron-driven refresh available per `compass/config.yaml`._
