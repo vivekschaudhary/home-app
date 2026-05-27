@@ -9,6 +9,18 @@ version: 0.3.0-alpha
 
 # Workflow: /setup-product
 
+## Framework grounding
+
+What this workflow operationalizes. Full entries in `compass/framework/canon.md`.
+
+- **Strategy / discovery foundations:** [working-backwards] · [lean-mvp] · [continuous-discovery] · [jtbd]
+- **Competitive position:** [porter-5-forces] · [helmer-7-powers] (Compass extends to 9-type) · [blue-ocean]
+- **Bet-based commitment:** [shape-up] · [helmer-bet-portfolio]
+- **Communication discipline:** [pyramid-principle] · [stripe-2-page] · [amazon-6-page]
+- **Goal-setting:** [okrs] · [north-star]
+- **Compass-originals operationalized:** [cite-or-mark-na] (Researcher 6-category + moat 9-type) · [refuse-escalate] · [soft-spec-hardening]
+- **Verifies adherence to:** Principle #14 (soft spec → AI rationalization, fix = constraint + verification + named anti-pattern) · Principle #15 (N-category cite-or-mark-n/a enforcement) · Principle #16 (refuse + escalate to upstream)
+
 ## Purpose
 
 Creates the **foundational product bet** — the company / product mission as a measurable bet, captured in `docs/foundation/product.md`. Must run before `/setup-foundation-architecture`.

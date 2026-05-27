@@ -115,6 +115,33 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 
 ---
 
+**ADDENDUM — 2026-05-27: framework grounding section added; budget recalibrated to density.**
+
+After the initial validation above, the spec added a required **Framework grounding** section between Header and Purpose. Workflows now cite the canonical frameworks they operationalize (industry standards, books, Compass-originals, cross-cutting principles), with citations resolving to a new reference doc `compass/framework/canon.md`. For `/setup-product`: Working Backwards · Lean MVP · Continuous Discovery · JTBD · Porter's Five Forces · Helmer 7 Powers (9-type extension) · Blue Ocean · Shape Up · Helmer bet portfolio · Pyramid Principle · Stripe 2-page · Amazon 6-page · OKRs · North Star · plus Compass-originals (cite-or-mark-n/a, refuse + escalate, soft-spec hardening).
+
+**This pushed `/setup-product` to 161 lines (2.24x original), well past the original "2x hard fail" threshold.** That triggered an explicit recalibration of the hardening budget:
+
+- **Old heuristic (rejected):** "hardened workflow ≤ 40% longer; 2x = hard fail." A raw-length proxy that didn't survive first contact. Penalized templates for adding load-bearing content (Framework grounding) the same as it penalized ceremony.
+- **New measure (adopted):** **load-bearing density** — count mechanically-checkable constraints, named conventions, auditable framework citations, principle-scoped Verification items per line. The check: **does each line earn its place?** Hardened `/setup-product` density = ~50 load-bearing items / 161 lines = **1 per 3.2 lines**. Original = ~20 / 72 = 1 per 3.6 lines. **Density rose, not fell** — hardening was net-additive to constraint, not bloat.
+
+**Why this re-calibration matters more than the budget bust it resolves:**
+
+- **Goodhart-resilient measure.** Counting "load-bearing items" instead of "lines" makes the metric track what we actually care about (constraint density) rather than a proxy (file size). Goodhart's law still applies — translators could pad Verification with non-load-bearing checkpoints to inflate density — but density is at least pointing at the right thing.
+- **Recursive Principle #14 lens applies to the framework's own metrics.** The original "2x lines" budget was a soft heuristic that, when contact with reality showed it was wrong, would have been rationalized away ("eh, 2.06x is *basically* 2x"). Replacing it with an explicit measure tied to load-bearing-per-line removes the interpretive room.
+- **Framework grounding becomes free in the new measure.** Each cited framework counts as a load-bearing item (auditable lineage anchors a gate's intent). The 15+ citations in `/setup-product` add ~30 lines AND ~15 load-bearing items, so density stays roughly stable.
+
+**v0.3.0-beta candidates still standing** (not invalidated by re-calibration; they're ergonomics improvements that also help density):
+
+- **Lighter triplets for context-loading steps** — saves lines without losing constraints, so density goes UP. Worth doing.
+- **Output summary contract collapsed to one-line pointer at AGENTS.md #12** — same. Worth doing.
+- **Citations as cross-doc references** is now MOOT — they're already cross-doc references (short-form → `canon.md`). The compression argument loses force; the auditability argument was the real reason to do it.
+
+**What this means for `/build`, `/create-brief`, and future hardenings:** stop staring at line counts. Run the density check after translation. If density holds (≥ original or improved), the hardening was structurally sound regardless of length. If density drops, the template is adding ceremony — that's the real signal for template adjustment.
+
+**Pattern observation:** the re-calibration is itself an application of Principle #14 to framework measurement. Soft metric ("budget is ~40% longer, 2x is too much") got rationalized away on first contact; replaced with a constraint-shaped measure (load-bearing density) that's harder to hand-wave. Same recipe as the workflow-level patches: name the failure mode (raw-length proxy fails for load-bearing growth) + make the new constraint mechanically defined (count items, divide by lines) + name the anti-pattern (Goodhart-style padding) inline so future framework-Architects inherit the vocabulary.
+
+---
+
 ### 2026-05-26 — `/advance` deprecated (v0.3.0-alpha part 1) — first action on a retro-surfaced drift signal
 
 **Friction:** Retro #003 (shipped hours earlier in v0.2.8) flagged `/advance: 0 uses in aura-app over 4 days of active dev` as a drift signal. The framework had been over-engineering a "canonical phase advance" command that real users don't invoke — phase transitions happen naturally via status-field flips (`proposed` → `approved` → `in-build` → `shipped`), and the elaborate auto-trigger chain we built (`/advance` → `/plan` → `/scan` → `/dashboard`) was load-bearing in the spec but irrelevant in practice.

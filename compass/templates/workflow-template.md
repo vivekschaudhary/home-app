@@ -26,6 +26,39 @@ version: 0.3.0-alpha             # workflow's own hardening version; bump on nex
 
 # Workflow: /<name>
 
+## Framework grounding
+
+<!--
+  REQUIRED in v0.3+. Names the canonical frameworks this workflow
+  operationalizes so future translators understand WHY each gate exists.
+  Without grounding, gates look like arbitrary ceremony; with grounding,
+  they're auditable lineage back to established practice.
+
+  Citations use short-form referring to `compass/framework/canon.md`:
+  e.g., [working-backwards] → expands to the canon entry.
+
+  Sections (use as many as apply; omit a section if genuinely n/a):
+  • Strategy / discovery foundations
+  • Competitive position
+  • Bet-based commitment
+  • Communication discipline
+  • Goal-setting
+  • Compass-original patterns operationalized (principles + named patterns)
+  • Verifies adherence to (cross-cutting principles this workflow enforces)
+
+  Honest labeling: industry standards cited with year + primary source;
+  books with author/title/year; Compass-originals labeled as such
+  (not pretending peer-review).
+-->
+
+- **Strategy / discovery:** <citations from canon.md>
+- **Competitive position:** <citations>
+- **Bet-based commitment:** <citations>
+- **Communication discipline:** <citations>
+- **Goal-setting:** <citations>
+- **Compass-originals operationalized:** <named patterns>
+- **Verifies adherence to:** <cross-cutting principle numbers + brief scope>
+
 ## Purpose
 
 <!-- ONE SENTENCE. Names what the workflow does and the artifact it produces. -->

@@ -57,6 +57,7 @@ Every v0.3+ workflow follows the canonical shape defined in `compass/templates/w
 The template enforces:
 
 - **Header** — `status` (active / deprecated / experimental), `owner` role, `auto_invokes`, `invoked_by`, `version`.
+- **Framework grounding** — cites the canonical frameworks the workflow operationalizes (industry standards with year + source; books with author/title/year; Compass-originals honestly labeled; cross-cutting principles enforced). Anchors each workflow's gates in auditable lineage rather than ad-hoc invention. Citations use short-form pointing at `compass/framework/canon.md`.
 - **Purpose** — one sentence naming what the workflow does and the artifact it produces.
 - **Preconditions (workflow-level GATE)** — mechanically-checkable conditions checked once at start; each failure case has an explicit refuse-and-redirect.
 - **Roles invoked** — role files loaded during execution.
@@ -66,6 +67,8 @@ The template enforces:
 - **Notes** — named anti-patterns + edge cases + migration notes.
 
 **Hardening rollout:** workflows translate to the template one at a time, deliberate pace. `/setup-product` was hardened first (v0.3.0-alpha) — already the most disciplined workflow, ideal for validating the template on the easy case before harder workflows (`/build`, `/create-brief`) translate. Each translation is structural-only by rule — same steps, same artifacts, same gates, same refusal cases.
+
+**Hardening budget — measured by load-bearing density, not raw length.** A hardened workflow can grow significantly in line count if the growth is **load-bearing content** (preconditions, postconditions, Verification items, anti-patterns, framework citations, specific principle scoping). The check isn't "is it longer?" — it's: **does each line earn its place by adding mechanically-checkable constraint, named convention, or auditable lineage?** Heuristic: load-bearing density should be ≥ 1 per ~4 lines (original `/setup-product` was 1 per 3.6; hardened `/setup-product` with framework grounding is 1 per 3.2 — *denser*). If density drops materially below the original, the template is adding ceremony, not constraint — flag in the workflow's Notes → Edge cases and propose template adjustment.
 
 If a step genuinely resists clean triplet separation, document the friction in the workflow's Notes → Edge cases (don't bend the triplet to fit). Template ergonomics get re-evaluated periodically based on accumulated friction.
 
