@@ -47,6 +47,7 @@ Real visual designs live in Figma; this doc is the spec — flows, decisions, st
 - Copy needs flagged for UX Writer
 - Figma frames linked
 - Accessibility considerations documented
+- **Coordinate with PM on the story's Standard Experience Checklist.** Every designed state, navigation path, and interaction must have a corresponding AC item in the story — your design is the *spec*, the story AC is the *implementation contract*. If something's in the design but not in the AC, it will ship missing (the back-button-in-Figma-but-not-in-AC failure mode).
 
 ## Anti-patterns
 

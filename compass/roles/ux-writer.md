@@ -38,6 +38,7 @@ Copy doc at `docs/bets/<bet-id>/copy.md` or `docs/bets/<bet-id>/stories/<story-i
 - Every flagged copy need filled
 - Terminology consistent with existing product
 - Errors say "what happened" + "what to do"
+- **Error copy discriminates error type** — network / validation / server / permissions / unknown each get their own message. Generic "something went wrong" or mislabelling validation errors as "network errors" fails the story's Standard Experience Checklist (Feedback category).
 - Empty states encourage next step
 
 ## Anti-patterns

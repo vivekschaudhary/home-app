@@ -60,6 +60,38 @@ Each entry: what happened → what changed → what to watch for.
 
 ---
 
+### 2026-05-26 — Story AC missing standard-experience coverage; PM wrote stories without back-button (v0.2.6)
+
+**Friction:** During the aura-app retrospective the user mentioned "3 small UX cleanups bundled with #1 — back-affordance on Handle screen (your observation), misleading 'network' error mapping on Passkey screen, error-state copy review." I initially categorized this as app-specific and moved on. The user corrected:
+
+> *"the ux cleanup was about — stories that were written did not have back button for eg. if compass is writing the story we should give the team a template to create the best story possible covering the feature standard experience"*
+
+**Root cause analysis:** When `/create-story` runs and PM drafts the story, the AC list is freeform — no structural prompt for navigation, states, feedback, accessibility, edge cases, or cross-surface consistency. The Designer + UX Writer roles individually cover state/accessibility/copy quality well in *their* artifacts, but the story AC (the actual implementation contract Engineer codes against and Codex tests against) doesn't echo it. Outcome: Designer draws the back button in Figma; story AC doesn't say "back navigation returns to <screen>"; Engineer implements only what AC specifies; Codex E2E tests only what AC specifies; ships without back button.
+
+Three aura-app failures fit the same gap:
+- **Missing back button** — Navigation category not in AC
+- **Misleading "network" error on Passkey screen** — Feedback category not in AC (no error-type discrimination requirement)
+- **Error-state copy review needed post-build** — Feedback category not in AC (copy quality expectations not specified)
+
+All three should have surfaced at story-creation time, not as post-build QA cleanups requiring re-design loops.
+
+**Change:**
+- New "Standard Experience Checklist" section in `compass/templates/story.md` — 6 categories (Navigation, States, Feedback, Accessibility, Edge cases, Cross-surface consistency). Each either covered by ≥1 AC item OR explicitly `n/a — <reason>`. Same enforcement shape as Researcher 6-category, Architect 6-pillar, signal-consultation 5-category.
+- `/create-story` step 7 requires checklist filled; new refusal case blocks empty categories from reaching `status: ready`.
+- Designer DoD adds explicit cross-reference: design and AC must match; what's in Figma but not in AC will ship missing.
+- UX Writer DoD adds error-type-discrimination requirement: generic "something went wrong" or mislabelled error types fail the Feedback category.
+
+**Files touched:** `compass/templates/story.md`, `compass/workflows/create-story.md`, `compass/roles/designer.md`, `compass/roles/ux-writer.md`, `CHANGELOG.md` (0.2.6), `compass/workflows/improvements.md`.
+
+**Meta-lesson — my miscategorization:** I read "3 UX cleanups bundled with #1" and pattern-matched to "app-specific polish, defer." That's exactly the kind of agent shortcut Compass keeps catching elsewhere. The user re-routed me to the structural gap underneath the symptoms. The relevant Compass principle (per AGENTS.md / cross-cutting): symptoms across multiple bets in the same shape ARE the signal of a missing structural constraint. Three UX issues "bundled" with another bet = three independent signals that the story-creation discipline wasn't catching standard UX expectations. Worth adding to my own scan-for-patterns when triaging future retrospectives: "are these N independent fixes really N fixes, or 1 missing constraint?"
+
+**Watch for:**
+- **Checklist becomes rote.** If PM starts marking every category as "covered by AC-1" without thinking, the gate is failing. Codex review or scanner could catch this with a "Standard Experience Checklist categories cite distinct AC numbers" check — defer until evidence shows the rot.
+- **Categories don't fit certain story types.** Backend-only stories will mark most categories `n/a — backend-only`. Internal-tooling stories might skip accessibility. If "n/a" becomes the default for >50% of stories, the categories are too broad — tighten or add story-type-specific subsets.
+- **The 6-category framework is the 4th instance of this pattern shape** (Researcher 6, Architect 6, signal-consultation 5, now standard-experience 6). Confirming that `cite-or-mark-n/a` is the right enforcement default across Compass for "agent could rationalize an omission." Worth codifying as an AGENTS.md cross-cutting principle if a 5th instance lands.
+
+---
+
 ### 2026-05-26 — Three Compass gaps from a 13-issue aura-app triage (v0.2.5)
 
 **Friction:** User finished a sprint in aura-app and produced a 13-issue retrospective covering: pnpm strict isolation × Metro module resolution (#1, #2, #4, #8); React 19 vs 18.3.1 version mismatch (#5, #10); react-native-screens / safe-area-context / expo-secure-store version drift (#3, #7); missing expo-constants peer deps (#6); New Architecture app.json flag (#9); `EXPO_PUBLIC_API_BASE_URL` defaulting to localhost on real device (#11); 4+ rounds of Vercel deploy failures (#12); Supabase `pg_uuidv7` missing in ap-south-1 (#13).

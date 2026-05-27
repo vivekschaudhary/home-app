@@ -245,3 +245,31 @@ Initial release. 72 files. 12 roles, 13 workflows, 10 templates, 3 cross-cutting
 - **Out of scope (per user):** the other 10 aura-app issues — Babel runtime / Metro module resolution / React 18 vs 19 / Expo SDK pinning / pnpm strict isolation interactions — are app-specific tooling choices, not Compass's concern.
 - **Deferred:** "stack composition matrix" (issues #1, #2, #4, #5, #8 reveal a meta-pattern of foundational stack choices not composing). The deploy-canary gate catches most of this at integration time; revisit if it doesn't catch enough.
 - **Same anti-pattern as v0.2.4:** load-bearing checks that weren't load-bearing in the spec. Fix shape is consistent — explicit constraint + verification gate + named anti-pattern.
+
+## [0.2.6] — 2026-05-26
+
+> Story template gained a Standard Experience Checklist after a missed back-button shipped in aura-app and led to a UX-cleanup mini-bet. Surfaced a Compass gap I initially miscategorized as "app-specific" — user correctly identified it as a story-AC structural omission.
+
+### Added
+- **`compass/templates/story.md` gained a "Standard Experience Checklist" section** between Acceptance Criteria and Tech notes. Six categories that PM must address when writing the story — each either covered by ≥1 AC item OR explicitly marked `n/a — <reason>`:
+  - **Navigation** — back / exit / cancel / dismiss paths for every navigable surface
+  - **States** — loading / empty / error / success / disabled each has an AC
+  - **Feedback** — error type discrimination + success acknowledgment + destructive confirmation
+  - **Accessibility** — focus management + keyboard nav + screen reader labels
+  - **Edge cases** — offline / slow network / permissions-denied / missing-data
+  - **Cross-surface consistency** (multi-target stacks) — behavior matches across surfaces
+- Same `cite-or-mark-n/a` enforcement shape as Researcher 6-category, Architect 6-pillar, signal-consultation 5-category.
+
+### Changed
+- **`/create-story` step 7 now requires the Standard Experience Checklist filled** before the story can reach `status: ready`. Empty categories (no AC reference AND no `n/a` note) block the gate.
+- **New refusal case in `/create-story`:** "Standard Experience Checklist has any empty category."
+- **Designer role DoD** gained explicit "coordinate with PM on Standard Experience Checklist" — design completeness and story-AC completeness must match. If something's in the Figma but not in the AC, it ships missing.
+- **UX Writer role DoD** gained explicit "error copy discriminates error type" — generic "something went wrong" or mislabelling validation as "network errors" fails the Feedback category.
+
+### Fixed
+- Closed the **story-AC-omission failure mode**: Designer drew the back button; the story's AC didn't say "back navigation present"; Engineer didn't implement; Codex E2E didn't test; shipped without. The new checklist makes "covered in design but missing from AC" structurally impossible at story-creation time.
+- Closed the **error-message-quality omission**: aura-app's Passkey screen showed misleading "network" errors when the actual failure was passkey-specific. New checklist's Feedback category forces error-type discrimination in the AC, which forces Engineer to implement type-specific handling and UX Writer to draft type-specific copy.
+
+### Notes
+- **Aura-app trigger:** PM was correct that the UX cleanups weren't just "app-specific" — they revealed a structural gap in story AC completeness. I initially miscategorized; user corrected.
+- **Out of scope (deferred from earlier triage rounds):** team playbooks signal-consultation category, stack-aware canary artifact, cross-story E2E pattern. Each warrants its own focused patch.

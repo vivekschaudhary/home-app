@@ -28,6 +28,7 @@ PM decomposes the bet into **one** shippable story at a time. After a story ship
    - Title
    - Description
    - Acceptance criteria (required)
+   - **Standard Experience Checklist (required, load-bearing).** Each of the 6 categories — Navigation / States / Feedback / Accessibility / Edge cases / Cross-surface consistency — is either covered by ≥1 AC item OR explicitly marked `n/a — <reason>`. Empty categories (no AC reference AND no `n/a` note) block the story from reaching `status: ready`. This is the bridge between Designer's "every state per screen" completeness and the implementation contract — what the Designer drew but the AC doesn't say will ship missing (the aura-app missing-back-button class of failure).
    - Design link (required if UI work)
    - Tech notes (referencing bet architecture)
    - Dependencies (other stories, external systems)
@@ -49,6 +50,7 @@ PM decomposes the bet into **one** shippable story at a time. After a story ship
 - Brief not approved
 - Architecture required but not approved
 - Previous story under this bet is still in `build` and PM hasn't shipped it (one at a time discipline)
+- Standard Experience Checklist has any empty category (no AC reference AND no `n/a — <reason>` note) — story cannot reach `status: ready`
 
 ## Notes
 
