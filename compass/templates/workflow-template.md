@@ -104,6 +104,19 @@ version: 0.3.0-alpha             # workflow's own hardening version; bump on nex
   context-loading where the postcondition is "Claude understands the role
   now"), document the friction in Notes → Edge cases. Don't bend the
   triplet to fit; flag it so the template can evolve.
+
+  ELICITATION STEPS: when a workflow's job is to surface choices to the
+  user (stack picks, configuration decisions, posture declarations), use
+  the [elicitation-with-options] Compass-original pattern (see
+  `compass/framework/canon.md`): static 3 options for an anchor decision +
+  cascading 3 options for subsequent decisions biased by prior picks +
+  "Other (specify)" escape valve. Each elicitation step is a normal
+  triplet — Precondition (prior picks captured) / Work (present options,
+  ask user, record pick + rationale) / Postcondition (pick captured with
+  cited option). DO NOT draft with "smart defaults" and ask the user to
+  approve — that's the rationalization surface principle #14 closes.
+  First instance: `/setup-foundation-architecture` v0.3.2 (anchor + 4
+  cascading layer elicitations).
 -->
 
 ### 1. <Step title>

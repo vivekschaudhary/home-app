@@ -100,6 +100,46 @@ erDiagram
 
 <Replace the example. Show all core entities with key relationships and cardinality (one-to-many, many-to-many).>
 
+## Stack picks (elicited)
+
+Captured via the **elicitation-with-options** pattern (`compass/framework/canon.md` → `[elicitation-with-options]`) in `/setup-foundation-architecture`. Each pick records: the elicited option, one-line rationale, one-line per-pillar implication. **Anchor** is static (same 3 options regardless of context); **layers** cascade (options biased by prior picks).
+
+### Anchor: primary language + deployment model
+
+- **Picked option:** `<TypeScript + Vercel | TypeScript + AWS | Python + managed PaaS | Other — specify>`
+- **Rationale:** <one line — why this anchor fits the product bet's posture, fitness functions, and data model>
+- **Per-pillar implication:** <one line — what this anchor implies for reliability / security / performance / cost / ops / sustainability>
+
+### Layer 1 — Frontend stack
+
+- **Picked option:** <framework + build tool + styling, e.g., "Next.js + Turbopack + Tailwind">
+- **Cascaded from anchor:** <how the anchor biased options surfaced>
+- **Rationale:** <one line>
+- **Per-pillar implication:** <one line — bundle size, accessibility surface, build time, etc.>
+
+### Layer 2 — Backend stack
+
+- **Picked option:** <framework + contracts format + auth model, e.g., "Next.js API routes + tRPC + passkey via Clerk">
+- **Cascaded from anchor + frontend pick:** <how prior picks biased options>
+- **Auth model derived from foundation-product Access & Data Posture:** <reference the auth posture set in product.md>
+- **Rationale:** <one line>
+- **Per-pillar implication:** <one line — auth-attack-surface, contract-evolution risk, etc.>
+
+### Layer 3 — Data stack
+
+- **Picked option:** <database + cache + object storage + secrets management, e.g., "Vercel Postgres + Upstash Redis + Vercel Blob + Vercel env vars">
+- **Cascaded from anchor:** <how the anchor biased options>
+- **Database choice derived from Foundational Data Model:** <reference the data model section above>
+- **Rationale:** <one line>
+- **Per-pillar implication:** <one line — durability, scaling story, backup posture, etc.>
+
+### Layer 4 — Ops stack
+
+- **Picked option:** <CI/CD + observability + IaC + deployment-target detail, e.g., "GitHub Actions + Sentry + Vercel native + Vercel CLI">
+- **Cascaded from anchor:** <how the anchor biased options>
+- **Rationale:** <one line>
+- **Per-pillar implication:** <one line — deploy frequency, MTTR, observability coverage, cost shape, etc.>
+
 ## Stack
 
 Every row scored on all 6 Well-Architected pillars in the per-row evaluations below. Empty pillar cells fail verification. Reversibility is honest (evidence-backed via the "Reversibility honesty" research category).

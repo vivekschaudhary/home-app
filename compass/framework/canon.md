@@ -56,6 +56,14 @@ Cited via short-form in workflows: e.g., `[working-backwards]` → links to that
 ### north-star
 **North Star Framework** — Amplitude (Sean Ellis lineage, formalized ~2017-2019). Single metric that captures core customer value; serves as the strategic compass for cross-functional alignment.
 
+## Architecture frameworks
+
+### well-architected
+**AWS Well-Architected Framework** — Amazon Web Services (2015; sustainability pillar added 2021). Six pillars: **reliability · security · performance efficiency · cost optimization · operational excellence · sustainability**. Compass uses the six pillars as scoring axes for every foundational architecture decision (each stack pick gets per-pillar rationale). Framework is cloud-vendor-named but principles apply to any deployment target (on-prem, multi-cloud, edge).
+
+### evolutionary-architecture
+**Building Evolutionary Architectures** — Neal Ford, Rebecca Parsons, Patrick Kua (2017; 2nd edition 2022). Introduces *fitness functions* as continuous architectural tests — objective, measurable criteria the architecture must satisfy. Compass operationalizes via the "derive fitness functions before stack choices" ordering in `/setup-foundation-architecture`: fitness functions name the falsification criteria; stack picks derive from them.
+
 ## Compass-original patterns
 
 ### cite-or-mark-na
@@ -66,6 +74,9 @@ Cited via short-form in workflows: e.g., `[working-backwards]` → links to that
 
 ### soft-spec-hardening
 **Soft spec → AI rationalization → hardening recipe** — Compass principle #14 (foundational). Anywhere an agent has interpretive room, it exercises judgment that diverges from intent. The fix is explicit constraint + mechanical verification gate + named anti-pattern in the workflow file. Drives the gate/work/postcondition template structure.
+
+### elicitation-with-options
+**Elicitation-with-options** — Compass-original interaction pattern (v0.3.2). When a workflow must surface choices to the user (stack picks, configuration decisions, posture declarations), it presents **3 widely-used options + an "Other (specify)" escape valve**. The first decision is **static** (an anchor — same 3 options regardless of context); subsequent decisions **cascade** (options biased by prior picks for coherent combinations). Each pick is captured with cited option + rationale in the workflow's output artifact. Reduces agent rationalization (principle #14) at decision points where genuine user input matters — replaces "draft with smart defaults, ask user to approve" with "ask user, present curated options, capture pick." First applied in `/setup-foundation-architecture` (4 cascading stack-layer elicitations after an anchor decision).
 
 ---
 

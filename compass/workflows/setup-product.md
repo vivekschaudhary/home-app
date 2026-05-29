@@ -74,9 +74,15 @@ Creates the **foundational product bet** — the company / product mission as a 
 
 **Precondition (GATE):** Source material loaded; Researcher findings present.
 
-**Work (Claude):** Draft `docs/foundation/product.md` using `compass/templates/foundation-product.md`. Populate: Vision/mission · Target users/personas · Market positioning · North-star metric(s) · Strategic OKRs (annual + current quarter) · Out-of-scope (what we're NEVER building) · Hypothesis · **Defensibility / Moat (all 9 types with verdict yes/no/partial + rationale; primary moat(s) explicitly named)** · Measurement window (typically annual) · Check-in cadence (typically quarterly). Frontmatter: `type: foundational-product`, `status: proposed`.
+**Work (Claude):** Draft `docs/foundation/product.md` using `compass/templates/foundation-product.md`. Populate: Vision/mission · Target users/personas · **Access & Data Posture (3 fields — see explicit elicitation below)** · Market positioning · North-star metric(s) · Strategic OKRs (annual + current quarter) · Out-of-scope (what we're NEVER building) · Hypothesis · **Defensibility / Moat (all 9 types with verdict yes/no/partial + rationale; primary moat(s) explicitly named)** · Measurement window (typically annual) · Check-in cadence (typically quarterly). Frontmatter: `type: foundational-product`, `status: proposed`.
 
-**Postcondition (GATE):** `docs/foundation/product.md` exists. All required sections populated. Defensibility / Moat section has all 9 moat-type rows filled. Frontmatter `status: proposed`.
+**Access & Data Posture (mandatory — explicitly elicit; do not infer or defer):**
+- Ask the user: *"What's the auth posture? (anonymous · registered · authenticated · MFA-required · regulated-identity)"*
+- Ask the user: *"What's the data sensitivity scope? (none · public · PII · sensitive · regulated)"*
+- Ask the user: *"What's the regulatory regime? (none · GDPR · HIPAA · SOC 2 · PCI DSS · sector-specific — name it · combination — name each)"*
+- These are **product decisions architecture derives from** — don't defer to `/setup-foundation-architecture`. Capture answers in the template's Access & Data Posture section. **Per Principle #14 — silent skipping is the failure mode; this is named explicitly because foundational-product bets have historically failed to surface auth.**
+
+**Postcondition (GATE):** `docs/foundation/product.md` exists. All required sections populated. Defensibility / Moat section has all 9 moat-type rows filled. **Access & Data Posture section has all 3 fields populated (auth posture, data sensitivity, regulatory regime) with a value OR explicit `n/a — <reason>`.** Frontmatter `status: proposed`.
 
 ### 6. PM seeds DRI log
 
@@ -119,6 +125,7 @@ Creates the **foundational product bet** — the company / product mission as a 
 - [ ] (Step 3) Researcher DRI: **≥1 Decision AND ≥1 Risk** (Issues-only does not satisfy)
 - [ ] (Step 5) `docs/foundation/product.md` exists with all required sections (Vision, Personas, Positioning, North-star, OKRs, Out-of-scope, Hypothesis, Defensibility/Moat, Measurement window, Cadence)
 - [ ] (Step 5) **Primary moat(s) being bet on are explicitly named** in the Defensibility / Moat section
+- [ ] (Step 5) **Access & Data Posture section populated** — all 3 fields (auth posture, data sensitivity, regulatory regime) have a value OR explicit `n/a — <reason>`. Empty values fail. Unjustified `n/a` fails. **Per Principle #15** (cite-or-mark-n/a enforcement) — and **Per Principle #14**, this is named explicitly because foundational-product bets have historically failed to surface auth (the auth gap that drove v0.3.1).
 - [ ] (Step 5) Frontmatter: `type: foundational-product`, `status: proposed`
 - [ ] (Step 6) PM DRI has ≥1 Decision entry
 - [ ] (Step 7) Mirroring completed (epic linked) OR skip logged as DRI Decision

@@ -70,6 +70,83 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 
 ---
 
+### 2026-05-27 — `/setup-foundation-architecture` hardened + elicitation-with-options pattern (v0.3.2)
+
+**Friction / trigger:** Second workflow translation in the v0.3 cycle per cadence. User picked `/setup-foundation-architecture` (had been pending since v0.3.0-alpha established the template). Additionally, user requested NEW behavior beyond just hardening: **interactive elicitation** — workflow should ASK the user about each architectural decision, present 3 widely-used product/tool options, and let user pick. Replaces the v0.2.x pattern of "draft with smart defaults, ask user to approve" (which the agent in practice mostly skipped — same soft-spec-rationalization shape the framework keeps catching).
+
+**Design picks (locked via AskUserQuestion):**
+- **Granularity:** grouped by stack layer — 4 elicitations (frontend / backend / data / ops) rather than all 13 stack rows individually (too verbose) or constraint-first (too opinionated).
+- **Curation context:** hybrid — first decision (anchor: primary language + deployment model) is static (same 3 options); subsequent decisions cascade (options biased by prior picks for coherent stacks).
+- **Reusability:** add to `canon.md` as Compass-original `[elicitation-with-options]`. Future workflows can adopt (likely 2nd instance: retroactive `/setup-product` enhancement for the v0.3.1 Access & Data Posture fields).
+
+**Deliberate precedent break — `[elicitation-with-options]` is a behavior change.** v0.3.0-alpha set the rule: workflow hardening is "PRESERVE all existing behavior." v0.3.2 deliberately violates that for the elicitation pattern (per explicit user direction). **Future translators must not quietly assume the preserve-behavior rule still binds across all hardenings — it's a default that can be overridden with explicit user direction + documented violation.** This is the first such override in the v0.3 cycle.
+
+**Change:**
+- `compass/framework/canon.md` gained 3 entries:
+  - New top-level section **Architecture frameworks** with `[well-architected]` (AWS, 2015 + sustainability 2021) and `[evolutionary-architecture]` (Ford / Parsons / Kua, 2017).
+  - Compass-originals section gained `[elicitation-with-options]` — first Compass-original interaction pattern (vs. prior Compass-originals which were all enforcement-shaped: cite-or-mark-n/a, refuse-escalate, soft-spec-hardening). Pattern: static anchor + cascading subsequent decisions, each 3 options + "Other (specify)," each pick captured with rationale + per-pillar implication.
+- `compass/workflows/setup-foundation-architecture.md` fully translated to v0.3 template: gate/work/postcondition triplets, framework grounding section, workflow-level Preconditions, 16 Phase A steps + 5 Phase B steps (was 12 + 5 in v0.2.x). All v0.1.11–v0.2.7 behavior preserved: Phase A/B HITL gate split, foundational data model derived before stack picks, bet-arch deviation gate reference, multi-target canary, ADR / Amendments pattern.
+- **NEW elicitation steps 8-12:** anchor (primary language + deployment model — static 3 options) + 4 cascading stack-layer elicitations (frontend / backend / data / ops — biased by prior picks). Step 10 (backend) elicitation's auth model **derives from foundation-product Access & Data Posture (v0.3.1)**; divergence triggers refuse + escalate. Step 11 (data) **cites Foundational Data Model**; DB pick that ignores entity shape fails. Per-pillar implication captured per step (replaces v0.1.11's separate pillar-scoring step; pillar scoring now baked into each elicitation step's Postcondition).
+- `compass/templates/foundation-architecture.md` gained **"Stack picks (elicited)"** section between Foundational Data Model and Stack — captures anchor + 4 layer picks.
+- `compass/templates/workflow-template.md` gained inline commentary on elicitation steps as a valid Steps pattern.
+- `AGENTS.md` "Workflow structure" section gained note about `[elicitation-with-options]` as a named Compass-original (pointer to canon entry).
+
+**Files touched (7):** `compass/framework/canon.md`, `compass/workflows/setup-foundation-architecture.md`, `compass/templates/foundation-architecture.md`, `compass/templates/workflow-template.md`, `AGENTS.md`, `CHANGELOG.md` (0.3.2), `compass/workflows/improvements.md`.
+
+**Watch for:**
+- **Elicitation depth fatigue.** 5 elicitation steps (anchor + 4 layers) is a lot of user back-and-forth. If real `/setup-foundation-architecture` runs feel slow or users skip-skip-skip through them, the cascading could compress (e.g., one "stack picks" Q&A session that walks through all 5 in sequence with shortcuts for users who have strong preferences). Defer changes until ≥2 real runs.
+- **Anchor=Other handling.** When user picks "Other (specify)" for the anchor, downstream cascades fall back to static layer options. If this fallback feels inadequate (e.g., user has a coherent custom stack but layer options don't fit), tighten the fallback rules. May surface as a v0.3.3 candidate after first real "Other" anchor.
+- **Option curation freshness.** The 3 options per anchor / per layer are listed in the workflow file as examples. They'll go stale as the tooling landscape evolves (Vite vs. Turbopack vs. Rspack churns; serverless vs. edge vs. containers shifts). Eventually the elicitation step should reference canon.md entries for each option rather than hard-coding tool names in the workflow. Defer until staleness bites — likely 12-18 months out at current churn.
+- **2nd instance trigger for principle #17.** When a 2nd workflow adopts `[elicitation-with-options]`, codify as AGENTS.md cross-cutting principle. Likely candidate: retroactive enhancement of `/setup-product` Access & Data Posture (v0.3.1) — 3 fields could use the elicitation pattern for closed-enum picks. Worth doing if/when the user surfaces friction with the current static-list approach.
+- **Preserve-behavior rule erosion.** v0.3.2 set the precedent that hardening can include deliberate behavior changes per explicit user direction. Future translators may use this as a loophole ("the user wanted X" → behavior creeps in alongside translation). Counter: the rule is "structural-only translation by default; behavior changes require explicit user direction + named in improvements.md as a precedent break." If multiple future hardenings stack precedent breaks, consider tightening to "behavior changes happen in separate patches, not bundled with hardening."
+
+**Meta-observation — pattern type:** `[elicitation-with-options]` is the **first Compass-original interaction pattern** (vs. prior Compass-originals which were all enforcement-shaped). The framework's Compass-original catalog now spans two shapes: enforcement (cite-or-mark-n/a, refuse-escalate, soft-spec-hardening — what the workflow REQUIRES) and interaction (elicitation-with-options — how the workflow ASKS). Worth watching whether this split surfaces a 3rd shape (e.g., capture patterns, validation patterns) as the framework grows.
+
+**Length / density check** (per v0.3.0-alpha recalibration): hardened `/setup-foundation-architecture` is ~370 lines vs ~156 in v0.2.x = ~2.4x. Load-bearing density: ~80 items (16 Phase A steps × ~3 gates each + Phase B steps + Verification + Framework grounding citations + named anti-patterns) / 370 lines = **1 per 4.6 lines**. Original was ~30 / 156 = **1 per 5.2 lines**. **Density improved** (denser is better) — adding load-bearing elicitation content and framework grounding raised density, confirming the v0.3.0-alpha recalibration thesis: length grows with constraint, not ceremony.
+
+---
+
+### 2026-05-27 — Access & Data Posture surfaced at foundation-product layer (v0.3.1)
+
+**Friction:** User ran `/setup-foundation-architecture` on aura-app and observed: **the workflow didn't ask about authentication and scaffolded nothing auth-related.** Even though auth IS in the Stack table (row 8: `Auth model | <session / JWT / OAuth> | <hard>`) and IS named in step 7's stack-row enumeration, **it's one bullet among 13 with no special weight** — agent rationally treated it like contracts format. Classic Principle #14: soft-spec burial → agent rationalization → load-bearing concern slips through.
+
+**Explore-agent triage confirmed the gap is upstream at the foundation-product layer**, not downstream at architecture:
+- `compass/templates/foundation-product.md` (114 lines) — no access/auth/data section anywhere. "Personas" doesn't ask about authentication state. "Defensibility/Moat → Regulatory" is competitive moat, not access posture.
+- `compass/templates/brief.md` (116 lines) — same blank.
+- `compass/workflows/setup-product.md` Verification — **zero gates on auth/identity.**
+- `compass/workflows/setup-foundation-architecture.md` "Identity strategy" is about **DB primary key type (UUID v7 / ULID / sequential)** — not access posture. I previously mis-attributed it as auth-adjacent; it isn't.
+- **16 AGENTS.md principles, none names this.** Zero prior improvements entries. **First time being named in the framework's history.**
+
+**User direction (after a course-correct from over-scoped initial plan):**
+- "Looks a foundational issue" → treat at framework level, not just template tweak.
+- "As simple as possible" → tight scope, closed enums, n/a-with-reason allowed.
+- "Every product brief should include authentication" → applies broadly (but defer `brief.md` to v0.3.2 per "one step at a time").
+- "Lets get create product right" → `/setup-product` only this round.
+- Picked **3 fields** (auth posture + data sensitivity + regulatory regime); picked **mandatory elicitation step** (workflow asks; doesn't trust agent to remember).
+
+**Change:**
+- **New "Access & Data Posture" section in `compass/templates/foundation-product.md`**, placed after Personas. 3 mandatory fields with closed enums:
+  - Auth posture: anonymous · registered · authenticated · MFA-required · regulated-identity
+  - Data sensitivity: none · public · PII · sensitive · regulated
+  - Regulatory regime: none · GDPR · HIPAA · SOC 2 · PCI DSS · sector-specific · combination
+  - `n/a — <reason>` valid only for genuinely non-applicable cases (e.g., internal build tooling with no users).
+- **`/setup-product` Step 5 gained explicit elicitation sub-bullet.** Workflow conversationally asks the user the 3 questions during drafting (not just "populate the section silently"). Per Principle #14 — explicit elicitation closes the rationalization surface.
+- **Step 5 Postcondition updated** to require the section is populated with values or `n/a — <reason>`.
+- **New Verification gate item** in `/setup-product`: section populated, all 3 fields with value or `n/a — <reason>`; HITL gate blocks otherwise. References Principle #15 (cite-or-mark-n/a) + Principle #14 (named explicitly because foundational-product bets have historically failed to surface auth — the v0.3.1 trigger).
+
+**Files touched (4):** `compass/templates/foundation-product.md`, `compass/workflows/setup-product.md`, `CHANGELOG.md` (0.3.1), `compass/workflows/improvements.md`. **Tight scope.**
+
+**Watch for:**
+- **Whether the `n/a` escape valve gets abused.** Backend-only / internal-tooling projects legitimately need it. If `n/a — internal` becomes the default answer for foundational products that DO have user-facing components, closed enums need tightening or workflow needs sharper elicitation language.
+- **2nd-instance trigger for Principle #17.** When `/create-brief` gets the same treatment in v0.3.2 (every feature/OKR/tech-debt bet declares Access & Data), promote to AGENTS.md cross-cutting principle #17: *"Every bet declares access & data posture."* Currently 1 instance; codification rule says wait for ≥2-3.
+- **Decide-before-derive flow in v0.3.2.** `/setup-foundation-architecture` auth promotion should **read the foundational product Access & Data Posture as input** — derive auth model from it, don't redefine. Without that link, the architecture decision is unmoored from the product decision and the gap returns at a different layer.
+- **Agent over-scope tendency (meta-observation).** This round I initially over-scoped the plan: first pass was 7 files touching product + brief + architecture in one patch. User course-corrected: *"one step at a time. Lets get create product right."* Same shortcut shape as the soft-spec-rationalization failure mode the framework keeps catching — even the meta-architect (Claude on Compass) defaults to "do it all at once" when a clean structural fix is visible. **Recursive Principle #14 again; honor the slow-pace commitment.**
+- **No new AGENTS.md principle this round.** Pattern needs 2nd instance (brief.md treatment) to satisfy codification rule. Codify in v0.3.2.
+
+**Meta-observation:** v0.3.1 is the smallest patch in the v0.3 cycle (4 files; ~10 lines of new content per file). **Deliberate.** Validates the "one step at a time" cadence as a real discipline, not just stated intention. Next aura-app `/setup-product` run should surface auth as a foundational question — that's the validation criterion. Architecture-layer auth derivation lands separately in v0.3.2.
+
+---
+
 ### 2026-05-26 — Workflow hardening template established + `/setup-product` translated (v0.3.0-alpha part 2)
 
 **Goal:** Validate that the v0.3 gate/work/postcondition template can express a real workflow without ceremony bloat or behavior change. Pick `/setup-product` first — already the most disciplined workflow (had Verification gate from v0.1.9, named anti-patterns inline). Low translation risk → ideal for validating template on the easy case before harder workflows translate.

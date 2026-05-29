@@ -29,6 +29,16 @@ check_in_cadence: quarterly
 
 <Who specifically. Not "users" — segments, roles, or job-to-be-done.>
 
+## Access & Data Posture
+
+Three foundational decisions that constrain all downstream auth / data / compliance work. **Don't defer to architecture** — these are product decisions that `/setup-foundation-architecture` derives from.
+
+- **Auth posture:** anonymous · registered · authenticated · MFA-required · regulated-identity
+- **Data sensitivity:** none · public · PII · sensitive (financial / health / private content) · regulated (subject to a regime — name under Regulatory regime)
+- **Regulatory regime:** none · GDPR · HIPAA · SOC 2 · PCI DSS · sector-specific (FERPA / GLBA / etc., name it) · combination (name each)
+
+Mandatory. `n/a — <reason>` valid only for genuinely non-applicable cases (e.g., internal build tooling with no users / no data / no regulatory exposure). Per Principle #15 — empty fields fail; unjustified `n/a` fails.
+
 ## Market positioning
 
 <Where we sit. Who we compete with. What's distinctive.>
