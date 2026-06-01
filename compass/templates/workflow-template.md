@@ -117,6 +117,20 @@ version: 0.3.0-alpha             # workflow's own hardening version; bump on nex
   approve — that's the rationalization surface principle #14 closes.
   First instance: `/setup-foundation-architecture` v0.3.2 (anchor + 4
   cascading layer elicitations).
+
+  ROLE-BOUNDARY MARKERS: when a workflow step loads a role or transitions
+  to a different role, add structured HTML-comment markers around the
+  step per the [role-boundary] Compass-original (see canon.md). Shape:
+
+      <!-- COMPASS_ROLE_BOUNDARY: enter | role=<name> | workflow=<id> | step=<N> -->
+      ...step content...
+      <!-- COMPASS_ROLE_BOUNDARY: exit | role=<name> | workflow=<id> | step=<N> -->
+
+  The markers are anchors for the reference parser at
+  `compass/scripts/token-usage.py`, which attributes Claude Code session
+  tokens to roles. Add markers when role transitions are meaningful
+  (multi-role workflows like /build, /setup-product, /create-brief);
+  optional for single-role workflows. PM-owned by convention.
 -->
 
 ### 1. <Step title>
