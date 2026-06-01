@@ -30,6 +30,8 @@ Artifacts the framework produces live in `docs/`:
 
 Reviewer findings are real. Disputes go to PM, not auto-resolved by either tool.
 
+**Why this split is structurally load-bearing, not procedural.** Same-model reviewer + same-model author share aesthetic priors — blind spots, assumptions about "clean code," default architectural patterns, "looks right" intuitions. A reviewer with identical priors can miss what an independent-model reviewer catches. **Empirically validated during aura-app CB-1.4 (2026-06-01):** user ran the same diff through both Codex (different model than Engineer) and Claude (same model as Engineer) as reviewers; Codex outperformed. This is not "pick whichever reviewer is cheaper" — switching to a same-model reviewer for cost reasons re-introduces the blind-spot overlap the framework exists to close. The `compass/scripts/agent-handoff.yml` template ships Codex default-enabled for this structural reason, not ergonomic preference; the Claude-headless block is documented as a fallback for teams without Codex access, **not an equivalent alternative**. Same logic applies to any future role-pairing — Engineer + Reviewer is the canonical instance; Architect-pair, Researcher-pair, or other multi-agent reviews inherit the same constraint.
+
 ## The 13 roles
 
 | Role                                       | Where defined                           |
