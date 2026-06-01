@@ -11,8 +11,9 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 - **Retro #001** (v0.1.8 → v0.1.12): [retros/2026-05-26-retro-001-v0.1.8-to-v0.1.12.md](retros/2026-05-26-retro-001-v0.1.8-to-v0.1.12.md)
 - **Retro #002** (v0.1.13 → v0.2.2): [retros/2026-05-26-retro-002-v0.1.13-to-v0.2.2.md](retros/2026-05-26-retro-002-v0.1.13-to-v0.2.2.md)
 - **Retro #003** (v0.2.3 → v0.2.7): [retros/2026-05-26-retro-003-v0.2.3-to-v0.2.7.md](retros/2026-05-26-retro-003-v0.2.3-to-v0.2.7.md)
+- **Retro #004** (v0.2.8 → v0.3.5 + same-day extensions): [retros/2026-06-01-retro-004-v0.2.8-to-v0.3.5.md](retros/2026-06-01-retro-004-v0.2.8-to-v0.3.5.md) — fired at #22, **2 cycles overdue** (promised after #20); names retro-cadence-rationalization as drift signal; surfaces `[mechanical-output-verification]` as codification-ready (2 instances).
 
-**Next retro fires after improvement #20.** (v0.2.8 is #16; 4 more entries needed.)
+**Next retro fires after improvement #25.** (v0.3.5 is #22; 3 more entries needed. **Hard line — if it slips again, retro rationalization is no longer one-off.**)
 
 ## Template
 
@@ -67,6 +68,54 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 **Watch for:**
 - Other workflows with "MUST engage" roles that don't enforce *what* the engagement produces (Architect on every PR — what's the deliverable?).
 - Researcher may now over-rotate and produce thin evidence across all three categories just to clear the gate. If that happens, tighten on *quality of evidence* (citations, primary sources) rather than just presence.
+
+---
+
+### 2026-06-01 — `[mechanical-output-verification]` codified + Codex review process gains Step 0 framework-registration + 4 new named anti-patterns (v0.3.6)
+
+**Friction (informed by Retro #004):** Retro #004 fired 2 cycles overdue at improvement #22 (this is improvement #23). It surfaced `[mechanical-output-verification]` as codification-ready — 2 instances accumulated: (1) CB-1.4 dashboard proxy `.next/server/middleware-manifest.json` inspection from v0.3.5 same-day extension; (2) Codex's own self-critique from the same cycle ("Start with framework registration checks before reading functional tests" + "Prefer 'is this actually deployed by the framework?' over 'do the tests pass?'"). Same shape: inspect runtime/build artifact before trusting source-level, test-level, or narrative signals. Codification rule satisfied.
+
+**Why now:** First time a *deferred* Compass-original candidate is being codified after accumulating 2 instances in the wild. Prior canon entries (e.g., `[freshness-check]` v0.3.3, `[elicitation-with-options]` v0.3.2) shipped with their 1st instance because the pattern itself was novel enough to name at first sight. `[mechanical-output-verification]` is the first that earned codification by *accumulated evidence* rather than *novelty at first sight*. Validates the 2-3-instance rule as a working codification mechanism, not a stalling tactic.
+
+**Change:**
+
+- **New `[mechanical-output-verification]` Compass-original** in `compass/framework/canon.md`. 4th enforcement-class member (joining cite-or-mark-n/a · refuse-escalate · soft-spec-hardening). Names: framework anchors (Next.js manifests / Vercel Functions output / Expo prebuild native config) + general principle (when runtime config is data-driven, source ≠ runtime — inspect runtime) + the two instances + `polished-but-broken` as the anti-pattern it closes.
+- **`compass/roles/reviewer.md` gained Step 0 — framework-registration check.** Before functional analysis, Codex verifies build output / runtime artifact for changes touching framework-discovered surfaces (file-based routing, middleware auto-registration, plugin discovery, asset bundling). REQUIRED for routing-layer / discovery-layer / framework-convention changes; OPTIONAL for pure logic changes. Direct application of Codex's own self-critique point #1 + #5.
+- **`compass/roles/reviewer.md` gained Step 4 — review-time freshness check.** When story or DRI Decision names a runtime behavior or file convention as load-bearing, Codex re-verifies the claim against current primary docs — does not trust story-as-written. BLOCKER promotion when claim is wrong regardless of how cleanly implementation follows the (incorrect) story. This is `[freshness-check]` applied at review time, not just doc-load time.
+- **`compass/roles/reviewer.md` Anti-patterns gained 4 new named entries:**
+  - `polished-but-broken` (formalized from v0.3.5)
+  - `direct-import-test-suspicious` (Codex point #2 — when feature depends on framework discovery, direct-import tests bypass the discovery mechanism)
+  - story-claim-trust-without-primary-doc-verification (load-bearing story claims must be re-verified at review time)
+  - `narrow-bug-focus` (Codex's own self-named failure mode — finding real bugs at functional layer while missing higher-altitude framework-legality issues)
+- **`compass/workflows/build.md` Phase 2 step 7** gained explicit `[mechanical-output-verification]` citation. Retrofit of formal pattern name onto the existing implementation from v0.3.5 same-day extension.
+- **`AGENTS.md` Workflow Structure section** gained note about `[mechanical-output-verification]` as 4th enforcement-class. Explicit balance framing: **4 enforcement : 4 usability**.
+- **`compass/templates/workflow-template.md` gained inline commentary** about applying the pattern when workflows include build/deploy/framework-discovery steps.
+- **`compass/framework/canon.md` `[freshness-check]` entry extended** with review-time application note (the pattern applies to story claims at review time, not just to Compass-doc-load time).
+- **CHANGELOG v0.3.6 entry** documents all of the above + 3rd consecutive freshness-detection slip (with hard line — if it slips a 4th time, the workflow-side defense from v0.3.3 must be re-examined).
+
+**Codex's own self-critique drove half the changes.** First time Compass evolution was driven by a reviewer agent's own retrospective rather than user friction or framework-on-framework reflection alone. Worth watching whether this pattern recurs:
+- Point 1 (framework registration before tests) → Step 0
+- Point 2 (direct-import-test suspicion) → named anti-pattern
+- Point 3 (re-verify load-bearing framework claims) → Step 4 review-time freshness
+- Point 4 (AC contradictions earlier) → **NOT integrated** (single instance only, defer per codification rule; surfaced for next retro)
+- Point 5 (prefer "is this deployed?" over "do tests pass?") → embedded in Step 0 reasoning + canon entry
+
+**Retro #004 → v0.3.6 framing held cleanly.** The retro reported findings; v0.3.6 was the prescriptive response. Retro framing ("reports — does not prescribe") survived its first real-world test where it directly preceded a substantive release. The two layers (reflection / action) stayed separable. Framework-on-framework working.
+
+**Files touched (7):** edited — `compass/framework/canon.md` (mechanical-output-verification entry + freshness-check review-time extension), `AGENTS.md` (4th enforcement-class note + 4:4 balance framing), `compass/roles/reviewer.md` (Step 0 + Step 4 + 4 new named anti-patterns), `compass/workflows/build.md` (canon reference in step 7), `compass/templates/workflow-template.md` (inline commentary), `CHANGELOG.md` (v0.3.6 entry), `compass/workflows/improvements.md` (this entry).
+
+**Watch for:**
+- **Will Step 0 reduce `polished-but-broken` recurrence in next reviews?** The retrospective evidence base for `[mechanical-output-verification]` is 2 instances; the test is whether real reviews (next 5-10 PRs across aura-app and future Compass consumers) catch framework-registration issues that previously slipped through. If they do — codification was the right move. If `polished-but-broken` keeps recurring — Step 0 is insufficient; escalate to scanner check or build-time gate.
+- **Will Codex actually apply Step 0 vs rationalize past it?** Codex's own retrospective produced these points. The codification embeds them into the role file. But Principle #14 says: agents under load rationalize away constraints, even ones they helped author. Watch for Codex review comments that skip Step 0 for "obvious" cases — that's the rationalization surface re-opening.
+- **First-time codification-by-accumulated-evidence — pattern or one-off?** v0.3.6 is the first deferred Compass-original promoted after 2 instances. If the next 2-3 codifications also follow accumulated-evidence path (vs novelty-at-first-sight), the 2-3-instance rule is a working codification mechanism. If accumulated-evidence codification stays one-off, examine why (novelty-at-first-sight may be the dominant path, with deferred-then-codified rare).
+- **AC consistency check (Codex point #4) recurring?** Single instance now (CB-1.4). If a 2nd structurally-distinct AC-contradiction instance surfaces, `[ac-consistency-check]` graduates to codification candidate. Probably belongs in `/create-story` Standard Experience Checklist.
+- **Freshness detection 4th slip.** v0.3.6+ continues the deferral. Hard line in CHANGELOG: if 4th slip happens, workflow-side check from v0.3.3 must be re-examined. This is the **structural escalation mechanism** — same shape as retro-counter visibility in v0.3.0-alpha. The slip is now load-bearingly visible.
+- **5-shape catalog vs 6-shape pressure.** v0.3.6 added a member to existing shape, did not introduce 6th shape. If a future Compass-original (`[defense-in-depth-marker]`, `[ac-consistency-check]`, or other) doesn't fit existing shapes, framing needs sharpening. Worth re-examining the catalog at every 3rd release.
+- **Will the reviewer-agent-self-critique pattern recur?** v0.3.6 was driven significantly by Codex's own retrospective. If future reviewer-agent retrospectives surface similar concrete patterns, the framework should formalize a way to capture and integrate them (a `/reviewer-retro` workflow? A standing section in `/retro` output?). Single instance now; watch.
+
+**Meta-observation — `[mechanical-output-verification]` rebalances the catalog.** Prior to v0.3.6: 3 enforcement (cite-or-mark-n/a · refuse-escalate · soft-spec-hardening) : 4 usability (interaction · freshness · observability · handoff). Post-v0.3.6: 4 : 4. The framework was tilting toward usability-shapes outpacing enforcement; v0.3.6 restores balance. **Whether this matters or is incidental is itself a question for retro #005.** If enforcement-class growth stalls again, the framework may be structurally biased toward making itself easier-to-use over making itself harder-to-violate — worth examining whether that's intentional or accidental.
+
+**Cadence held.** v0.3.1 (Access & Data Posture) · v0.3.2 (elicitation-with-options) · v0.3.3 (freshness-check) · v0.3.4 (role-boundary) · v0.3.5 (agent-handoff + same-day extension) · v0.3.6 (mechanical-output-verification codified) = **one Compass-original per session, 6 sessions running.** Retro #005 fires at improvement #25 (3 more entries needed).
 
 ---
 
