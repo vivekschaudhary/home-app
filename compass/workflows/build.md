@@ -79,7 +79,7 @@ Engineer implements an approved story. Codex reviews. Architect compliance enfor
 
    This is the pull-bridge round-1 defense against external-tool drift (per `[freshness-check]` v0.3.3 → v0.3.4 detection → v0.4 push). Without this gate, Codex format changes silently break the review parsing — exactly the friction that prompted the pattern.
 
-13. **CI runs.** Codex review begins ONLY after CI is green.
+13. **CI runs.** Codex review begins ONLY after CI is green. **If `.github/workflows/ai-review.yml` is installed in the consuming repo (per `compass/scripts/agent-handoff.yml` template, `[agent-handoff]` v0.3.5), the reviewer fires automatically on CI-green — Engineer does not need to invoke it manually. Otherwise the reviewer is invoked manually** (open terminal, run `codex` against the reviewer prompt referencing the PR number — see `compass/roles/reviewer.md`). Both paths terminate at the same place (structured findings posted as a PR comment); automation removes the tool-switch + manual prompt paste only.
 14. **Codex reviews** — posts structured findings on PR (BLOCKER / ISSUE / NIT)
 15. **Architect compliance check** is part of Codex review (bet architecture as reference)
 16. **Security Reviewer (Codex)** auto-engages if diff touches auth/PII/payments/secrets/external input/sessions

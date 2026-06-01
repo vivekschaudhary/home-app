@@ -1,8 +1,8 @@
 # Compass — `scripts/`
 
-Reference utility scripts that complement Compass workflows. Each script is single-file and uses stdlib only (no `pip install`, no `npm install`). Adopt as-is or fork for team-specific needs.
+Reference utility scripts and templates that complement Compass workflows. Each entry is single-file. Adopt as-is or fork for team-specific needs.
 
-**Owner convention:** scripts in this directory are operated by the **Project Manager** role (matching the existing `/status` + `/plan` ownership of "make work visible" jobs).
+**Owner convention:** scripts in this directory are operated by the **Project Manager** role (matching the existing `/status` + `/plan` ownership of "make work visible" jobs). The `agent-handoff.yml` template is consumed by Engineer / Reviewer roles through CI rather than invoked by PM directly — it lives here because it ships with Compass as a reference, alongside `token-usage.py`.
 
 ---
 
@@ -84,12 +84,67 @@ PM-owned by convention — see `compass/roles/project-manager.md` for token-usag
 
 ---
 
-## Future scripts
+---
+
+## `agent-handoff.yml` — GitHub Actions reviewer template
+
+> Last verified against vendor CLIs: **2026-06-01**. Freshness window: **30 days**.
+> External sources tracked: `https://github.com/openai/codex` · `https://docs.anthropic.com/claude/docs/claude-code` · `https://github.com/google/gemini-cli`.
+> Re-verify install commands + invocation flags before the window expires; bump `last_verified` after confirmation. Per `[freshness-check]` (canon.md).
+
+Automates the Engineer → Reviewer handoff for `/build`. When CI passes on a PR, the workflow runs the reviewer agent against the diff and posts findings as a PR comment. The sending agent (Claude) reads the comment back via GitHub MCP the next session — no terminal switch, no manual prompt paste.
+
+Per the `[agent-handoff]` Compass-original pattern in `compass/framework/canon.md` (v0.3.5).
+
+### Setup in your consuming repo
+
+1. **Copy the template** to your repo: `cp compass/scripts/agent-handoff.yml .github/workflows/ai-review.yml` (in the consuming repo, not the Compass repo).
+2. **Set the CI workflow name** in the `workflows:` line near the top of the file to match YOUR CI workflow's `name:` value (the human-readable name, not the YAML file name).
+3. **Add the API-key secret** matching the reviewer block you enable, in your repo's GitHub Settings → Secrets:
+   - `OPENAI_API_KEY` (Option A — Codex)
+   - `ANTHROPIC_API_KEY` (Option B — Claude headless)
+   - `GOOGLE_API_KEY` (Option C — Gemini)
+   - Your provider's key (Option D — generic)
+4. **Pick ONE reviewer block** in the YAML; leave the others commented out.
+5. **Verify the install command + CLI flags** for your chosen reviewer against current vendor docs. The values shipped are best-effort references; CLI surfaces drift.
+
+After the first PR opens, the action runs on CI completion; findings post as a PR comment. Claude (next session) reads them via GitHub MCP and addresses BLOCKERs / ISSUEs.
+
+### Handoff shape (per [agent-handoff])
+
+| Piece | Value |
+|---|---|
+| **Trigger artifact** | The PR (opened or synchronized) |
+| **Trigger event** | `workflow_run` on CI completion |
+| **Context window** | `pr.diff` + your reviewer prompt file |
+| **Output medium** | PR comment (posted via `gh pr comment`) |
+| **Loop signal** | Claude reads PR comments via GitHub MCP next session |
+
+### Agent-agnostic by design
+
+The template ships with four reviewer blocks (Codex / Claude headless / Gemini / generic CLI). Each block: install CLI · invoke with prompt + diff · capture findings to `review.md`. The default-enabled block is Codex (matching the canonical Compass tool division: Claude implements, Codex reviews); the alternatives match alternate setups.
+
+### Accuracy honesty + caveats
+
+- **Vendor CLI drift is real.** The `npm install` packages and CLI flags shown are placeholder references. Verify against current vendor docs before adoption; the freshness markers above name the window.
+- **No replay protection.** If CI re-runs, the workflow re-runs and posts another review comment. Acceptable for most teams; if noisy, add a `concurrency:` group or check for existing review comments before posting.
+- **Cost.** Every PR (and every `git push` while CI re-runs) triggers a reviewer invocation. Budget accordingly — for high-PR-volume repos, consider gating on a label (`needs-review`) instead of every CI-green.
+- **Auth model.** GitHub Actions writes the review comment using `secrets.GITHUB_TOKEN`. The reviewer agent uses YOUR API key (one of the secrets above). Both must be set.
+
+### Manual fallback always supported
+
+If the template isn't installed, the Engineer → Reviewer handoff stays manual exactly as it was pre-v0.3.5: terminal → `codex` → reviewer prompt → PR. Both paths terminate at the same place (findings as PR comment); automation removes the tool-switch only. See `compass/roles/reviewer.md` → "How you're invoked."
+
+---
+
+## Future scripts + templates
 
 Reference implementations may join this directory as Compass evolves. Candidates:
 
-- **Freshness detector** (v0.3.5+) — CI script that watches external-tool sources (Codex changelog, MCP schemas, library release notes, Vercel deploys) and auto-bumps `last_verified` markers on Compass docs
+- **Freshness detector** (v0.3.6+) — CI script that watches external-tool sources (Codex changelog, MCP schemas, library release notes, Vercel deploys, AND the CLIs referenced by `agent-handoff.yml`) and auto-bumps `last_verified` markers on Compass docs. Slipped from v0.3.4 → v0.3.5+ → v0.3.6+ as token tracking and handoff automation took priority.
 - **Multi-session aggregator** — wraps `token-usage.py` across many session logs for team-level reporting
 - **Marker linter** — validates `COMPASS_ROLE_BOUNDARY` markers in workflows are well-formed (enter/exit balance, valid role names, no orphans)
+- **Handoff replay** — for repos with high PR volume, gates `agent-handoff.yml` invocation on labels or checks existing comments to avoid duplicate reviews
+- **Cross-agent codex parser** — `token-usage-codex.py` for attributing Codex CLI session tokens (parallel to `token-usage.py` for Claude Code; same protocol, different log format)
 
-Add scripts here when token-tracking-style problems are structurally hard to solve with markdown docs alone. **Keep them single-file, stdlib-only, and PM-operable** — same discipline as `token-usage.py`.
+Add scripts here when problems are structurally hard to solve with markdown docs alone. **Keep them single-file and minimal-dependency** — same discipline as `token-usage.py` (stdlib-only Python) and `agent-handoff.yml` (vanilla GitHub Actions).

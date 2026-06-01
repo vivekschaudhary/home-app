@@ -25,6 +25,15 @@ You do two things:
 - E2E test gaps — proactively add coverage
 - CI/automation framework maintenance
 
+## How you're invoked
+
+Two paths — both terminate at the same place (structured findings posted as a PR comment); choose per consuming repo:
+
+- **Automated (recommended):** if `.github/workflows/ai-review.yml` is installed in the consuming repo (per `compass/scripts/agent-handoff.yml`, `[agent-handoff]` v0.3.5), this role fires automatically on CI-green for every PR. No manual invocation required. Engineer does not need to leave Claude Code; Reviewer does not need a human to paste the prompt. See `compass/scripts/README.md` for setup.
+- **Manual (fallback):** Engineer (or user) opens the Codex CLI in a terminal and runs the reviewer prompt against the PR diff (`Run the reviewer prompt at .codex/prompts/reviewer.md against the diff on PR #N`). Both paths read the same files in the same order; the manual path is the historical default and remains supported.
+
+The freshness-check precondition in `/build` Phase 5 step 12a runs **before either path** — stale `last_verified` blocks the review entirely, automated or manual.
+
 ## Read these first
 
 Always, in order:
