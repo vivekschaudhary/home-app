@@ -14,7 +14,7 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 - **Retro #004** (v0.2.8 → v0.3.5 + same-day extensions): [retros/2026-06-01-retro-004-v0.2.8-to-v0.3.5.md](retros/2026-06-01-retro-004-v0.2.8-to-v0.3.5.md) — fired at #22, **2 cycles overdue** (promised after #20); names retro-cadence-rationalization as drift signal; surfaces `[mechanical-output-verification]` as codification-ready (2 instances).
 - **Retro #005** (v0.3.6 → v0.3.8 + same-day correction): [retros/2026-06-02-retro-005-v0.3.6-to-v0.3.8.md](retros/2026-06-02-retro-005-v0.3.6-to-v0.3.8.md) — **fired ON TIME at #25** (hard line from Retro #004 worked). Smaller 3-improvement cycle. Surfaces `[declare-not-implement]` + `[hard-line-declaration]` as codification-ready (2 instances each); `[framework-on-framework]` at threshold (3 instances). Includes first in-cycle artifact analysis section: `compass/roles/reviewer.md` rated 7/10 (pruning candidate) + CB-1.5 story rated 9/10 (correct framework application in the wild).
 
-**Next retro fires after improvement #30.** (v0.3.5 = #22; v0.3.6 = #23; v0.3.7 = #24; v0.3.8 = #25 — Retro #005 fired ON TIME 2026-06-02; v0.3.9 = #26; v0.3.10 = #27. **3 more substantive improvements needed** before Retro #006. Hard line from Retro #004 still in effect — `[hard-line-declaration]` is now codified per v0.3.10 (canon.md); the counter mechanism above is itself an instance of the pattern.)
+**Next retro fires after improvement #30.** (v0.3.5 = #22; v0.3.6 = #23; v0.3.7 = #24; v0.3.8 = #25 — Retro #005 fired ON TIME 2026-06-02; v0.3.9 = #26; v0.3.10 = #27; v0.3.11 = #28; v0.3.12 = #29 (v0.4 spec capture). **1 more substantive improvement needed** before Retro #006. `[hard-line-declaration]` codified v0.3.10; the counter mechanism above is itself an instance of the pattern.)
 
 ## Template
 
@@ -69,6 +69,174 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 **Watch for:**
 - Other workflows with "MUST engage" roles that don't enforce *what* the engagement produces (Architect on every PR — what's the deliverable?).
 - Researcher may now over-rotate and produce thin evidence across all three categories just to clear the gate. If that happens, tighten on *quality of evidence* (citations, primary sources) rather than just presence.
+
+---
+
+### 2026-06-02 — v0.4 architectural-direction crystallized: Delivery Manager + Time/Quality/Finance + moat positioning + 4 sub-problems (v0.3.12)
+
+**Friction (not yet observed; conceptual capture):** User starting a new project. v0.4 orchestrator vision needed sharper architecture before either (a) pre-emptively building v0.4 infrastructure or (b) starting the new project without v0.4 framing. **The v0.3.x line continues to ship; v0.4 is the architectural target.**
+
+User direction across the session: clarify the orchestrator role, name its mandate, articulate the moat positioning, identify the hard problems "under the surface" that need to be solved. **What follows is the crystallized v0.4 spec target.**
+
+## The orchestrator role: Delivery Manager
+
+Not "Project Manager evolved." A distinct role with three explicit mandates:
+
+1. **Time** — schedule, dispatch sequencing, milestone tracking, plan refinement, sprint cadence, deadline reporting
+2. **Quality** — HITL gate enforcement, BLOCKER routing, scanner finding triage, discipline checks (do role files derive from latest, did /build's Step 0 fire, did `[freshness-check]` pass), Codex review status tracking
+3. **Finance** — token cost tracking across hosts/roles/phases, budget allocation, cost transparency, ROI per bet outcome, overrun flags
+
+**Mutually exclusive with content decisions.** Delivery Manager never decides:
+- What to build (PM/Product owns this)
+- How to architect (Architect owns this)
+- How to implement (Engineer owns this)
+- What's a bug (Reviewer owns this)
+- What copy says (UX Writer owns this)
+
+**No authority creep risk by design.** The mandate is three measurable axes; three reportable surfaces; three places the user can override. Real Delivery Manager role exists in real software organizations — this is borrowing a known-working pattern, not inventing one.
+
+## Moat positioning — why Compass differentiates
+
+Methodology + markdown + roles + workflows is widely replicable; every framework has it. **The orchestration layer is structural** and that's where Compass differentiates:
+
+| Compass moat-layer | Why it's hard to replicate |
+|---|---|
+| **Filesystem as state** (`compass/` + `docs/` in git) | Most multi-agent systems use proprietary memory/state stores; Compass uses git artifacts. Durable, host-neutral, auditable, version-controlled. |
+| **Declarative workflow markdown as orchestration spec** | Workflow files describe role + step + handoff in prose; Delivery Manager interprets. Most frameworks code orchestration in YAML or Python; Compass's prose-first approach is more maintainable + legible to non-engineers. |
+| **Cross-host role dispatch** | OpenAI for PM, Claude for Architect, Gemini for Researcher, Codex for Reviewer — coordinated by one Delivery Manager. Most frameworks lock everyone to one host. |
+| **Surface-aware role-task fit** (CB-1.5 `[surface-shapes-output]` insight) | Different surfaces produce different aesthetic outputs; Delivery Manager picks surface per role's work shape. Most frameworks treat hosts/surfaces as interchangeable. |
+| **Discipline-as-orchestration-input** (Principle #14 + others) | Soft-spec-hardening · hard-line-declaration · mechanical-output-verification · declare-not-implement become Delivery Manager inputs — enforced at dispatch time. Most frameworks separate discipline from orchestration; Compass unifies them. |
+
+**No other framework combines these.** The integration IS the moat — not any single piece. Compass's strategic positioning is now an engineering commitment, not just methodology.
+
+## Four sub-problems to solve "under the surface"
+
+### 1. Cross-host task dispatch
+
+Delivery Manager (web surface) routes work to roles on other hosts/surfaces. Four candidate mechanisms:
+
+| Mechanism | How | Trade-off |
+|---|---|---|
+| **Task-file dispatch** *(recommended)* | Delivery Manager writes `docs/tasks/<task-id>.md` with role + spec + acceptance + dispatch metadata; per-host watcher agents poll for tasks assigned to their roles; reports back via filesystem | Compass-native; matches filesystem-as-state principle; works with any host that can read/write the repo. Requires watchers per host (small CLI agents). |
+| MCP-based dispatch | Delivery Manager exposes "dispatch role X with task Y" via MCP; each host's agent registers as an executor | Real-time; cleaner contracts; requires every host to have MCP support (Anthropic + OpenAI shipping; not universal yet) |
+| Direct API dispatch | Delivery Manager has API keys; routes via OpenAI / Anthropic / Google APIs directly | Real-time; no host-side agent needed; **loses surface-specific context** (no Claude Code file-system bias for Engineer work) — this is the wrong choice given the surface-shapes-output insight |
+| User-shuttle dispatch | Delivery Manager prepares the task; user opens the right host+surface; pastes; today's manual mode | Works without infrastructure; doesn't scale; this is what's friction-y today |
+
+**v0.4 commits to task-file dispatch.** Compass-native; preserves surface-specific context; works with any host that has GitHub read+write.
+
+### 2. State synchronization across hosts
+
+Every host needs read+write access to shared state:
+
+| State type | Location | Access requirement |
+|---|---|---|
+| Artifacts (briefs, stories, architecture, code, tests) | `compass/` + `docs/` + repo files | GitHub MCP (Claude.ai, ChatGPT, Gemini web) OR git CLI (Claude Code, Codex CLI) |
+| Workflow state (where we are in the cadence) | `docs/foundation/plan.md` + `docs/status.md` | Same |
+| Orchestration state (who's working on what RIGHT NOW) | NEW: `docs/orchestration-state.md` + `docs/tasks/` dispatch directory | Same |
+| Cost state (rolling totals per role / per host) | NEW: `docs/usage/current.json` + extend `compass/scripts/token-usage.py` | Same |
+| Decision state (DRI log entries) | Already in artifacts' DRI sections | Same |
+
+**Practical constraint:** every host needs GitHub repo access. "If your chosen host can't read/write the repo, it can't participate in Compass." Reasonable constraint at v0.4 maturity — host ecosystems will catch up (Claude.ai already has GitHub MCP shipping; ChatGPT has connectors).
+
+### 3. Real-time cost tracking (the Finance leg)
+
+v0.3.4's `compass/scripts/token-usage.py` parses Claude Code session logs. For Delivery Manager Finance to work:
+
+- **Parsers per host:** Claude Code ✓; Codex CLI needed; ChatGPT API needed; Gemini CLI + web needed
+- **Aggregator** combining per-host usage → per-role / per-workflow / per-bet totals (`compass/scripts/cost-aggregator.py`)
+- **Live state:** `docs/usage/current.json` + `docs/usage/<period>.md` archives
+- **Delivery Manager Finance flow:** reads aggregated totals → reports to user → flags budget overruns → enforces budget gates if configured
+
+Per-host session-log formats are a drift surface (`[freshness-check]` applies — each parser tracks its host's CLI version + last_verified date). Aggregator itself is bounded engineering. **The Finance leg is the most directly-shippable sub-problem** because v0.3.4 already established the pattern.
+
+### 4. HITL gate routing across surfaces
+
+Delivery Manager hits approval gate → notify user → wait → continue. **Progressive maturity:**
+
+| Maturity | Mechanism | User effort |
+|---|---|---|
+| **v0.4.0** | Polling (Delivery Manager pauses; user checks any surface; approves on web by writing to a state file or clicking a link) | Low (works with no extra infrastructure) |
+| **v0.4.1** | Email/Slack notification (Delivery Manager posts to user's configured channel; user clicks approve link) | Medium (notification config + webhook) |
+| **v0.5+** | Browser notification, mobile push (ergonomic improvements) | Higher (browser extension or app) |
+
+**v0.4 ships polling first.** Email/Slack as v0.4.1 once friction validates the priority. Browser/mobile push are ergonomic improvements deferred until usage demands them.
+
+## Implementation scope (estimated)
+
+- **New role:** `compass/roles/delivery-manager.md` (replaces or supersedes `project-manager.md` when v0.4 ships)
+- **New convention:** `docs/tasks/` directory + task-file schema (role + spec + acceptance + dispatch metadata)
+- **New aggregator:** extend `compass/scripts/token-usage.py` for multi-host + add `compass/scripts/cost-aggregator.py`
+- **Workflow updates:** every workflow's role-handoff steps become task-file dispatches (interpretable by Delivery Manager + executable by per-host watchers)
+- **AGENTS.md:** Delivery Manager added as the orchestration role + moat-layer description + Time/Quality/Finance mandate articulated
+- **New principle candidate (#17?):** Delivery Manager owns Time/Quality/Finance; never makes content decisions; mandate is mutually exclusive with content roles
+- **Per-host watcher implementations:** small CLI agents per host (Claude Code watcher, Codex CLI watcher, Gemini CLI watcher; ChatGPT/Claude.ai web use task-file dispatch via GitHub MCP); Compass-shipped reference implementations + user-extensible
+
+**6-8 file changes at the framework level + per-host watcher implementations** (each small). **Not a 6-month rebuild** — probably **3-4 design sessions + implementation sessions within v0.3.x cadence territory** once new-project friction signals validate sub-problem priorities.
+
+## Forward roadmap
+
+- **v0.3.x line continues** to ship incremental codifications + infrastructure as patterns emerge from real usage. v0.4 doesn't block v0.3.x.
+- **v0.4 ships when:** (a) enough new-project friction signals validate sub-problem priorities; (b) the design is concrete enough to implement without speculation.
+- **v0.4 is additive** — methodology + markdown + filesystem layer continue working; orchestration layer is additive when ready. Existing consumers don't have to adopt v0.4 to benefit from v0.3.x.
+- **The new project (starting now) is the friction-discovery vehicle.** User is manual Delivery Manager today; each friction signal informs which sub-problem to tackle first.
+
+## Decision (carried from user direction)
+
+User said: "lets log as v0.4." Interpreted as: log this conversation's architectural-direction crystallization as a v0.3.12 release that captures the v0.4 spec target. (Not bumping to v0.4.0-spec because v0.4 doesn't ship until implementation work happens; v0.3.12 is the spec-capture entry that future-self reading CHANGELOG sees as "the architectural direction was committed here.")
+
+**No framework code changes in v0.3.12 — pure spec capture.** New release class introduced: **architectural-direction crystallization**, joining the existing taxonomy (Compass-original codification · infrastructure release · PR correction · same-day correction · artifact-pruning release · architectural-direction crystallization). **6 release classes** as of v0.3.12.
+
+**Files touched (2):** edited — `CHANGELOG.md`, `compass/workflows/improvements.md` (this entry).
+
+**Watch for:**
+- **Which sub-problem causes most friction in new-project usage?** Validates v0.4 implementation priority. Likely candidates: cross-host task dispatch (manual is most painful) or HITL gate routing (notifications via email vs polling, user choice). Cost tracking (Finance) and state sync (filesystem) are likely lower-friction than expected.
+- **Does Delivery Manager / Project Manager naming need to evolve before v0.4 ships?** Today Project Manager has /status, /plan, /dashboard workflows. If new-project usage shows these workflows naturally absorb Delivery Manager responsibilities, the renaming/superseding becomes clean. If the role splits into two distinct usage patterns, sibling roles is better.
+- **Does the "moat" framing hold up?** When v0.4 ships and serves 3-5 real projects, does the integration actually feel differentiated, or does it feel like "yet another multi-agent system"? **Codification candidate when v0.4 ships:** `[moat-as-integration]` or `[orchestration-as-differentiation]` — a strategic/positioning pattern, distinct from existing 6 shapes.
+- **New release class observation:** v0.3.12 is the first architectural-direction crystallization release. **Release-class taxonomy now: 6 distinct classes.** Worth examining in Retro #006 whether these collapse into fewer or remain distinct.
+- **Does v0.3.x continue shipping while v0.4 is being designed?** Should — v0.3.x line still has friction-driven improvements queued (`[framework-on-framework]` codification past threshold; `setup-agent.py` propagation script; whatever new-project usage surfaces). v0.4 doesn't block; both lines run in parallel.
+- **Per-host watcher proliferation.** Each new host needs a watcher. If the ecosystem expands (DeepSeek, Codestral, future agents), watcher count grows. Mitigate via reference implementation + user-extensible pattern; track in `[declare-not-implement]` shape (Compass ships reference watchers; ecosystem builds the rest).
+- **MCP rollout shifts dispatch mechanism timeline.** If Anthropic + OpenAI ship comprehensive MCP support for their web apps before v0.4 implementation starts, MCP-based dispatch may become more attractive than task-file dispatch. Re-examine the dispatch mechanism choice at v0.4 design start.
+
+**Meta-observation — the moat is now explicit.** Up through v0.3.11, Compass was "yet another methodology framework." With the Delivery Manager + Time/Quality/Finance + cross-host orchestration framing, **Compass becomes a specific architectural bet: methodology + discipline + multi-agent orchestration unified.** That's positioning, not just engineering. Worth treating v0.4 design + implementation as the framework's identity-defining release — when v0.4 ships, Compass stops being a methodology framework with markdown files and becomes a multi-agent orchestration system with a methodology-based discipline layer.
+
+**Cadence note.** v0.3.1 → v0.3.12 = **12 sessions across 9 Compass-originals + 1 infrastructure release + 1 artifact-pruning release + 1 architectural-direction crystallization + corrections.** Cadence broke from strict-Compass-original-per-session early (v0.3.7 infrastructure); v0.3.12 confirms the broader framing: **substantive-progress-per-session, where "substantive" includes new release classes as they emerge.** Worth examining in Retro #006: is the cadence's flexibility a feature (responsive to friction) or a drift signal (loss of discipline)?
+
+---
+
+### 2026-06-02 — `compass/roles/reviewer.md` pruned per Retro #005 artifact analysis (v0.3.11)
+
+**Friction (carried from Retro #005 artifact analysis):** reviewer.md rated 7/10. Three overkill items named: (1) Step 0 too front-loaded for general PRs — Codex reads 4 framework-specific anchors + general principle + cross-reference + REQUIRED-vs-OPTIONAL determination before concluding "OPTIONAL" for pure-logic bug fixes; (2) Step 4 operationally expensive — "re-verify against current primary docs" every load-bearing claim means web fetches for every review with framework-behavior claims, the exact failure mode Principle #14 warns against (soft-spec rationalization under pressure); (3) anti-patterns section grew from 5 → 9 items in v0.3.6 with cumulative cognitive load risk ("too many named patterns become noise rather than signal").
+
+**Why now (user picked C in sequence A→B→C):** Retro #005 surfaced this as the highest-ROI cleanup candidate. Every Codex review pays the reading cost; pruning compounds.
+
+**Change:**
+
+- **Step 0 gained a decision tree at the top** — pure-logic PRs skip the framework-registration check entirely with a YES/NO gating decision; framework-discovered surfaces continue to the detailed checks. Detail-block compressed (removed "REQUIRED vs OPTIONAL" tail because decision tree handles gating). Cross-references `polished-but-broken` instead of separately naming `direct-import-test-suspicious`.
+- **Step 4 scoped from "every load-bearing claim" to "NEW load-bearing claims only"** — claims not already verified in prior PRs against the same external source, OR claims whose `last_verified` window has expired. Names the operational-cost failure mode explicitly: "re-verifying every load-bearing claim on every PR is the operational-cost failure mode the freshness-check pattern is designed to AVOID, not perpetuate." Already-verified claims within their window inherit prior verification.
+- **Anti-patterns consolidated from 9 → 7** — `direct-import-test-suspicious` and `narrow-bug-focus` folded into `polished-but-broken` as concrete sub-examples (they're failure modes that share the same diagnostic shape: mechanical artifact inspection closes the gap). Story-claim-trust preserved separately because structurally distinct (about NEW claims at Step 4 review-time freshness, not framework registration). Original 5 anti-patterns unchanged.
+
+**What was preserved (substance):** all four v0.3.6 codifications (Step 0 framework-registration mechanics, Step 4 freshness-at-review-time mechanics, all four named anti-patterns by reference); the "Expected Codex output shape" contract; the freshness markers (`last_verified`, `freshness_window_days`, `external_source`); all other Steps 1-3, 5-7 and Hard rules section.
+
+**What was reduced (cognitive cost):**
+- Step 0 reading cost on pure-logic PRs (decision tree exits at top)
+- Step 4 operational cost (NEW-claims-only scope; sliding-window inheritance)
+- Anti-patterns reading cost (9 → 7 with semantic consolidation under `polished-but-broken` parent)
+
+**No Compass-original codified — pure artifact cleanup.** Catalog unchanged at 6 shapes / 11 patterns. **First artifact-pruning release in the v0.3.x line** triggered by retro artifact analysis rather than by friction or codification readiness.
+
+**Files touched (3):** edited — `compass/roles/reviewer.md`, `CHANGELOG.md`, `compass/workflows/improvements.md` (this entry).
+
+**Watch for:**
+- **`polished-but-broken` recurrence rate after consolidation.** If recurrence rises after `direct-import-test-suspicious` and `narrow-bug-focus` became sub-examples, the consolidation under-named the failure modes (they had distinct discriminatory value that the parent didn't capture). If stable or falls, the consolidation captured the right semantic level — sub-examples were redundant identity. **3-5 PRs of data needed to read the signal.**
+- **Step 0 skip rate.** Track in Codex review output how often the YES/NO gating decision concludes "NO → skip Step 0". If high (>50%), the decision tree is correctly off-loading cognitive cost. If low (<25%), the gating criteria are too narrow and most PRs hit the detailed checks anyway — could either tighten gating ("does this PR ADD framework-discovered files" rather than "touch") or accept that Step 0 is universally relevant.
+- **Step 4 NEW-claim discrimination.** The "claims not already verified in prior PRs against the same external source" criterion is mechanical-sounding but requires Codex to grep prior PRs for citations against the same source. If this is operationally hard (Codex doesn't have efficient prior-PR-citation grep), the operational-cost reduction may not materialize. Watch first 3-5 reviews to see if the NEW-claim scoping actually reduces work.
+- **Catalog stability after pruning.** No Compass-original codified; no shape change; no anti-pattern category change. **First v0.3.x release that changes a load-bearing artifact's substance without changing the catalog framing.** Worth examining whether artifact-pruning becomes a recurring release class (alongside Compass-original codification, infrastructure, PR corrections, same-day corrections).
+- **Retro-to-release pipeline.** 3 of 5 Retro #005 recommendations actioned in 3 consecutive sessions (v0.3.9 `[declare-not-implement]` codified · v0.3.10 `[hard-line-declaration]` codified · v0.3.11 reviewer.md pruned). 2 remain deferred: `[framework-on-framework]` codification (3 instances past threshold) and `setup-agent.py` propagation script. Both carried forward to next session as candidates.
+- **Whether pruning was sufficient or whether reviewer.md needs further passes.** Pre-pruning length: ~165 lines. Post-pruning: estimate ~155 lines (compression in Step 0 + Step 4; consolidation in anti-patterns). Not dramatically shorter. If next 2-3 retros surface reviewer.md as still high-cost-per-read, a deeper pruning pass (or splitting into reviewer.md + reviewer-detail.md) may be warranted.
+
+**Meta-observation — first session-ending release driven by retro artifact analysis rather than friction or codification.** Up through v0.3.10, every release was either Compass-original codification (recurring shape) or infrastructure (v0.3.7) or correction (PR #1 + v0.3.8 same-day). v0.3.11 is the first **artifact-cleanup release** — Retro #005 named specific overkill items in a load-bearing artifact; v0.3.11 acts on them. This is a third release-driver pattern (alongside friction-driven and codification-driven). Worth noting in the catalog framing: release drivers include friction → codification, codification readiness ranking → codification, artifact analysis → cleanup, infrastructure commitments → infrastructure ship. The retro framework was originally designed to surface the first three drivers; v0.3.11 confirms artifact analysis as a fourth.
+
+**Cadence note.** v0.3.1 → v0.3.11 = **11 sessions, 9 Compass-originals + 1 infrastructure release + 1 artifact-pruning release + 1 PR correction + 1 same-day correction.** One-Compass-original-per-session cadence broken twice (v0.3.7 + v0.3.11) — both for legitimate non-codification work surfaced by retro. **The cadence isn't strict-Compass-original-only; it's substantive-progress-per-session.**
 
 ---
 
