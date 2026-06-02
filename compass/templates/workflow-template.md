@@ -158,6 +158,26 @@ version: 0.3.0-alpha             # workflow's own hardening version; bump on nex
   the orchestrator vision (v0.4+) — the registry shape naturally extends
   to declare an `orchestrator` entry.
 
+  SCOPE-DISCIPLINE: when a workflow needs an integration with external
+  tools, agents, or services (CLIs, APIs, vendor SDKs, language models,
+  MCP servers, etc.), follow [declare-not-implement] (see canon.md, v0.3.9):
+  declare the pattern + registry + manual fallback; do NOT write the
+  integration in Compass. Upstream libraries, vendor CLIs, or
+  consumer-side wiring handle the actual integration. Compass identifies
+  the integration surface, declares the structural shape, and points at
+  upstream/consumer responsibility. This is scope discipline applied at
+  framework design time, NOT at workflow execution time. Examples:
+  [agent-handoff] v0.3.5 (declared 5-piece handoff shape + template with
+  commented reviewer blocks; consumer wires per-CLI integration);
+  [agent-agnostic-role-assignment] v0.3.8 (declared agents registry +
+  delegated adapter layer to LiteLLM / Vercel AI SDK / OpenRouter /
+  LangChain; no per-agent adapter docs in Compass). When evaluating
+  whether to add per-X documentation or adapter code to a workflow, ask:
+  "would this duplicate upstream work that someone else already maintains?"
+  If yes, declare the pattern + point at upstream; do not write the
+  integration in Compass. First scope-discipline class Compass-original;
+  introduces 6th pattern shape in the catalog.
+
   MECHANICAL-OUTPUT-VERIFICATION: when a workflow includes a build, deploy,
   or framework-discovery step, the Postcondition is inspection of the
   build OUTPUT (or runtime artifact), not just the build PROCESS exit

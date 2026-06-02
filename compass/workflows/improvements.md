@@ -14,7 +14,7 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 - **Retro #004** (v0.2.8 → v0.3.5 + same-day extensions): [retros/2026-06-01-retro-004-v0.2.8-to-v0.3.5.md](retros/2026-06-01-retro-004-v0.2.8-to-v0.3.5.md) — fired at #22, **2 cycles overdue** (promised after #20); names retro-cadence-rationalization as drift signal; surfaces `[mechanical-output-verification]` as codification-ready (2 instances).
 - **Retro #005** (v0.3.6 → v0.3.8 + same-day correction): [retros/2026-06-02-retro-005-v0.3.6-to-v0.3.8.md](retros/2026-06-02-retro-005-v0.3.6-to-v0.3.8.md) — **fired ON TIME at #25** (hard line from Retro #004 worked). Smaller 3-improvement cycle. Surfaces `[declare-not-implement]` + `[hard-line-declaration]` as codification-ready (2 instances each); `[framework-on-framework]` at threshold (3 instances). Includes first in-cycle artifact analysis section: `compass/roles/reviewer.md` rated 7/10 (pruning candidate) + CB-1.5 story rated 9/10 (correct framework application in the wild).
 
-**Next retro fires after improvement #30.** (v0.3.5 = #22; v0.3.6 = #23; v0.3.7 = #24; v0.3.8 = #25 — **Retro #005 fired ON TIME 2026-06-02**. Hard line from Retro #004 still in effect through next cycle — if Retro #006 slips, retro rationalization is no longer one-off; elevate `[hard-line-declaration]` codification or tighten slip-counter visibility.)
+**Next retro fires after improvement #30.** (v0.3.5 = #22; v0.3.6 = #23; v0.3.7 = #24; v0.3.8 = #25 — Retro #005 fired ON TIME 2026-06-02; v0.3.9 = #26. **4 more substantive improvements needed** before Retro #006. Hard line from Retro #004 still in effect — if Retro #006 slips, retro rationalization is no longer one-off; elevate `[hard-line-declaration]` codification or tighten slip-counter visibility.)
 
 ## Template
 
@@ -69,6 +69,55 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 **Watch for:**
 - Other workflows with "MUST engage" roles that don't enforce *what* the engagement produces (Architect on every PR — what's the deliverable?).
 - Researcher may now over-rotate and produce thin evidence across all three categories just to clear the gate. If that happens, tighten on *quality of evidence* (citations, primary sources) rather than just presence.
+
+---
+
+### 2026-06-02 — `[declare-not-implement]` codified as 1st scope-discipline class Compass-original — introduces 6th pattern shape (v0.3.9)
+
+**Friction (carried from Retro #005 codification readiness ranking):** v0.3.5 `[agent-handoff]` parameterized over reviewer CLIs without writing per-CLI integrations. v0.3.8 same-day correction caught me about to ship per-agent adapter docs that would have duplicated upstream LiteLLM / Vercel AI SDK / OpenRouter / LangChain documentation. **Same shape, two instances** — Compass declares patterns + registries + manual fallback, doesn't build integrations. Retro #005 surfaced this as the top codification candidate; user picked B (codify) over A (propagation script) for v0.3.9.
+
+**Why now (per user direction):** "lets go with B." Codifying `[declare-not-implement]` while the v0.3.8 same-day correction example is concrete gives the framework an explicit principle to invoke against future scope-creep. **Returns to substantive Compass-original cadence after v0.3.7 (infrastructure) + v0.3.8 (handoff Compass-original)** — 8 sessions / 8 Compass-originals + 1 infrastructure release; cadence holds.
+
+**Change:**
+
+- **New `[declare-not-implement]` Compass-original** in `compass/framework/canon.md`. Names the pattern + the 2 instances accumulated + the `integration-creep` anti-pattern it closes + the "applied at framework design time" framing + the "user as load-bearing oversight" honesty + the forward-compatibility note for v0.4+ scope-discipline candidates (orchestrator selection + consumer distribution).
+- **`AGENTS.md` Workflow Structure section** gained scope-discipline pattern note — names it as the 6th pattern shape (first non-workflow-execution shape), cites both instances, names the `integration-creep` anti-pattern, names user as load-bearing oversight.
+- **`compass/templates/workflow-template.md`** gained inline `SCOPE-DISCIPLINE` commentary block with a workflow-author heuristic ("would this duplicate upstream work?") for invoking the pattern when about to add per-X documentation or adapter code.
+- **`CHANGELOG.md` v0.3.9 entry** documents the catalog growth (5 shapes / 9 patterns → 6 shapes / 10 patterns), names what's deferred from Retro #005 recommendations, notes the cadence holding.
+
+**Catalog grows from 5 shapes / 9 patterns → 6 shapes / 10 patterns.**
+
+| Shape | Members | Governs |
+|---|---|---|
+| Enforcement | cite-or-mark-n/a · refuse-escalate · soft-spec-hardening · mechanical-output-verification (4) | What workflows REQUIRE at execution |
+| Interaction | elicitation-with-options (1) | How workflows ASK users |
+| Freshness | freshness-check (1) | How workflows STAY CURRENT against external sources |
+| Observability | role-boundary (1) | How workflows EXPOSE STRUCTURE |
+| Handoff | agent-handoff · agent-agnostic-role-assignment (2) | How workflows ROUTE across agents |
+| **Scope-discipline (NEW)** | **declare-not-implement (1)** | **What Compass declares vs builds vs delegates at FRAMEWORK DESIGN TIME** |
+
+**The split is meaningful.** The first 5 shapes govern WORKFLOW EXECUTION (what fires when a workflow runs). Scope-discipline governs FRAMEWORK SCOPE (what fires when Compass's own scope is being decided). Different abstraction level, different audience (framework contributors vs workflow executors). The canon entry, AGENTS.md note, and workflow-template inline commentary all explicitly call this out.
+
+**Workflow-execution patterns total 9; scope-discipline (framework-design pattern) totals 1.** Worth examining in Retro #006 whether the 9-to-1 split holds or whether scope-discipline grows additional members. Forward candidates named explicitly in canon entry: orchestrator selection (v0.4+) and consumer distribution (v0.4+).
+
+**Anti-pattern named: `integration-creep`.** When integration surfaces expand (new AI provider, new vendor CLI, new framework version, new MCP server), the temptation is to add per-integration documentation or adapters to Compass. **Integration scope grows linearly with the integration count; Compass-maintainer scope does not.** The result is stale Compass docs, brittle Compass adapters, and a framework whose maintenance burden grows past its sustainable size. `[declare-not-implement]` is the structural countermeasure — invoked when about to ship integration work that should be upstream or consumer-side.
+
+**User as load-bearing oversight — named explicitly for the first time in canon.** Prior Compass-originals named user as approver (HITL gates) or arbiter (PM disputes), but not as load-bearing oversight against the framework's own scope creep. v0.3.8 same-day correction was caught by user, not by the framework. The canon entry names this honestly: "the framework's `[declare-not-implement]` reflex is real but not infallible; user judgment is part of the system." **First Compass-original that names user judgment as part of the structural system.** Future v0.4+ multi-agent architecture (orchestrator vision) must preserve this user-as-oversight role; orchestrator agency does not replace it.
+
+**Files touched (5):** edited — `compass/framework/canon.md`, `AGENTS.md`, `compass/templates/workflow-template.md`, `CHANGELOG.md`, `compass/workflows/improvements.md` (this entry).
+
+**Watch for:**
+- **How often does `[declare-not-implement]` fire in future release-planning sessions?** Each catch is a successful application; each miss (user catching it) is data for the load-bearing-oversight observation. Track in Retro #006 codification readiness ranking.
+- **Scope-discipline shape's 2nd member.** Forward candidates named: orchestrator selection + consumer distribution. When v0.4+ work starts, these are the natural next scope-discipline patterns. If a different scope-discipline pattern surfaces first, that's signal about which scope decisions are most pressing.
+- **`integration-creep` anti-pattern recurrence.** Watch for cases where contributors (or AI agents like me) start drafting per-integration documentation or adapters. Naming the anti-pattern gives Codex review + Engineer self-check + framework reviewers a vocabulary to flag it.
+- **Framework-design-time shape vs workflow-execution-time shape.** v0.3.9 introduces the first design-time pattern. Future patterns may sit in either bucket. The catalog framing in canon.md + AGENTS.md treats them as distinct shapes; if 2-3 more design-time patterns emerge, the framing may need finer-grained subdivision (e.g., release-planning-discipline vs codification-discipline).
+- **Retro #005 deferred recommendations:** `[hard-line-declaration]` codification + `[framework-on-framework]` codification + `compass/roles/reviewer.md` pruning + `setup-agent.py` propagation script. All carried forward as v0.3.10+ candidates. **Counter ticks to #26; next retro fires after #30 — 4 more substantive improvements needed.**
+- **CHANGELOG growth.** Eight sessions of changes accumulating (v0.3.0-alpha → v0.3.9). At some point a 0.4.0 release branch will be the natural shape; v0.4 architectural rework (orchestrator + multi-agent) is the obvious break point.
+- **9 commits worth of uncommitted work accumulating across v0.3.7 → v0.3.9.** Housekeeping pending; user mentioned commits as orthogonal to substance. Should bundle cleanly before piling more on.
+
+**Meta-observation — the framework's first design-time Compass-original closes a recurring meta-failure.** Up to v0.3.8 every Compass-original governed workflow execution. The same-day correction in v0.3.8 surfaced that the framework's design-time scope decisions were themselves a soft-spec rationalization surface (Principle #14 applied recursively): per-agent adapter docs felt like "completing" the agent-agnostic pattern, but actually re-introduced the integration-creep failure mode. **Codifying `[declare-not-implement]` is the framework recognizing that its own scope is governed by the same discipline as its workflows.** Recursive Compass-on-Compass at a structural level — directly relevant to Retro #005's `[framework-on-framework]` 3rd-instance observation. Worth noting that scope-discipline + framework-on-framework are closely related: scope-discipline is what the framework does to itself; framework-on-framework is the meta-observation that it does so. They could codify as separate patterns (current direction) or merge as one (if 4th `[framework-on-framework]` instance is also scope-discipline-shaped).
+
+**Cadence note.** v0.3.1 → v0.3.9 = 9 sessions, 8 Compass-originals + 1 infrastructure release (v0.3.7) + 1 PR correction (PR #1 to v0.3.6) + 1 same-day correction (v0.3.8 adapter-upstream). One-Compass-original-per-session cadence holds for 9 sessions running.
 
 ---
 
