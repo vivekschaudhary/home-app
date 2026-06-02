@@ -14,7 +14,7 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 - **Retro #004** (v0.2.8 → v0.3.5 + same-day extensions): [retros/2026-06-01-retro-004-v0.2.8-to-v0.3.5.md](retros/2026-06-01-retro-004-v0.2.8-to-v0.3.5.md) — fired at #22, **2 cycles overdue** (promised after #20); names retro-cadence-rationalization as drift signal; surfaces `[mechanical-output-verification]` as codification-ready (2 instances).
 - **Retro #005** (v0.3.6 → v0.3.8 + same-day correction): [retros/2026-06-02-retro-005-v0.3.6-to-v0.3.8.md](retros/2026-06-02-retro-005-v0.3.6-to-v0.3.8.md) — **fired ON TIME at #25** (hard line from Retro #004 worked). Smaller 3-improvement cycle. Surfaces `[declare-not-implement]` + `[hard-line-declaration]` as codification-ready (2 instances each); `[framework-on-framework]` at threshold (3 instances). Includes first in-cycle artifact analysis section: `compass/roles/reviewer.md` rated 7/10 (pruning candidate) + CB-1.5 story rated 9/10 (correct framework application in the wild).
 
-**Next retro fires after improvement #30.** (v0.3.5 = #22; v0.3.6 = #23; v0.3.7 = #24; v0.3.8 = #25 — Retro #005 fired ON TIME 2026-06-02; v0.3.9 = #26. **4 more substantive improvements needed** before Retro #006. Hard line from Retro #004 still in effect — if Retro #006 slips, retro rationalization is no longer one-off; elevate `[hard-line-declaration]` codification or tighten slip-counter visibility.)
+**Next retro fires after improvement #30.** (v0.3.5 = #22; v0.3.6 = #23; v0.3.7 = #24; v0.3.8 = #25 — Retro #005 fired ON TIME 2026-06-02; v0.3.9 = #26; v0.3.10 = #27. **3 more substantive improvements needed** before Retro #006. Hard line from Retro #004 still in effect — `[hard-line-declaration]` is now codified per v0.3.10 (canon.md); the counter mechanism above is itself an instance of the pattern.)
 
 ## Template
 
@@ -69,6 +69,51 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 **Watch for:**
 - Other workflows with "MUST engage" roles that don't enforce *what* the engagement produces (Architect on every PR — what's the deliverable?).
 - Researcher may now over-rotate and produce thin evidence across all three categories just to clear the gate. If that happens, tighten on *quality of evidence* (citations, primary sources) rather than just presence.
+
+---
+
+### 2026-06-02 — `[hard-line-declaration]` codified as 2nd scope-discipline class member — `commitment-drift` named (v0.3.10)
+
+**Friction (carried from Retro #005 codification readiness ranking):** v0.3.6 CHANGELOG declared "if freshness detection slips a 4th time, the workflow-side defense from v0.3.3 must be re-examined" → v0.3.7 shipped freshness detection ON TIME after 3 slips. Retro #004 declared "if retro slips again, retro rationalization is no longer one-off" → Retro #005 fired ON TIME at improvement #25. **Same shape, two instances** — explicit slip-counters + named consequences in CHANGELOG / improvements.md create structural pressure that overcomes the diffuse "next substantive release is more important" rationalization. Retro #005 surfaced this as 2nd-priority codification candidate after `[declare-not-implement]`; v0.3.10 acts on it.
+
+**Why now (carried from sequence A→B):** Housekeeping commits already shipped (v0.3.7 + v0.3.8 + same-day correction + Retro #005 + v0.3.9 as 5 clean per-release commits). Working tree was clean. Moving to B = `[hard-line-declaration]` codification per user's sequence pick.
+
+**Change:**
+
+- **New `[hard-line-declaration]` Compass-original** in `compass/framework/canon.md`. Names the pattern + mechanical three-part structure: (1) counter visibility in a load-bearing place (CHANGELOG release notes, improvements.md header next-retro counter); (2) named consequence at N+1 slip ("if it slips a 4th time, X will be re-examined"); (3) structural pressure overcoming rationalization. Names both instances + classification as scope-discipline 2nd member + `commitment-drift` anti-pattern + distinction from Principle #16 refuse-escalate (within-workflow vs across-releases scope) + tracking note for future-self.
+- **`AGENTS.md` Workflow Structure section restructured for the scope-discipline class** — top paragraph explains the class as a whole; subsequent paragraphs document each member (`[declare-not-implement]` then `[hard-line-declaration]`). Catalog count updated: 6 shapes / 11 patterns; ratio 9 workflow-execution : 2 scope-discipline.
+- **`CHANGELOG.md` v0.3.10 entry** documents the codification + the recursive observation that improvements.md "Next retro fires after #30" counter is itself an instance of the pattern just codified (3rd implicit instance arguably).
+
+**Catalog grows from 6 shapes / 10 patterns → 6 shapes / 11 patterns.**
+
+| Shape | Members (v0.3.10) | Governs |
+|---|---|---|
+| Enforcement | cite-or-mark-n/a · refuse-escalate · soft-spec-hardening · mechanical-output-verification (4) | What workflows REQUIRE at execution |
+| Interaction | elicitation-with-options (1) | How workflows ASK users |
+| Freshness | freshness-check (1) | How workflows STAY CURRENT |
+| Observability | role-boundary (1) | How workflows EXPOSE STRUCTURE |
+| Handoff | agent-handoff · agent-agnostic-role-assignment (2) | How workflows ROUTE across agents |
+| **Scope-discipline** | **declare-not-implement · hard-line-declaration (2 — was 1)** | **What Compass declares/commits/defers at FRAMEWORK DESIGN TIME** |
+
+**Scope-discipline class grows from 1 → 2 members.** Validates v0.3.9's introduction of the shape — it's not a one-off. Ratio: 9 workflow-execution : 2 scope-discipline.
+
+**Anti-pattern named: `commitment-drift`.** When Compass commits to a future release and lets it slip silently, the commitment drifts indefinitely. Each individual slip is defensible ("substantive work is more important than this commitment"); the cumulative pattern is rationalization — Principle #14 applied to roadmap. `[hard-line-declaration]` is the structural countermeasure.
+
+**Recursive observation worth noting:** the `compass/workflows/improvements.md` "Next retro fires after #30" counter mechanism that has been carrying the retro cadence since Retro #001 IS the pattern being codified. **Framework retroactively recognizing what it's been doing.** This could be considered a 3rd implicit instance for codification-confidence purposes; the canon entry cites only the 2 explicit "hard line" declarations (v0.3.6 CHANGELOG, Retro #004) but notes the implicit form. Worth examining in Retro #006 whether the implicit counter form should be treated as a 3rd codification instance.
+
+**Files touched (4):** edited — `compass/framework/canon.md`, `AGENTS.md`, `CHANGELOG.md`, `compass/workflows/improvements.md` (this entry).
+
+**Watch for:**
+- **How often `[hard-line-declaration]` fires successfully in future release-planning sessions.** Each on-time ship after a declared hard line is a successful application; each slip past a declared consequence is data the pattern needs sharpening (tighter counter visibility, more specific consequences, escalation to enforcement-class).
+- **Whether the workflow-execution:scope-discipline ratio (currently 9:2) continues.** Forward scope-discipline candidates named in canon: orchestrator selection (v0.4+) and consumer distribution (v0.4+). If both ship as scope-discipline patterns, ratio becomes 9:4 — still workflow-execution dominant but scope-discipline becomes a substantial second category.
+- **`commitment-drift` recurrence.** Track future cases where commitments slip past a declared hard line. Each is data on whether `[hard-line-declaration]` is sufficient or whether the pattern needs supplementary mechanisms (e.g., automated CI checks on missed deadlines, escalation to enforcement-class).
+- **Distinction from Principle #16 refuse-escalate.** Both family-relate to "structural enforcement of soft constraints." Refuse-escalate fires within a workflow at upstream-decision boundaries; hard-line-declaration fires across releases at roadmap-commitment boundaries. If a 3rd "structural-enforcement of soft constraints" pattern surfaces in a NEW scope, worth examining whether they should be subgrouped within enforcement+scope-discipline or constitute their own meta-shape.
+- **Retro #005 deferred recommendations remaining:** `[framework-on-framework]` codification (3 instances past threshold) · reviewer.md pruning · `setup-agent.py` propagation script. 3 candidates carried forward for v0.3.11+.
+- **Cadence held for 10 consecutive sessions.** v0.3.1 → v0.3.10 = 10 sessions, 9 Compass-originals + 1 infrastructure release. **The cadence commitment itself is implicitly hard-lined** — each release-planning decision happens against the visible "Compass-original per session" pattern in CHANGELOG. Worth examining whether to make this explicit (declare "if a session ships without a Compass-original AND without legitimate infrastructure reason, examine why").
+
+**Meta-observation — codification of patterns that produced their own codification.** `[hard-line-declaration]` was discovered by being applied — Retro #004's hard line on retro cadence and v0.3.6's hard line on freshness detection both successfully delivered the work-they-named-the-consequence-for, and Retro #005 then surfaced the pattern for codification. **The pattern's success was its own evidence for codification.** Same shape as v0.3.9 `[declare-not-implement]` — discovered by the v0.3.8 same-day correction catching scope-creep. **First two scope-discipline patterns both originated from successful instances of themselves being applied, then named retrospectively.** Worth tracking whether all future scope-discipline patterns follow this discovery shape (applied-then-named) or whether some emerge from explicit theoretical reasoning before application.
+
+**Cadence note.** v0.3.1 → v0.3.10 = **10 sessions, 9 Compass-originals + 1 infrastructure release (v0.3.7) + 1 PR correction (PR #1) + 1 same-day correction (v0.3.8 adapter-upstream).** One-Compass-original-per-session cadence holds for 10 sessions running. **Two consecutive sessions codifying from Retro #005's readiness ranking** (v0.3.9 `[declare-not-implement]` then v0.3.10 `[hard-line-declaration]`) — retro-to-release pipeline working as designed.
 
 ---
 
