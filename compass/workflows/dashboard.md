@@ -1,8 +1,10 @@
 # Workflow: /dashboard
 
-Generates a **single self-contained `docs/dashboard.html`** that renders all living Compass artifacts (foundation, plan, portfolio, scan reports, metrics, status) in a browser. Opens via `file://`. No server, no build toolchain. Shareable as an attachment.
+Generates a **single self-contained `docs/dashboard.html`** that renders all living Compass artifacts (foundation, plan, portfolio, scan reports, metrics, status) **AND** surfaces a 7th "Actions" tab with workflow-launcher buttons (orchestrator entry point per v0.4 spec target). Opens via `file://`. No server, no build toolchain. Shareable as an attachment.
 
 **Why:** Markdown is great for git diffs, AI consumption, and engineers in the IDE. But stakeholders skim — PMs, leadership, on-call, anyone outside the IDE wants to open a URL or attach a file and see current state without spelunking `docs/bets/*/scan-report.md`. The dashboard is that view.
+
+**Orchestrator entry point (v0.3.13):** The Actions tab makes the dashboard the **first concrete user-facing piece of the v0.4 Delivery Manager vision** (per v0.3.12 spec target). Solopreneur opens `docs/dashboard.html` in browser → sees project state + pending HITL gates + Finance summary + quick-action workflow launchers → clicks a launcher → command is copied to clipboard → user pastes into preferred web app (ChatGPT, Claude.ai) → Compass-aware AI runs the workflow → outputs commit back to repo → dashboard regenerates. **L1 (clipboard-copy) ships today.** L2 (`compass://` protocol handler + CLI for one-click execution) is deferred to v0.3.14. L3 (localhost server with real-time updates) is deferred indefinitely.
 
 **How:** Compass workflows are already AI-driven. The "generator" is the AI agent following this workflow — no Node, no Python, no Pandoc. Read all the markdown reports, inline them verbatim into `<script type="text/markdown">` blocks inside the HTML template, write `docs/dashboard.html`. Browser-side, **marked.js + mermaid.js (CDN)** render the inlined content. CORS-safe because everything is inline; no `fetch()` of local files.
 
@@ -59,12 +61,114 @@ Generates a **single self-contained `docs/dashboard.html`** that renders all liv
    </article>
    ```
    *One critical detail:* if the markdown contains `</script>` anywhere (rare, but possible in code examples), escape it as `<\/script>` to avoid breaking the HTML parser. This is the **only** transformation permitted on the source content.
-8. **Empty-tab fallback** — for any tab where no source files exist, emit:
+8. **Populate the Actions block** (orchestrator entry point per v0.3.13). Generate HTML for `<!-- COMPASS-INSERT:actions-block -->` with up to 4 sub-sections (rendered in this order, sections omitted when empty):
+
+   **8a. Project state summary** (always shown — top of the Actions tab):
+
+   Emit a brief paragraph describing where the project is. Compute from artifact existence + statuses:
+
+   - **Empty project** (no `docs/foundation/product.md`): "**No foundation yet.** Start with `/setup-product`." — and skip directly to a single highlighted launcher row containing only `/setup-product`. Omit sections 8b–8d.
+   - **Foundation product approved, no architecture:** "**Product foundation approved.** Next: `/setup-foundation-architecture`."
+   - **Foundation approved, no portfolio:** "**Foundations approved.** Next: `/create-bet-portfolio` (bootstrap MVP wedge) or `/create-brief <id>` (single bet)."
+   - **Portfolio approved, bets in flight:** "**N bets in flight.**" + bullet list per bet showing bet-id + current phase (from brief's `status` and presence of architecture / stories).
+   - **All bets shipped:** "**All bets shipped.** `/measure` per cron; `/metrics` for outcomes view."
+
+   Shape:
+   ```html
+   <div class="action-section project-state">
+     <p>... state summary ...</p>
+   </div>
+   ```
+
+   **8b. Pending HITL gates** (omit section entirely if none): scan all bet artifacts (`docs/foundation/product.md`, `docs/foundation/architecture.md`, `docs/foundation/portfolio.md`, `docs/bets/*/brief.md`, `docs/bets/*/architecture.md`, `docs/bets/*/stories/*.md`) for frontmatter `status: proposed`. Each surfaces as:
+
+   ```html
+   <div class="action-section">
+     <h2>Pending approvals (HITL gates)</h2>
+     <div class="hitl-gate">
+       <div><strong>Brief awaiting approval:</strong> CB-2 — Mobile dashboard</div>
+       <div class="path">docs/bets/CB-2/brief.md</div>
+     </div>
+     <div class="hitl-gate">
+       <div><strong>Architecture awaiting approval:</strong> CB-3</div>
+       <div class="path">docs/bets/CB-3/architecture.md</div>
+     </div>
+     <p class="action-help">Approve by editing the file's <code>status:</code> frontmatter to <code>approved</code> and committing. L1 surfaces visibility; L2 (v0.3.14) will add one-click approval buttons.</p>
+   </div>
+   ```
+
+   **8c. Quick-action workflow launchers** (always shown — main orchestrator surface). Group actions semantically; show only relevant groups for project state. Each launcher is a `<button class="action-btn" onclick="compassCopy('/<workflow>', this)">Label <span class="cmd">/&lt;workflow&gt;</span></button>`. The `compassCopy` JS handler is defined in the template (v0.3.13); it writes the command to clipboard + shows visual feedback.
+
+   Recommended groups (omit entire group when irrelevant for project state):
+
+   ```html
+   <div class="action-section">
+     <h2>Actions</h2>
+
+     <!-- Bootstrap (only shown when foundation incomplete) -->
+     <div class="action-row">
+       <span class="label">Bootstrap</span>
+       <button class="action-btn" onclick="compassCopy('/setup-product', this)">Start product foundation <span class="cmd">/setup-product</span></button>
+       <button class="action-btn" onclick="compassCopy('/setup-foundation-architecture', this)">Start architecture foundation <span class="cmd">/setup-foundation-architecture</span></button>
+       <button class="action-btn" onclick="compassCopy('/create-bet-portfolio', this)">MVP bet portfolio <span class="cmd">/create-bet-portfolio</span></button>
+     </div>
+
+     <!-- Create or refine a bet (shown post-portfolio-approval) -->
+     <div class="action-row">
+       <span class="label">Create or refine a bet</span>
+       <button class="action-btn" onclick="compassCopy('/create-brief', this)">New bet brief <span class="cmd">/create-brief</span></button>
+       <button class="action-btn" onclick="compassCopy('/create-bet-architecture', this)">Bet architecture <span class="cmd">/create-bet-architecture</span></button>
+       <button class="action-btn" onclick="compassCopy('/create-story', this)">Create story <span class="cmd">/create-story</span></button>
+     </div>
+
+     <!-- Build &amp; ship (shown when ready stories or bets exist) -->
+     <div class="action-row">
+       <span class="label">Build &amp; ship</span>
+       <button class="action-btn" onclick="compassCopy('/build', this)">Build story <span class="cmd">/build &lt;story-id&gt;</span></button>
+       <button class="action-btn" onclick="compassCopy('/fix', this)">Fix bug <span class="cmd">/fix</span></button>
+       <button class="action-btn" onclick="compassCopy('/triage', this)">Triage incident <span class="cmd">/triage</span></button>
+       <button class="action-btn" onclick="compassCopy('/ops', this)">Ops change <span class="cmd">/ops</span></button>
+     </div>
+
+     <!-- Observe &amp; report (always shown post-foundation) -->
+     <div class="action-row">
+       <span class="label">Observe &amp; report</span>
+       <button class="action-btn" onclick="compassCopy('/status', this)">Refresh status <span class="cmd">/status</span></button>
+       <button class="action-btn" onclick="compassCopy('/scan', this)">Run scanner <span class="cmd">/scan &lt;bet-id&gt;</span></button>
+       <button class="action-btn" onclick="compassCopy('/plan', this)">Refresh plan <span class="cmd">/plan</span></button>
+       <button class="action-btn" onclick="compassCopy('/metrics', this)">Update metrics <span class="cmd">/metrics</span></button>
+     </div>
+
+     <p class="action-help">Click any action → command is copied to clipboard → paste into ChatGPT / Claude.ai / your preferred Compass-aware AI surface → workflow runs there and commits back to the repo. The dashboard regenerates next time you run <code>/dashboard</code> (or auto-refreshes via <code>/scan</code> / <code>/plan</code> / <code>/status</code> / <code>/metrics</code>).</p>
+   </div>
+   ```
+
+   For each story in `status: ready`, the `/build <story-id>` placeholder can be templated with the actual ID (e.g., `compassCopy('/build CB-2-1', this)`). Same for `/scan <bet-id>` and `/create-bet-architecture <bet-id>` etc. — replace the placeholder with the most relevant in-flight identifier when computable; otherwise leave the placeholder.
+
+   **8d. Finance summary** (omit section entirely if `docs/usage/current.json` does NOT exist — do not fake numbers): read the JSON, render as:
+
+   ```html
+   <div class="action-section">
+     <h2>This period's cost</h2>
+     <div class="finance-summary">
+       <div>PM (OpenAI)</div><div>$4.20</div>
+       <div>Researcher (Gemini)</div><div>$2.10</div>
+       <div>Engineer (Claude Code)</div><div>$12.50</div>
+       <div>Reviewer (Codex)</div><div>$3.80</div>
+       <div class="total">Total</div><div class="total">$22.60</div>
+     </div>
+     <p class="action-help">Costs aggregated from per-host session logs. Full breakdown in <code>docs/usage/</code>. L1 shows the rollup; v0.4 Delivery Manager will use this for Finance-leg budget enforcement.</p>
+   </div>
+   ```
+
+   **Why clipboard-copy (L1) instead of one-click execution:** the dashboard is a static `file://` page. Buttons can't directly invoke workflows. Clipboard-copy bridges the gap — solopreneur pastes the command into ChatGPT, Claude.ai, or any Compass-aware AI surface where the actual workflow runs. L2 (v0.3.14) will add `compass://` URL handler + a small Compass CLI that registers the protocol — buttons become one-click execution. Same dashboard; same buttons; less friction.
+
+9. **Empty-tab fallback** — for any tab where no source files exist, emit:
    ```html
    <div class="empty-tab">No <name> artifacts yet. Run <code>/<command></code> to generate.</div>
    ```
-9. **Write `docs/dashboard.html`** with the Write tool.
-10. **Output summary in chat:**
+10. **Write `docs/dashboard.html`** with the Write tool.
+11. **Output summary in chat:**
     - File path
     - Count of inlined artifacts (per tab)
     - File size
@@ -72,7 +176,7 @@ Generates a **single self-contained `docs/dashboard.html`** that renders all liv
       - macOS: `open docs/dashboard.html`
       - Linux: `xdg-open docs/dashboard.html`
       - Windows: `start docs/dashboard.html`
-11. **No HITL gate** — dashboard is a living artifact, refreshed on demand. Same shape as `plan.md` and `scan-report.md`.
+12. **No HITL gate** — dashboard is a living artifact, refreshed on demand. Same shape as `plan.md` and `scan-report.md`.
 
 ## Block shape (canonical)
 
@@ -96,7 +200,13 @@ The `<div class="rendered"></div>` is where marked.js writes the rendered HTML (
 - [ ] Every available source artifact is inlined as `<script type="text/markdown" data-artifact="<path>">…</script>` with the source path preserved
 - [ ] **Every inlined artifact's content matches its source file byte-for-byte.** No summarization, no executive summaries, no truncation, no rewording. Spot-check by `diff`-ing 2-3 inlined blocks against their source `.md` files (excluding whitespace at the `<script>` block boundary). The **only** permitted transformation is escaping `</script>` → `<\/script>` inside the inlined content.
 - [ ] Marked.js + Mermaid.js CDN `<script>` tags present in `<head>`
-- [ ] Tab navigation present with all six tabs: Foundation / Plan / Portfolio / Scan / Metrics / Status
+- [ ] Tab navigation present with all seven tabs (v0.3.13): **Actions** / Foundation / Plan / Portfolio / Scan / Metrics / Status — Actions tab is the default initially-active tab
+- [ ] **Actions tab** present with `<!-- COMPASS-INSERT:actions-block -->` marker filled in (not literal marker text remaining)
+- [ ] **Actions tab** contains at least one workflow-launcher `<button class="action-btn" onclick="compassCopy('/...', this)">` (minimum: `/setup-product` for empty projects; full action grid for post-foundation projects)
+- [ ] **Clipboard-copy JS** present in `<script>` block: `compassCopy` function defined and uses `navigator.clipboard.writeText`
+- [ ] **Project state summary** at top of Actions tab matches actual project state (empty / foundation-only / portfolio-approved / bets-in-flight / all-shipped)
+- [ ] **Pending HITL gates** section appears IFF at least one artifact has `status: proposed` in its frontmatter; section omitted entirely when none pending
+- [ ] **Finance summary** section appears IFF `docs/usage/current.json` exists; section omitted entirely when missing (no fabricated numbers)
 - [ ] "Last generated" timestamp visible at top of page
 - [ ] Footer note about re-running `/dashboard` present
 - [ ] Empty tabs show empty-tab message (not blank, not error)

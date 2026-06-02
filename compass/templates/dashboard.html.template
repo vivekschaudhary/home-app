@@ -129,6 +129,97 @@
     }
     /* Finding-severity pill styling (when rendered markdown contains [CRITICAL] etc.) */
     .rendered h3:has(+ * code:contains("Critical")) { color: var(--critical); }
+    /* ── Actions tab (v0.3.13 orchestrator entry point) ────────────────── */
+    .action-section {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1.5rem 2rem;
+      margin-bottom: 1.5rem;
+    }
+    .action-section h2 {
+      margin-top: 0;
+      font-size: 1.1rem;
+      color: var(--fg);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: .5rem;
+    }
+    .action-section h2:first-child { margin-top: 0; }
+    .action-row { margin-bottom: 1rem; }
+    .action-row:last-child { margin-bottom: 0; }
+    .action-row .label {
+      display: block;
+      color: var(--fg-muted);
+      font-size: .85rem;
+      margin-bottom: .35rem;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+    }
+    .action-btn {
+      display: inline-block;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: .55rem 1rem;
+      font-size: .9rem;
+      font-family: inherit;
+      cursor: pointer;
+      margin: .15rem .4rem .15rem 0;
+      transition: background .15s ease-out;
+    }
+    .action-btn:hover { background: #1e4e8a; }
+    .action-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .action-btn.copied { background: #2f855a; }
+    .action-btn.failed { background: var(--critical); }
+    .action-btn .cmd {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: .82em;
+      opacity: .85;
+      margin-left: .35rem;
+    }
+    .action-help {
+      color: var(--fg-muted);
+      font-size: .85rem;
+      margin-top: 1rem;
+      font-style: italic;
+    }
+    .hitl-gate {
+      background: #fff8e1;
+      border: 1px solid #f0c441;
+      border-radius: 4px;
+      padding: .75rem 1rem;
+      margin-bottom: .5rem;
+      font-size: .9rem;
+    }
+    .hitl-gate:last-child { margin-bottom: 0; }
+    .hitl-gate .path {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: .8em;
+      color: var(--fg-muted);
+      margin-top: .25rem;
+    }
+    .finance-summary {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: .35rem 1rem;
+      font-size: .9rem;
+      max-width: 420px;
+    }
+    .finance-summary .total {
+      font-weight: 600;
+      border-top: 1px solid var(--border);
+      padding-top: .5rem;
+      margin-top: .25rem;
+    }
+    .project-state {
+      font-size: .95rem;
+      line-height: 1.55;
+    }
+    .project-state .next-step {
+      color: var(--accent);
+      font-weight: 600;
+    }
     footer {
       max-width: 1100px;
       margin: 2rem auto;
@@ -147,7 +238,8 @@
   </header>
 
   <nav role="tablist">
-    <button role="tab" data-tab="foundation" aria-selected="true">Foundation</button>
+    <button role="tab" data-tab="actions" aria-selected="true">Actions</button>
+    <button role="tab" data-tab="foundation">Foundation</button>
     <button role="tab" data-tab="plan">Plan</button>
     <button role="tab" data-tab="portfolio">Portfolio</button>
     <button role="tab" data-tab="scan">Scan</button>
@@ -156,8 +248,30 @@
   </nav>
 
   <main>
+    <!-- ACTIONS (v0.3.13 — dashboard as orchestrator entry point per v0.4 spec target) -->
+    <section role="tabpanel" data-tab="actions" class="active">
+      <!-- COMPASS-INSERT:actions-block -->
+      <!--
+        Workflow agent populates this with up to 4 sub-sections:
+        1. <div class="action-section project-state"> — one-paragraph project state summary
+        2. <div class="action-section"> with <div class="hitl-gate"> entries — pending HITL gates (omit section if none)
+        3. <div class="action-section"> with <div class="action-row"> groups — quick-action workflow launchers
+           Each launcher: <button class="action-btn" onclick="compassCopy('/workflow-name', this)">Label <span class="cmd">/workflow-name</span></button>
+        4. <div class="action-section"> with <div class="finance-summary"> — token-usage rollup (omit if docs/usage/current.json missing)
+
+        Empty project state: emit only section 1 + a single highlighted /setup-product launcher.
+        Otherwise: emit all relevant sections.
+
+        State-aware action visibility (recommended grouping):
+        - Create or refine a bet:  /create-brief, /create-bet-architecture, /create-story
+        - Build & ship:            /build, /fix, /triage, /ops
+        - Observe & report:        /status, /scan, /plan, /metrics
+        - Bootstrap (only when foundation incomplete): /setup-product, /setup-foundation-architecture, /create-bet-portfolio
+      -->
+    </section>
+
     <!-- FOUNDATION -->
-    <section role="tabpanel" data-tab="foundation" class="active">
+    <section role="tabpanel" data-tab="foundation">
       <!-- COMPASS-INSERT:foundation-blocks -->
       <!--
         For each existing foundation artifact, emit:
@@ -257,8 +371,37 @@
       }
     }
 
+    // ── Actions tab clipboard-copy (v0.3.13 orchestrator entry point) ───
+    // Buttons in the Actions tab use this handler via inline onclick:
+    //   <button class="action-btn" onclick="compassCopy('/create-brief', this)">
+    // Copies the workflow command to clipboard so user can paste into their
+    // preferred web app (ChatGPT, Claude.ai) where a Compass-aware AI runs it.
+    // Per v0.3.13 — L1 of v0.4 spec target. L2 (CLI + protocol handler for
+    // one-click execution) deferred to v0.3.14.
+    async function compassCopy(command, button) {
+      const originalText = button.innerHTML;
+      try {
+        await navigator.clipboard.writeText(command);
+        button.classList.add('copied');
+        button.textContent = '✓ Copied! Paste into ChatGPT / Claude.ai';
+        setTimeout(() => {
+          button.classList.remove('copied');
+          button.innerHTML = originalText;
+        }, 2000);
+      } catch (err) {
+        console.error('Compass clipboard copy failed:', err);
+        button.classList.add('failed');
+        button.textContent = '⚠ Copy failed — manually copy: ' + command;
+        setTimeout(() => {
+          button.classList.remove('failed');
+          button.innerHTML = originalText;
+        }, 3500);
+      }
+    }
+    window.compassCopy = compassCopy;
+
     // Initial render
-    activateTab('foundation');
+    activateTab('actions');
   </script>
 </body>
 </html>
