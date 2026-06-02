@@ -23,14 +23,47 @@ Artifacts the framework produces live in `docs/`:
 
 ## Tool division of labor
 
-| Tool   | Plays the role of                                          |
-| ------ | ---------------------------------------------------------- |
-| Claude | All roles EXCEPT Reviewer and Security Reviewer            |
-| Codex  | Reviewer, Security Reviewer (independent model on purpose) |
+**Configurable per role; default = Claude implements, Codex reviews.** Per `[agent-agnostic-role-assignment]` (`compass/framework/canon.md`, v0.3.8). The actual per-role agent picks live in `compass/config.yaml` under `tool_assignments:`, validated against the `agents:` registry. To use a different agent for any role, edit the value — no other framework files need to change at the consumer level.
+
+**Supported agents (registry in `compass/config.yaml`):**
+
+| Agent | Invocation | Production-ready? |
+| ----- | ---------- | ----------------- |
+| `claude` (Claude Code) | CLI / IDE plugin; reads local files automatically | Yes |
+| `codex` (Codex CLI) | CLI; reads `.codex/prompts/<role>.md` | Yes |
+| `openai` (ChatGPT / GPT API) | API call with role file as system prompt; Custom GPT; manual paste | API mature |
+| `gemini` (Google Gemini CLI) | CLI; mirrors codex with `.gemini/prompts/<role>.md` | Yes |
+| `deepseek` | DeepSeek API | API mature |
+| `codestral` (Mistral) | Mistral API | API mature |
+| `apple` | Manual paste into Apple Intelligence | ⚠ Marked `unsupported: true` — system-level features only, no open API for arbitrary role-playing |
+| `custom` | User-defined invocation | Escape valve |
+
+**Default configuration (out of the box):**
+
+| Role category | Default agent | Why |
+| ------------- | ------------- | --- |
+| Implementer roles (engineer, architect, etc.) | `claude` | Claude Code's local-file reading + IDE integration is mature for code work |
+| Reviewer roles (reviewer, security_reviewer) | `codex` | **Independent model** — different from implementer; see structural rationale below |
+| Product roles (pm, researcher, designer, ux_writer, etc.) | `claude` | Default; user often overrides to `openai` or `gemini` for varied perspective |
+| Tech writer | `claude` | Default; can swap to any other agent without risk |
 
 Reviewer findings are real. Disputes go to PM, not auto-resolved by either tool.
 
-**Why this split is structurally load-bearing, not procedural.** Same-model reviewer + same-model author share aesthetic priors — blind spots, assumptions about "clean code," default architectural patterns, "looks right" intuitions. A reviewer with identical priors can miss what an independent-model reviewer catches. **Empirically validated during aura-app CB-1.4 (2026-06-01):** user ran the same diff through both Codex (different model than Engineer) and Claude (same model as Engineer) as reviewers; Codex outperformed. This is not "pick whichever reviewer is cheaper" — switching to a same-model reviewer for cost reasons re-introduces the blind-spot overlap the framework exists to close. The `compass/scripts/agent-handoff.yml` template ships Codex default-enabled for this structural reason, not ergonomic preference; the Claude-headless block is documented as a fallback for teams without Codex access, **not an equivalent alternative**. Same logic applies to any future role-pairing — Engineer + Reviewer is the canonical instance; Architect-pair, Researcher-pair, or other multi-agent reviews inherit the same constraint.
+**Why the reviewer split is structurally load-bearing, not procedural.** Same-model reviewer + same-model author share aesthetic priors — blind spots, assumptions about "clean code," default architectural patterns, "looks right" intuitions. A reviewer with identical priors can miss what an independent-model reviewer catches. **Empirically validated during aura-app CB-1.4 (2026-06-01):** user ran the same diff through both Codex (different model than Engineer) and Claude (same model as Engineer) as reviewers; Codex outperformed. This is not "pick whichever reviewer is cheaper" — switching to a same-model reviewer for cost reasons re-introduces the blind-spot overlap the framework exists to close. **The `tool_assignments.reviewer` value must be a different agent than `tool_assignments.engineer`** — this is enforced semantically by the agent-pairing constraint, not by a config validator (yet). The `compass/scripts/agent-handoff.yml` template ships Codex default-enabled for this structural reason, not ergonomic preference; the Claude-headless block is documented as a fallback for teams without Codex access, **not an equivalent alternative**. Same logic applies to any future role-pairing — Engineer + Reviewer is the canonical instance; Architect-pair, Researcher-pair, or other multi-agent reviews inherit the same constraint.
+
+**How to override defaults.** Edit `compass/config.yaml` `tool_assignments:` — any agent key from the `agents:` registry is valid for any role (subject to the independent-model constraint above). Example overrides:
+
+```yaml
+tool_assignments:
+  pm:                  openai     # ChatGPT for PM work
+  researcher:          openai     # ChatGPT for research
+  designer:            gemini     # Gemini for design decisions
+  engineer:            claude     # Claude for engineering (default)
+  reviewer:            codex      # MUST differ from engineer
+  ...
+```
+
+**Honest scope of v0.3.8.** The registry + defaults + per-role assignments are **declarative** today. `compass/config.yaml` is the source of truth; downstream prose still hardcodes the Claude+Codex split in ~10 files (this AGENTS.md section being the first to derive from config). v0.3.9 ships per-agent adapter docs at `compass/agents/<agent>.md`; v0.3.10 ships a `compass/scripts/setup-agent.py` propagation script that generates per-agent prompt directories from `tool_assignments`. Until then, picking a non-default agent for a role still requires manual setup of that agent's prompt files / invocation pattern (see registry `note:` for each agent).
 
 ## The 13 roles
 

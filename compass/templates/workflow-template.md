@@ -145,6 +145,19 @@ version: 0.3.0-alpha             # workflow's own hardening version; bump on nex
   tracks `last_verified` per [freshness-check]. First instance: /build
   Phase 5 (Engineer → Codex via PR + GitHub Actions).
 
+  AGENT-AGNOSTIC ROLE ASSIGNMENT: when a workflow loads a role, the agent
+  that plays the role is config-driven via compass/config.yaml
+  `tool_assignments` (validated against the `agents:` registry). Per
+  [agent-agnostic-role-assignment] (see canon.md, v0.3.8). Defaults match
+  Compass's empirically-validated split (Claude implements, Codex reviews);
+  user can override per-role to any agent in the registry (openai,
+  gemini, deepseek, codestral, custom). Reviewer + Security Reviewer
+  must use a DIFFERENT MODEL than the implementer per AGENTS.md "Tool
+  division of labor" structural rationale. Generalizes the [agent-handoff]
+  v0.3.5 pattern (reviewer-only) to every role. Forward-compatible with
+  the orchestrator vision (v0.4+) — the registry shape naturally extends
+  to declare an `orchestrator` entry.
+
   MECHANICAL-OUTPUT-VERIFICATION: when a workflow includes a build, deploy,
   or framework-discovery step, the Postcondition is inspection of the
   build OUTPUT (or runtime artifact), not just the build PROCESS exit

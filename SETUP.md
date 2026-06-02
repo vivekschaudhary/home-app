@@ -225,14 +225,41 @@ When the measurement window closes, the bet transitions to `won`, `learning`, or
 └── .codex/                      ← Codex CLI: config + reviewer prompts
 ```
 
+## Picking which agent plays which role
+
+Per `[agent-agnostic-role-assignment]` (v0.3.8 — `compass/framework/canon.md`), Compass ships an agent registry + sensible defaults. To override:
+
+1. Open `compass/config.yaml`.
+2. Look at the `agents:` registry — supported agents include `claude`, `codex`, `openai` (ChatGPT/GPT API), `gemini`, `deepseek`, `codestral`, `apple` (marked unsupported), and `custom`. Each declares its invocation pattern (`cli` / `api` / `manual`) + context-loading convention + auth env var.
+3. Edit the `tool_assignments:` block to assign any registry agent to any role.
+
+```yaml
+# Example: ChatGPT for PM-side roles, Claude for tech roles, Codex stays for review
+tool_assignments:
+  pm:                  openai     # ChatGPT for PM
+  researcher:          openai     # ChatGPT for research
+  designer:            gemini     # Gemini for design decisions
+  engineer:            claude     # Claude for engineering
+  reviewer:            codex      # MUST differ from engineer (independent model)
+  security_reviewer:   codex
+  ...
+```
+
+**Reviewer constraint:** `reviewer` and `security_reviewer` must use a **different model** than the implementer. Same-model reviewer + same-model author share aesthetic priors and miss what an independent-model reviewer catches (empirically validated during aura-app CB-1.4; see AGENTS.md "Tool division of labor").
+
+**Defaults work out of the box.** If you change nothing, Compass uses Claude implements + Codex reviews — matching the empirically-validated split.
+
+**Non-default agents may require manual setup** of the agent's prompt directory (e.g., `.gemini/prompts/<role>.md` mirroring `.codex/prompts/`) until v0.3.10 ships the `compass/scripts/setup-agent.py` propagation script. See `compass/config.yaml` registry `note:` for each agent's invocation pattern.
+
 ## Adding more AI tools later
 
 The framework lives in `compass/`. To add Cursor, Cline, Windsurf, etc.:
 
-1. Create the tool's expected config folder (`.cursor/rules/`, `.clinerules`, etc.)
-2. Write thin wrappers that reference `compass/roles/<role>.md` and `compass/workflows/<workflow>.md`
-3. Decide which roles that tool plays — update `compass/config.yaml` under `tool_assignments`
-4. `compass/` files don't change. Only the wrapper folder is added.
+1. Add the tool to the `agents:` registry in `compass/config.yaml` with its invocation + context-loading details
+2. Create the tool's expected config folder (`.cursor/rules/`, `.clinerules`, etc.)
+3. Write thin wrappers that reference `compass/roles/<role>.md` and `compass/workflows/<workflow>.md`
+4. Assign roles to the new agent via `tool_assignments`
+5. `compass/` files don't change. Only the wrapper folder + a registry entry are added.
 
 For tools with flatter customization (Copilot, Cline's single-file rules), concatenate the relevant role files instead of referencing.
 

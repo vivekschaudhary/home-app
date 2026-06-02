@@ -13,7 +13,7 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 - **Retro #003** (v0.2.3 → v0.2.7): [retros/2026-05-26-retro-003-v0.2.3-to-v0.2.7.md](retros/2026-05-26-retro-003-v0.2.3-to-v0.2.7.md)
 - **Retro #004** (v0.2.8 → v0.3.5 + same-day extensions): [retros/2026-06-01-retro-004-v0.2.8-to-v0.3.5.md](retros/2026-06-01-retro-004-v0.2.8-to-v0.3.5.md) — fired at #22, **2 cycles overdue** (promised after #20); names retro-cadence-rationalization as drift signal; surfaces `[mechanical-output-verification]` as codification-ready (2 instances).
 
-**Next retro fires after improvement #25.** (v0.3.5 is #22; v0.3.6 = #23; v0.3.7 = #24. **1 more entry needed.** Hard line still in effect — if retro slips again, retro rationalization is no longer one-off.)
+**Next retro fires after improvement #30.** (v0.3.5 = #22; v0.3.6 = #23; v0.3.7 = #24; **v0.3.8 = #25 — Retro #005 trigger reached**, fires next session unless explicitly bundled with v0.3.8. Hard line from Retro #004 still in effect — if retro slips again, retro rationalization is no longer one-off.)
 
 ## Template
 
@@ -68,6 +68,67 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 **Watch for:**
 - Other workflows with "MUST engage" roles that don't enforce *what* the engagement produces (Architect on every PR — what's the deliverable?).
 - Researcher may now over-rotate and produce thin evidence across all three categories just to clear the gate. If that happens, tighten on *quality of evidence* (citations, primary sources) rather than just presence.
+
+---
+
+### 2026-06-02 — `[agent-agnostic-role-assignment]` codified + `compass/config.yaml` gains `agents:` registry + `defaults:` + per-role `tool_assignments` validated against registry (v0.3.8)
+
+**Friction (re-framed twice during planning):**
+
+User initially asked: "I want to allow ChatGPT/OpenAI for product manager roles and use Claude for tech roles. How can I configure that in the config?"
+
+Drilling into mechanism surfaced an honest gap: **`tool_assignments` is documentation only today.** Nothing in Compass programmatically reads it; grep confirmed zero references outside `config.yaml`. **10 files independently hardcode the Claude+Codex split in prose** (the "3-surface drift" named when user first asked "where can I configure the AI agents"). The string `claude` next to `pm:` was a label humans read — it didn't gate which tool could be invoked.
+
+User then **re-framed significantly**: "my vote is to have options to select agents — openai, claude, gemini, apple intelligence, deepseek, Codestral, custom — I can pick any from the list. And the package should have default configuration built in leveraging the same compass files as inputs."
+
+This shifted the work from "edit one config field for one role" to "generalize the `[agent-handoff]` v0.3.5 pattern (reviewer-only agent-agnosticism) to every role, with built-in defaults."
+
+User then **re-framed again** (architectural): "ideally there should be an orchestrator agent in the list that runs point and controls — something like what came out in Claude's latest version of dynamic workflows. Ideally each workflow is a different agent type. Let's think through before we decide." This raised the v0.4/v0.5 multi-agent rearchitecture vision.
+
+**User decision (after thinking through):** "lets add it to the improvements for now. lets move with A." → Continue v0.3.x methodology line; ship L1 substantive (pattern + registry + defaults); defer orchestrator vision to v0.4+ explicitly. **L1 is forward-compatible with the orchestrator vision** — registry shape naturally extends to declare an `orchestrator` entry.
+
+**Change:**
+
+- **New `[agent-agnostic-role-assignment]` Compass-original** in `compass/framework/canon.md`. Generalizes `[agent-handoff]` v0.3.5 (reviewer-only agent-agnosticism) to every role. Names the 8 supported agents at codification + the 2-instance codification rationale.
+- **`compass/config.yaml` `agents:` registry** — 8 entries: `claude`, `codex`, `openai` (ChatGPT/GPT API), `gemini`, `deepseek`, `codestral`, `apple` (marked `unsupported: true`), `custom`. Each declares `invocation` pattern (`cli` / `api` / `manual`), `context_loading` convention, `auth_env` (API key env var), `maturity` flag, and `note:` describing the integration path. **Apple flagged unsupported honestly** rather than faked — Apple Intelligence is system-level (Writing Tools, Summarization) without an open API for arbitrary role-playing.
+- **`compass/config.yaml` `defaults:` block** — `implements: claude` · `reviews: codex` · `product: claude` · `tech-writes: claude`. Categorizes roles by job-shape; serves as fallback when `tool_assignments` doesn't enumerate a role.
+- **`compass/config.yaml` `tool_assignments:` validated against registry** — per-role agent picks with comments showing which `defaults:` category each falls under; structural constraint (reviewer + security_reviewer must use different model than implementer) explicit in inline comment.
+- **`AGENTS.md` "Tool division of labor" reframed** — from hardcoded `Claude | All roles EXCEPT...` + `Codex | Reviewer, Security Reviewer` to: (a) registry table of 8 supported agents with maturity flags; (b) defaults table of 4 role categories; (c) structural rationale for the reviewer-different-model constraint; (d) override examples (showing `pm: openai`, `designer: gemini`, etc.). **First of the 10 hardcoding files to derive from config**; rest update in v0.3.9 (L2 adapter docs) + v0.3.10 (L3 propagation script).
+- **`compass/templates/workflow-template.md`** gained inline commentary block on agent-agnostic role assignment — workflow steps that load a role reference `tool_assignments` for which agent plays it; forward-compatible with v0.4+ orchestrator vision.
+- **`README.md` "Core ideas"** — Claude+Codex line updated to "Agent-agnostic by design; defaults built in" with all registry agents enumerated; preserves "default = Claude implements, Codex reviews" for empirical validation argument.
+- **`SETUP.md`** gained "Picking which agent plays which role" section — step-by-step override guide with example showing ChatGPT for PM + Gemini for designer + Claude for engineer + Codex for reviewer; names reviewer-different-model constraint inline; notes non-default agents may require manual prompt-directory setup until v0.3.10 propagation script ships.
+
+**Catalog balance shifts.** Before v0.3.8: 4 enforcement : 4 usability (interaction · freshness · observability · handoff). **After v0.3.8: 4 enforcement : 5 usability** (interaction · freshness · observability · 2 handoff). Handoff class gains a 2nd member. Worth examining in Retro #005 — was 5-enforcement-lean after v0.3.6's mechanical-output-verification; v0.3.7 (infrastructure) held balance; v0.3.8 swings 5-usability. Bias signal or natural emergence?
+
+**Future direction — orchestrator vision deferred to v0.4+.** User raised this as the architectural endpoint Compass is moving toward. Documented for future-self / next /retro examination:
+
+- **Pattern shape:** orchestrator agent reads `compass/config.yaml` + `AGENTS.md` + user intent → routes to specialized workflow-agents → workflow-agents read role context + execute → orchestrator manages handoffs + HITL gates + DRI logging across agents
+- **Each Compass workflow becomes a separate agent type** (per user vision) — `/setup-product` is one agent, `/build` is another, etc. — 17 workflows = 17 workflow-agents. Or 13 role-specialized agents. Or a hybrid.
+- **The v0.3.8 `agents:` registry shape is the foundation** — naturally extends with `orchestrator:` and per-workflow `workflow_agents:` entries
+- **Key questions for v0.4/v0.5 work** (preserved here so framing isn't lost):
+  1. Unit of agency — per-workflow agent (17) vs per-role agent (13) vs hybrid
+  2. Where orchestrator runs — Compass-side declarative spec vs runtime-layer (Claude Agent SDK / OpenAI Assistants / LangGraph) vs both
+  3. What "controlling" means — just routing vs routing+state vs full conductor (which can replace PM-as-arbiter — major philosophy choice)
+  4. How existing Compass principles survive — #14 soft-spec-hardening, #15 cite-or-mark-n/a, #16 refuse-escalate need to live as agent constitutions; risk = prompt generation drift from intent at generation time (same `polished-but-broken` shape we just codified in v0.3.6)
+  5. Cost/latency reality — multi-agent systems are expensive and slow vs single-agent; need fast-path for simple cases that stay single-agent
+  6. MVP shape — declarative-only (registry, no runtime) vs reference orchestrator (1-2 example workflow-agents) vs full transition (all 17 workflows ported)
+  7. Lock-in risk — Claude Agent SDK ties Compass to Claude stack at orchestrator layer; contradicts v0.3.5 agent-agnostic principle; generic abstraction is harder but preserves posture
+- **This is the framework's first explicit architectural-rearchitecture deferral with reasoning preserved** rather than silently dropped or implicitly absorbed. Worth examining as a positive pattern in Retro #005.
+
+**Files touched (8):** edited — `compass/framework/canon.md`, `compass/config.yaml`, `AGENTS.md`, `compass/templates/workflow-template.md`, `README.md`, `SETUP.md`, `CHANGELOG.md`, `compass/workflows/improvements.md`.
+
+**Watch for:**
+- **Catalog-balance bias.** v0.3.8 swings the catalog from 4:4 (after v0.3.6) to 4:5 enforcement-vs-usability. If the next 1-2 Compass-originals also land in usability shapes, that's a pattern worth naming — is Compass evolving toward "make itself usable" over "make itself harder to violate"? If so, intentional or accidental? **Retro #005 should examine.**
+- **The 9 remaining hardcoding files.** AGENTS.md "Tool division of labor" now derives from config (1 of 10 hardcoding files updated). README, CLAUDE.md, SETUP, skill files, .codex/prompts, canon.md, build.md, fix.md still hardcode Claude+Codex split. v0.3.9 (L2 adapter docs) + v0.3.10 (L3 propagation script) close the gap. If users hit drift between these files before v0.3.10, escalate the propagation script.
+- **Multi-consumer adoption gap continues.** aura-app (v0.2.x) + crypto-app (v0.3.x active). v0.3.7 detection ran on framework repo only; v0.4+ distribution ships consumer-side propagation. The v0.3.8 registry-as-source-of-truth shape doesn't change this — until L3 propagation lands, each consumer still maintains its own copy of `compass/`. Watch whether consumer drift becomes acute enough to force L3 earlier than v0.3.10.
+- **Agent registry maturity churn.** OpenAI / Codex / Gemini / Anthropic CLIs evolve rapidly. The `maturity:` flags in the registry are a point-in-time snapshot. **The `[freshness-check]` pattern applies** — registry entries with `external_source:` could carry freshness markers. Defer until first noticed staleness; could be a v0.3.9 enhancement if multiple registry entries drift in the same month.
+- **Apple Intelligence `unsupported: true` re-examination.** Apple's developer-facing AI surface evolves; if Apple ships an open API for arbitrary on-device role-playing, the registry flag should flip. Track via the freshness-check pattern (`external_source: https://developer.apple.com/apple-intelligence` or similar). Defer until Apple ships such an API.
+- **Orchestrator-vision re-examination triggers.** When does v0.4/v0.5 work start? Candidates: (a) user explicitly asks; (b) the registry-as-documentation-only limitation becomes acute (someone manually triggers wrong agent for a role multiple times); (c) cost/coordination overhead of multi-tool sessions becomes visible enough to want orchestrator state management. **Watch for which trigger fires first.**
+- **Improvement counter — Retro #005 fires.** This is improvement #25; cadence promised retro after #25 → fires next. Watch whether (a) Retro #005 happens this session (concurrent with v0.3.8) or (b) defers to a separate session (cleaner separation but risks repeating the v0.3.4 → v0.3.6 retro-deferral pattern).
+
+**Meta-observation — the planning loop itself was the work.** v0.3.8 substance is light (8 files, mostly registry declaration). But the planning loop — initial framing → mechanism diagnosis → reframing to multi-tool → reframing to orchestrator → deciding path A — was where the conceptual work happened. This is consistent with Compass's design philosophy: **the methodology IS the work; the substance is mostly declaration of decided patterns.** Worth noting as confirmation that framework evolution is mostly conceptual + declarative, not implementation-heavy.
+
+**Cadence note.** v0.3.1 (Access & Data Posture) · v0.3.2 (elicitation-with-options) · v0.3.3 (freshness-check) · v0.3.4 (role-boundary) · v0.3.5 (agent-handoff + same-day extension) · v0.3.6 (mechanical-output-verification codified) · v0.3.7 (INFRASTRUCTURE — freshness detection shipped, no new Compass-original) · v0.3.8 (agent-agnostic-role-assignment codified) = **8 sessions, 7 Compass-originals + 1 infrastructure release.** Back to one-Compass-original-per-session cadence after v0.3.7's legitimate infrastructure break.
 
 ---
 

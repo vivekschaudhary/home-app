@@ -15,7 +15,7 @@ A markdown-based framework that any AI tool can read. The framework lives in `co
 - **Every initiative is a bet.** Foundation product, OKRs, features, architectural initiatives — all measurable bets with a hypothesis, key metric, and an outcome: **won / learning / inconclusive**.
 - **Bets contain stories.** Stories contain implementation, tests, fixes, ops.
 - **Roles, not job titles.** 13 product roles played by AI tools loading the right context at each phase.
-- **Two tools, separated jobs.** Claude implements. Codex reviews. Independent models catch what one would miss.
+- **Agent-agnostic by design; defaults built in.** Pick any agent per role (`claude`, `codex`, `openai`, `gemini`, `deepseek`, `codestral`, `custom`) from the registry in `compass/config.yaml`. **Default = Claude implements, Codex reviews** — independent models catch what one would miss (empirically validated). Per `[agent-agnostic-role-assignment]` (v0.3.8).
 - **Discipline holds always.** Full review on every PR, no shortcuts under pressure.
 - **Decisions, Risks, Issues** logged at every stage (DRI logs).
 - **Compass scans your product like Snyk scans your code.** A continuous quality scanner runs across six SDLC phases — Product, Architecture, Build, Production Ready, GTM, Operate — and produces *findings, not failures*. Each finding has severity (Critical / High / Medium / Low) + confidence + location + reason + fix. Measurement is automatic (no manual self-assessment). Suppressions are explicit, justified, logged in DRI. Owners decide; the scanner informs.

@@ -12,21 +12,113 @@ framework_version: 1.0
 # - merge_only   : approve only at PR merge (lightest)
 hitl_level: milestones
 
+# ─── Agent registry ───────────────────────────────────────────────────
+# Per [agent-agnostic-role-assignment] (compass/framework/canon.md, v0.3.8).
+# Declares each supported agent's invocation pattern + context-loading
+# convention + auth requirements. Generalizes the [agent-handoff] v0.3.5
+# pattern (reviewer-only agent-agnosticism) to every role.
+#
+# To add a new agent: add an entry here, then reference it in
+# tool_assignments below. Per-agent adapter docs (v0.3.9 candidate) and
+# per-agent prompt-directory scaffolding (v0.3.10 candidate) will follow
+# this registry as their source of truth.
+agents:
+  claude:
+    invocation: cli                 # Claude Code CLI / IDE plugin
+    context_loading: local-files
+    files: [AGENTS.md, CLAUDE.md, "compass/roles/<role>.md"]
+    auth_env: ANTHROPIC_API_KEY     # or claude-code login
+    maturity: production
+    note: "Claude Code reads local files automatically on session start."
+
+  codex:
+    invocation: cli                 # OpenAI Codex CLI
+    context_loading: local-files
+    files: [AGENTS.md, ".codex/prompts/<role>.md", "compass/roles/<role>.md"]
+    auth_env: OPENAI_API_KEY        # or codex login
+    maturity: production
+    note: "Reads .codex/prompts/<role>.md as the role entrypoint."
+
+  openai:
+    invocation: api                 # OpenAI API (ChatGPT / GPT models)
+    context_loading: api-system-prompt
+    auth_env: OPENAI_API_KEY
+    maturity: api-mature            # API stable; web UI requires manual paste
+    note: "Three paths: API call with role file as system prompt (recommended), Custom GPT (discoverable), or manual paste (degraded). Distinct from `codex` (also OpenAI but a different CLI product)."
+
+  gemini:
+    invocation: cli                 # Google Gemini CLI
+    context_loading: local-files
+    files: [AGENTS.md, ".gemini/prompts/<role>.md", "compass/roles/<role>.md"]
+    auth_env: GOOGLE_API_KEY        # or gemini login
+    maturity: production
+    note: "Mirrors codex pattern. CLI package: @google/gemini-cli."
+
+  deepseek:
+    invocation: api                 # DeepSeek API
+    context_loading: api-system-prompt
+    auth_env: DEEPSEEK_API_KEY
+    maturity: api-mature            # No first-class CLI integration
+    note: "API-only; user wires up call with role file as system prompt."
+
+  codestral:
+    invocation: api                 # Mistral / Codestral API
+    context_loading: api-system-prompt
+    auth_env: MISTRAL_API_KEY
+    maturity: api-mature            # No first-class CLI integration
+    note: "Mistral API; Codestral is the code-specialist model family."
+
+  apple:
+    invocation: manual              # Manual paste into Apple Intelligence
+    context_loading: manual-paste
+    unsupported: true               # Explicit honest deferral
+    maturity: limited
+    note: "Apple Intelligence is system-level (Writing Tools, Summarization) without an open API for arbitrary role-playing. Listed for visibility; not first-class. Use `custom` if you need a non-standard Apple-side workflow."
+
+  custom:
+    invocation: user-defined        # Escape valve
+    context_loading: user-defined
+    maturity: user-managed
+    note: "Declare your own invocation pattern. Use for agents not in the registry (self-hosted model, custom CLI wrapper, internal API, etc.)."
+
+# ─── Defaults ─────────────────────────────────────────────────────────
+# Sensible defaults matching Compass's empirically-validated split per
+# AGENTS.md "Tool division of labor" (Claude implements; Codex reviews —
+# different-model reviewer is structurally load-bearing per v0.3.5
+# same-day extension; CB-1.4 empirically validated). Any role not set
+# below in tool_assignments falls back to the appropriate default here.
+defaults:
+  implements:   claude              # for builder/maker roles
+  reviews:      codex               # for independent-model review roles
+  product:      claude              # for PM/discovery/visibility roles
+  tech-writes:  claude              # for documentation roles
+
 # ─── Tool assignments ─────────────────────────────────────────────────
-# Which AI tool plays which role.
+# Which agent (from the `agents:` registry above) plays which role.
+# Validated against the registry at workflow load time.
+#
+# To override: change a value to any agent key from the registry above.
+#   Example: pm: openai           ← use ChatGPT / GPT API for PM role
+#            designer: gemini     ← use Gemini for designer role
+#
+# IMPORTANT — reviewer/security_reviewer constraint: must use a
+# DIFFERENT MODEL than the implementer. Same-model reviewer + same-model
+# author share aesthetic priors and miss what an independent-model
+# reviewer catches. See AGENTS.md "Tool division of labor" for the
+# structural rationale + CB-1.4 empirical validation.
 tool_assignments:
-  pm:                       claude
-  researcher:               claude
-  support:                  claude
-  designer:                 claude
-  ux_writer:                claude
-  architect:                claude
-  enterprise_architect:     claude
-  engineer:                 claude    # writes unit/API/component tests too
-  reviewer:                 codex     # writes E2E + automation framework
-  security_reviewer:        codex
-  tech_writer:              claude
-  project_manager:          claude
+  pm:                       claude    # defaults.product
+  researcher:               claude    # defaults.product
+  support:                  claude    # defaults.product
+  designer:                 claude    # defaults.product
+  ux_writer:                claude    # defaults.product
+  architect:                claude    # defaults.implements
+  enterprise_architect:     claude    # defaults.implements
+  engineer:                 claude    # defaults.implements — writes unit/API/component tests too
+  reviewer:                 codex     # defaults.reviews — writes E2E + automation framework
+  security_reviewer:        codex     # defaults.reviews
+  tech_writer:              claude    # defaults.tech-writes
+  project_manager:          claude    # defaults.product
 
 # ─── Connectors (MCP) ─────────────────────────────────────────────────
 # Wire these up in .mcp.json. The framework references them by name here.
