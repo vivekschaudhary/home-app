@@ -1,0 +1,96 @@
+# Compass — Freshness Check workflow
+# Per [freshness-check] (compass/framework/canon.md) — pull-bridge round 2 (v0.3.7).
+#
+# Runs weekly on Compass repo. Invokes `compass/scripts/check-freshness.py`:
+#   - Walks compass/ for files with `last_verified:` frontmatter
+#   - Queries external sources (GitHub API or HTTP Last-Modified)
+#   - Auto-bumps `last_verified` where source unchanged (safe)
+#   - Flags files where source has changed (manual review)
+#   - Errors when network or parse fails (no action)
+#
+# Action taken:
+#   - If any bumps applied → open PR with the diff + report
+#   - If flags only (no bumps but flags exist) → open Issue with the report
+#   - If everything fresh → no action
+
+name: Freshness Check
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'         # Mondays 06:00 UTC
+  workflow_dispatch:             # Manual trigger from Actions UI
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write            # to commit auto-bumps
+      pull-requests: write       # to open PR
+      issues: write              # to open Issue for flag-only weeks
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Run freshness check (apply mode)
+        id: check
+        run: |
+          set +e
+          python compass/scripts/check-freshness.py --apply --out report.md
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Detect file changes
+        id: diff
+        run: |
+          if [ -n "$(git status --porcelain compass/)" ]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open PR (bumps applied)
+        if: steps.diff.outputs.has_changes == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DATE=$(date +%Y-%m-%d)
+          BRANCH="freshness/${DATE}"
+          git config user.name "compass-freshness-bot"
+          git config user.email "compass-freshness@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add compass/
+          git commit -m "freshness: auto-bump last_verified markers (round 2 v0.3.7)
+
+          $(head -20 report.md)
+          "
+          git push origin "$BRANCH"
+          gh pr create \
+            --title "Freshness check ${DATE}" \
+            --body-file report.md \
+            --base main \
+            --head "$BRANCH" \
+            --label "freshness-check"
+
+      - name: Open Issue (flags only, no bumps)
+        if: steps.diff.outputs.has_changes == 'false' && steps.check.outputs.exit_code == '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DATE=$(date +%Y-%m-%d)
+          gh issue create \
+            --title "Freshness check ${DATE} — manual review needed" \
+            --body-file report.md \
+            --label "freshness-check"
+
+      - name: Upload report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: freshness-report-${{ github.run_id }}
+          path: report.md
+          retention-days: 90
