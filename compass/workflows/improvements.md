@@ -12,8 +12,9 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 - **Retro #002** (v0.1.13 → v0.2.2): [retros/2026-05-26-retro-002-v0.1.13-to-v0.2.2.md](retros/2026-05-26-retro-002-v0.1.13-to-v0.2.2.md)
 - **Retro #003** (v0.2.3 → v0.2.7): [retros/2026-05-26-retro-003-v0.2.3-to-v0.2.7.md](retros/2026-05-26-retro-003-v0.2.3-to-v0.2.7.md)
 - **Retro #004** (v0.2.8 → v0.3.5 + same-day extensions): [retros/2026-06-01-retro-004-v0.2.8-to-v0.3.5.md](retros/2026-06-01-retro-004-v0.2.8-to-v0.3.5.md) — fired at #22, **2 cycles overdue** (promised after #20); names retro-cadence-rationalization as drift signal; surfaces `[mechanical-output-verification]` as codification-ready (2 instances).
+- **Retro #005** (v0.3.6 → v0.3.8 + same-day correction): [retros/2026-06-02-retro-005-v0.3.6-to-v0.3.8.md](retros/2026-06-02-retro-005-v0.3.6-to-v0.3.8.md) — **fired ON TIME at #25** (hard line from Retro #004 worked). Smaller 3-improvement cycle. Surfaces `[declare-not-implement]` + `[hard-line-declaration]` as codification-ready (2 instances each); `[framework-on-framework]` at threshold (3 instances). Includes first in-cycle artifact analysis section: `compass/roles/reviewer.md` rated 7/10 (pruning candidate) + CB-1.5 story rated 9/10 (correct framework application in the wild).
 
-**Next retro fires after improvement #30.** (v0.3.5 = #22; v0.3.6 = #23; v0.3.7 = #24; **v0.3.8 = #25 — Retro #005 trigger reached**, fires next session unless explicitly bundled with v0.3.8. Hard line from Retro #004 still in effect — if retro slips again, retro rationalization is no longer one-off.)
+**Next retro fires after improvement #30.** (v0.3.5 = #22; v0.3.6 = #23; v0.3.7 = #24; v0.3.8 = #25 — **Retro #005 fired ON TIME 2026-06-02**. Hard line from Retro #004 still in effect through next cycle — if Retro #006 slips, retro rationalization is no longer one-off; elevate `[hard-line-declaration]` codification or tighten slip-counter visibility.)
 
 ## Template
 
