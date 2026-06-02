@@ -18,10 +18,24 @@ hitl_level: milestones
 # convention + auth requirements. Generalizes the [agent-handoff] v0.3.5
 # pattern (reviewer-only agent-agnosticism) to every role.
 #
+# ADAPTER LAYER — upstream, not Compass-side. Compass does not write
+# per-agent adapters. For API-based agents (openai, deepseek, codestral,
+# any future API provider), use an existing adapter library:
+#   - LiteLLM (recommended) — 100+ providers, unified API, Python + JS
+#   - Vercel AI SDK — TypeScript-first, similar provider abstraction
+#   - OpenRouter — hosted proxy, OpenAI-compatible API for many models
+#   - LangChain LLM providers — if already in your stack
+# Each declares model strings in its own convention (LiteLLM uses
+# `openai/gpt-5`, `anthropic/claude-opus-4-7`, etc.). Auth via standard
+# env vars (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.).
+#
+# For full-agent CLIs (claude, codex, gemini) the CLI tool IS the
+# adapter — reads local files, runs its own loop, no extra adapter needed.
+#
 # To add a new agent: add an entry here, then reference it in
-# tool_assignments below. Per-agent adapter docs (v0.3.9 candidate) and
-# per-agent prompt-directory scaffolding (v0.3.10 candidate) will follow
-# this registry as their source of truth.
+# tool_assignments below. Per-agent prompt-directory scaffolding for CLI
+# agents (v0.3.9 candidate) will follow this registry as source of truth;
+# per-agent adapter docs are NOT shipped — upstream libraries handle that.
 agents:
   claude:
     invocation: cli                 # Claude Code CLI / IDE plugin
@@ -43,8 +57,9 @@ agents:
     invocation: api                 # OpenAI API (ChatGPT / GPT models)
     context_loading: api-system-prompt
     auth_env: OPENAI_API_KEY
+    adapter: litellm                # or vercel-ai-sdk / openrouter / langchain
     maturity: api-mature            # API stable; web UI requires manual paste
-    note: "Three paths: API call with role file as system prompt (recommended), Custom GPT (discoverable), or manual paste (degraded). Distinct from `codex` (also OpenAI but a different CLI product)."
+    note: "Use an upstream adapter library — LiteLLM model string `openai/gpt-5` (or current), Vercel AI SDK provider, OpenRouter, or LangChain. Compass passes `compass/roles/<role>.md` as system prompt. Distinct from `codex` (also OpenAI but a different CLI product)."
 
   gemini:
     invocation: cli                 # Google Gemini CLI
@@ -58,15 +73,17 @@ agents:
     invocation: api                 # DeepSeek API
     context_loading: api-system-prompt
     auth_env: DEEPSEEK_API_KEY
+    adapter: litellm                # or vercel-ai-sdk / openrouter / langchain
     maturity: api-mature            # No first-class CLI integration
-    note: "API-only; user wires up call with role file as system prompt."
+    note: "Use an upstream adapter library — LiteLLM model string `deepseek/deepseek-chat` (or current). Compass passes `compass/roles/<role>.md` as system prompt."
 
   codestral:
     invocation: api                 # Mistral / Codestral API
     context_loading: api-system-prompt
     auth_env: MISTRAL_API_KEY
+    adapter: litellm                # or vercel-ai-sdk / openrouter / langchain
     maturity: api-mature            # No first-class CLI integration
-    note: "Mistral API; Codestral is the code-specialist model family."
+    note: "Use an upstream adapter library — LiteLLM model string `mistral/codestral-latest` (or current). Codestral is Mistral's code-specialist model family. Compass passes `compass/roles/<role>.md` as system prompt."
 
   apple:
     invocation: manual              # Manual paste into Apple Intelligence

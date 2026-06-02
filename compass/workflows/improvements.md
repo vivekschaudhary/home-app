@@ -130,6 +130,45 @@ User then **re-framed again** (architectural): "ideally there should be an orche
 
 **Cadence note.** v0.3.1 (Access & Data Posture) · v0.3.2 (elicitation-with-options) · v0.3.3 (freshness-check) · v0.3.4 (role-boundary) · v0.3.5 (agent-handoff + same-day extension) · v0.3.6 (mechanical-output-verification codified) · v0.3.7 (INFRASTRUCTURE — freshness detection shipped, no new Compass-original) · v0.3.8 (agent-agnostic-role-assignment codified) = **8 sessions, 7 Compass-originals + 1 infrastructure release.** Back to one-Compass-original-per-session cadence after v0.3.7's legitimate infrastructure break.
 
+**Same-day correction — 2026-06-02: adapter layer is upstream, not Compass-side.**
+
+User direction immediately after v0.3.8 L1 shipped: *"we are not creating per agent adapter we will use an existing adapter like litellm and other competitors for the adapters."* The originally-planned L2 (per-agent adapter docs at `compass/agents/<agent>.md`) is **not a Compass deliverable**. Compass would have been duplicating upstream documentation that's already maintained by LiteLLM, Vercel AI SDK, OpenRouter, LangChain, etc.
+
+**What this is:**
+- Compass declares the agent registry (`compass/config.yaml`)
+- For API-based agents (openai, deepseek, codestral, future API providers): use an upstream adapter library — **LiteLLM recommended**; Vercel AI SDK / OpenRouter / LangChain alternatives
+- For full-agent CLIs (claude / codex / gemini): the CLI tool IS the adapter; no upstream library needed
+- Compass doesn't write per-agent adapters; the adapter routes API calls to the right provider given a model string
+
+**Why this is the right call:**
+- LiteLLM handles 100+ LLM providers with a unified API + standard env var conventions — solved problem, maintained upstream
+- Vercel AI SDK does the same for TS/JS projects
+- OpenRouter is the hosted version of the same idea
+- Per-agent adapter docs in Compass would (a) duplicate upstream documentation, (b) go stale as adapters add providers, (c) put Compass in a layer that's not its job
+- **Same shape as v0.3.5 `[agent-handoff]`** — that pattern parameterizes over reviewer CLIs without writing per-CLI integrations; v0.3.8 + this correction extends the same restraint to per-tool agents
+
+**Change:**
+- **`compass/config.yaml` `agents:` block top comment expanded** — declares the adapter layer is upstream + lists 4 recommended libraries (LiteLLM, Vercel AI SDK, OpenRouter, LangChain) + clarifies that full-agent CLIs ARE the adapter for their respective agents
+- **`compass/config.yaml` API-based agent entries (openai, deepseek, codestral) gained `adapter: litellm` field** + updated `note:` referencing LiteLLM model strings (e.g., `openai/gpt-5`, `deepseek/deepseek-chat`, `mistral/codestral-latest`); Compass passes `compass/roles/<role>.md` as system prompt
+- **`compass/framework/canon.md` `[agent-agnostic-role-assignment]` entry forward-looking section** updated — L2 (per-agent adapter docs) explicitly NOT a Compass deliverable; v0.3.9 becomes what was previously L3 (CLI-agent prompt directory propagation script)
+- **`CHANGELOG.md` v0.3.8 Roadmap clarification + Notes** updated — name the correction explicitly + note this is the **first v0.3.x release with a same-day correction to the deferred roadmap** (not just to the substance)
+- **this improvements.md entry** updated with this same-day correction subsection
+
+**Forward roadmap simplified:**
+- **v0.3.9 (was v0.3.10):** `compass/scripts/setup-agent.py` propagation script — generates `.codex/prompts/<role>.md` and `.gemini/prompts/<role>.md` files for CLI-based assigned agents (small scope; ~3-5 files)
+- **v0.4+:** still the orchestrator vision (deferred for substantive multi-agent architecture)
+- **L2 removed entirely** — adapter docs are upstream
+
+**Files touched (5):** edited — `compass/config.yaml`, `compass/framework/canon.md`, `CHANGELOG.md`, `compass/workflows/improvements.md` (this entry), and (planned) `SETUP.md` to mention LiteLLM in the "Picking which agent plays which role" section.
+
+**Watch for:**
+- **Adapter-library churn risk.** LiteLLM and competitors evolve rapidly (new providers, new model strings, breaking API changes). The `[freshness-check]` pattern could apply to adapter recommendations — `compass/config.yaml` `agents:` block could gain a `last_verified` marker pointing at the LiteLLM repo. Defer until first noticed staleness.
+- **"Compass becoming smaller" as a positive scope-discipline pattern.** This is the **2nd structurally-distinct instance of the framework declaring patterns rather than building implementations** (1st: v0.3.5 `[agent-handoff]` parameterized over reviewer CLIs without writing per-CLI integrations; 2nd: v0.3.8 + this correction extends restraint to per-tool agents via upstream adapter libraries). If a 3rd instance surfaces, candidate Compass-original: `[declare-not-implement]` or `[upstream-delegation]` — a meta-pattern about Compass's scope discipline. Worth retro #005 examination.
+- **First same-day correction to deferred roadmap (not to substance).** v0.3.5 had a same-day extension (3 implementation lessons). v0.3.6 had a PR#1 correction (Next 16 anchor). v0.3.8 has a same-day **roadmap correction** — different shape: this isn't fixing what shipped, it's reshaping what was planned to ship next. Pattern or one-off?
+- **Multi-consumer adoption simplification.** With L2 removed, consumers don't need to wait for Compass-side per-agent adapter docs. They can adopt LiteLLM (or alternative) for API-based agents and use CLI tools directly for full-agent CLIs. **The path from v0.3.8 to actual multi-agent usage in aura-app or crypto-app gets shorter.**
+
+**Meta-observation — the framework's reflex to declare-not-implement stayed intact under user reality-check.** The originally-planned L2 (8 adapter docs) was an instance of scope-creep that I almost shipped. User caught it immediately. This is exactly the soft-spec-rationalization pattern Principle #14 closes — applied to Compass's own scope discipline. Worth surfacing in Retro #005 as evidence the framework's principles work when applied to itself, with user as the load-bearing oversight (not the framework alone).
+
 ---
 
 ### 2026-06-01 — Freshness detection shipped (pull-bridge round 2 — 3-slip commitment closure) (v0.3.7)

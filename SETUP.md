@@ -249,7 +249,17 @@ tool_assignments:
 
 **Defaults work out of the box.** If you change nothing, Compass uses Claude implements + Codex reviews — matching the empirically-validated split.
 
-**Non-default agents may require manual setup** of the agent's prompt directory (e.g., `.gemini/prompts/<role>.md` mirroring `.codex/prompts/`) until v0.3.10 ships the `compass/scripts/setup-agent.py` propagation script. See `compass/config.yaml` registry `note:` for each agent's invocation pattern.
+**Non-default agents may require manual setup** depending on their type:
+
+- **CLI-based agents** (`claude`, `codex`, `gemini`): need a per-tool prompt directory (`.codex/prompts/<role>.md`, `.gemini/prompts/<role>.md`). Until v0.3.9 ships `compass/scripts/setup-agent.py` to generate these, copy the pattern from existing `.codex/prompts/reviewer.md` (it's a thin wrapper pointing at `compass/roles/<role>.md`).
+
+- **API-based agents** (`openai`, `deepseek`, `codestral`): use an upstream adapter library — **LiteLLM recommended** (handles 100+ providers, unified API, Python + JS). Alternatives: **Vercel AI SDK** (TypeScript-first), **OpenRouter** (hosted proxy), **LangChain LLM providers**. Compass passes `compass/roles/<role>.md` as the system prompt; the adapter routes to the right provider given a model string (e.g., LiteLLM uses `openai/gpt-5`, `deepseek/deepseek-chat`, `mistral/codestral-latest`). Auth via standard env vars (`OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `MISTRAL_API_KEY`).
+
+- **Apple Intelligence** (`apple`): flagged `unsupported: true` in the registry — system-level features only, no open API for arbitrary role-playing. Use `custom` if you need a non-standard Apple-side workflow.
+
+- **Custom**: declare your own invocation pattern in the registry. Use for self-hosted models, custom CLI wrappers, internal APIs.
+
+See `compass/config.yaml` registry `note:` for each agent's specific integration path.
 
 ## Adding more AI tools later
 
