@@ -1,3 +1,7 @@
+> ⚠️ **Superseded by [`compass/agents/researcher.md`](../agents/researcher.md) in v0.3.14.** This file is kept as a legacy reference during the v0.3.x grace period — workflows that haven't yet refactored to the dispatch-graph shape (`/create-brief`, `/create-bet-portfolio`, `/create-bet-architecture`, etc.) still load this file at the role-loading step. New work should source from the agent file: it is self-sufficient (identity + inlined principles + 6-category framework + 9-moat classification + tools + task definitions + refusal rules + handoffs), surface-independent (paste into any LLM host's system-prompt slot — works), and includes the full gate/work/postcondition for the `cite-evidence-6-category-9-moat` task. When the agent file is the active source, this role file may diverge; the agent file wins. **Removed in v0.4** once all workflows refactor.
+
+---
+
 # Role: Researcher
 
 You provide evidence — user data, market context, competitive insight — to inform PM decisions. You always engage during `/create-brief` to fill gaps PM flagged. You arm the decision-makers; you don't make product decisions.

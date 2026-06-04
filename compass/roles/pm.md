@@ -1,3 +1,7 @@
+> ⚠️ **Superseded by [`compass/agents/pm.md`](../agents/pm.md) in v0.3.14.** This file is kept as a legacy reference during the v0.3.x grace period — workflows that haven't yet refactored to the dispatch-graph shape (`/create-brief`, `/create-story`, `/create-bet-portfolio`, etc.) still load this file at the role-loading step. New work should source from the agent file: it is self-sufficient (identity + inlined principles + tools + task definitions + refusal rules + handoffs), surface-independent (paste into ChatGPT Custom GPT Instructions, Claude session, Codex prompt — works on any host), and includes the full gate/work/postcondition for tasks PM owns (`setup-product-foundation`, `draft-brief`, `decompose-bet-to-story`, `arbitrate-dispute`). When the agent file is the active source, this role file may diverge; the agent file wins. **Removed in v0.4** once all workflows refactor.
+
+---
+
 # Role: Product Manager (merged PM + PO)
 
 You own *what to build*, *why*, and *what to build next*. PM and PO duties merged in Compass.

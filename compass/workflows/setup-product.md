@@ -4,7 +4,7 @@ status: active
 owner: pm
 auto_invokes: []
 invoked_by: []
-version: 0.3.0-alpha
+version: 0.3.14
 ---
 
 # Workflow: /setup-product
@@ -18,151 +18,128 @@ What this workflow operationalizes. Full entries in `compass/framework/canon.md`
 - **Bet-based commitment:** [shape-up] · [helmer-bet-portfolio]
 - **Communication discipline:** [pyramid-principle] · [stripe-2-page] · [amazon-6-page]
 - **Goal-setting:** [okrs] · [north-star]
-- **Compass-originals operationalized:** [cite-or-mark-na] (Researcher 6-category + moat 9-type) · [refuse-escalate] · [soft-spec-hardening]
-- **Verifies adherence to:** Principle #14 (soft spec → AI rationalization, fix = constraint + verification + named anti-pattern) · Principle #15 (N-category cite-or-mark-n/a enforcement) · Principle #16 (refuse + escalate to upstream)
+- **Compass-originals operationalized:** [agent-as-surface-independent-unit] (v0.3.14 — agent files own task content) · [cite-or-mark-na] (Researcher 6-category + moat 9-type) · [refuse-escalate] · [soft-spec-hardening] · [elicitation-with-options] (3-options + Other for auth posture / data sensitivity / regulatory regime)
+- **Verifies adherence to:** Principle #14 (soft spec → AI rationalization) · Principle #15 (N-category cite-or-mark-n/a enforcement) · Principle #16 (refuse + escalate to upstream)
 
 ## Purpose
 
 Creates the **foundational product bet** — the company / product mission as a measurable bet, captured in `docs/foundation/product.md`. Must run before `/setup-foundation-architecture`.
 
+## Architectural shape (v0.3.14)
+
+This workflow is a **thin dispatch graph** per `[agent-as-surface-independent-unit]` (canon v0.3.14). The heavy gate/work/postcondition content lives in the agent task definitions in `compass/agents/`. This file declares:
+
+1. **Workflow-level preconditions** (cross-agent invariants)
+2. **Dispatch graph** — ordered sequence of `<agent>.<task>` invocations + HITL gates
+3. **Workflow-level verification** — cross-agent invariants the dispatch graph must satisfy
+
+The per-step gate/work/postcondition detail is NOT in this file. Read the named task in the named agent file for that.
+
 ## Preconditions (workflow-level GATE — checked once at start)
 
-- **No in-review foundation** — if `docs/foundation/product.md` exists with `status: proposed`, **refuse with:** "Existing product.md is in review (status: proposed). Approve or reject it before re-invoking `/setup-product`." (Amend of an `approved` foundation is allowed — see Step 1.)
+- **No in-review foundation** — if `docs/foundation/product.md` exists with `status: proposed`, **refuse with:** "Existing product.md is in review (status: proposed). Approve or reject it before re-invoking `/setup-product`." (Amend of an `approved` foundation is allowed — handled inside `pm.setup-product-foundation`.)
 - **Source material provided** — user must provide at least one source (Confluence link, GDrive doc, notes, free text). **On failure, refuse with:** "Provide at least a vision sentence or a source link to begin."
+- **At least one agent dispatched per workflow phase has an available host.** If neither PM agent nor Researcher agent can be reached on any configured host, refuse and escalate.
 
-## Roles invoked
+## Roles invoked (agents dispatched)
 
-- `compass/roles/pm.md` — primary role throughout
-- `compass/roles/researcher.md` — mandatory engagement during Step 3
-- `compass/roles/project-manager.md` — final status update (Step 9)
+- `compass/agents/pm.md` — primary agent across most of the workflow
+- `compass/agents/researcher.md` — engaged for the cited-evidence task (no log-and-walk-away)
+- `compass/roles/project-manager.md` — final status update step (Project Manager agent migration deferred to v0.3.15+; uses legacy role file until then)
 
-## Steps
+## Dispatch graph
 
-### 1. Check state and handle amend
+The workflow walks this sequence. The runtime mechanism is one of:
+- **Today (no orchestrator):** human dispatcher — opens the right agent's host (e.g., PM Custom GPT on ChatGPT for the PM tasks, Claude Code for filesystem steps), pastes the workflow command, agent runs its task, halts at the next handoff, human transitions to the next agent's host.
+- **v0.4 (orchestrator):** orchestrator walks the graph, dispatches each step to its assigned agent on its assigned host automatically.
 
-**Precondition (GATE):** Workflow invoked; workflow-level Preconditions pass.
+Either way, the GRAPH is the same.
 
-**Work (Claude):** If `docs/foundation/product.md` exists with `status: approved`, ask user: amend (creates v2, supersedes v1) or abort? If amend: rename existing to `docs/foundation/product-v<N>.md`, flip its frontmatter to `status: superseded`.
+### Step 1. `pm.setup-product-foundation` (PM agent owns)
 
-**Postcondition (GATE):** Either no `docs/foundation/product.md` exists, OR existing approved file is renamed `product-v<N>.md` with `status: superseded` and user has confirmed amend intent.
+**Dispatches:** PM agent
+**Task definition:** `compass/agents/pm.md` → Task `setup-product-foundation`
+**What it covers:** state check (handle amend mode) → load PM context → gather source material → draft `docs/foundation/product.md` (including the 3 mandatory Access & Data Posture elicitations) → seed DRI log → optional Confluence/Jira mirror → halt at HITL gate.
+**Pause point inside task:** PM halts internally before drafting if Researcher findings (Step 2) are not yet present — the task gates on Researcher's output.
 
-### 2. Load PM role context
+### Step 2. `researcher.cite-evidence-6-category-9-moat` (Researcher agent owns)
 
-**Precondition (GATE):** Step 1 postcondition holds.
+**Dispatches:** Researcher agent
+**Task definition:** `compass/agents/researcher.md` → Task `cite-evidence-6-category-9-moat`
+**What it covers:** identify open questions → gather cited evidence across User pain · Competitive · Moat (mandatory) + Technical · Quantitative · Trends (cited or `n/a — <reason>`) → evaluate all 9 moat types with verdict + rationale → name primary moat(s) → synthesize patterns → acknowledge limitations → output findings (appended to draft product.md OR standalone `docs/foundation/research.md`) → seed Researcher DRI (≥1 Decision AND ≥1 Risk).
+**When it runs:** invoked by PM mid-task (PM Step 5 conceptual draft requires Researcher output). On hosts that can run multiple agents in one session, Researcher work happens within the PM session. On cross-host setups, PM halts, Researcher dispatched, PM resumes with findings.
 
-**Work (Claude):** Load `compass/roles/pm.md` as active role context for the rest of the workflow.
+### Step 3. **HITL gate** (human)
 
-**Postcondition (GATE):** PM role active.
+**Dispatches:** HUMAN (not an agent)
+**What it covers:** human reviews `docs/foundation/product.md` against the workflow-level Verification checklist below. If all items pass, human flips frontmatter `status: proposed` → `status: approved` and commits. If any item fails, human rejects and either re-dispatches PM/Researcher or aborts. **Per Principle #16:** PM agent must NOT self-approve; HITL is a hard stop.
 
-### 3. Researcher engages (mandatory — no log-and-walk-away)
+### Step 4. `project-manager.update-status` (Project Manager — legacy role until v0.3.15+)
 
-**Precondition (GATE):** PM role loaded.
+**Dispatches:** Project Manager (agent migration pending)
+**Task definition (interim):** `compass/roles/project-manager.md` — append note to `docs/status.md` recording that foundation product bet exists and is approved (with date).
+**Migration TODO:** create `compass/agents/project-manager.md` with task `update-status` in v0.3.15+. Until then, this step uses the legacy role file. Dispatch graph stays stable across the migration.
 
-**Work (Claude):** Load `compass/roles/researcher.md`. Researcher produces **cited evidence** in the mandatory categories: **User pain**, **Competitive**, **Moat (all 9 classic types)** — per the 6-category framework in `compass/roles/researcher.md`. Findings land in the eventual `product.md` Defensibility / Moat section AND/OR standalone `docs/foundation/research.md` for substantial findings. **Filing missing research as DRI Issues is NOT a substitute for producing the research** — if source is vision-only, Researcher's job is to fill the gap, not record it. **No silent skip on moat analysis.**
+## Workflow-level verification (final GATE — workflow cannot complete until all checked)
 
-**Postcondition (GATE):** Cited evidence exists for each mandatory category (each citation a real source — no "TBD" / "see R-N"). Researcher DRI Log has **≥1 Decision AND ≥1 Risk** entry (Issues-only does not satisfy).
+Mirrors per-task postconditions + cross-agent invariants.
 
-### 4. Gather source material
-
-**Precondition (GATE):** Researcher engaged.
-
-**Work (Claude):** Read user-provided sources via MCP (Confluence / GDrive / Notion etc.) and/or capture free-text input.
-
-**Postcondition (GATE):** At least one source artifact loaded into working context.
-
-### 5. Draft foundational product bet
-
-**Precondition (GATE):** Source material loaded; Researcher findings present.
-
-**Work (Claude):** Draft `docs/foundation/product.md` using `compass/templates/foundation-product.md`. Populate: Vision/mission · Target users/personas · **Access & Data Posture (3 fields — see explicit elicitation below)** · Market positioning · North-star metric(s) · Strategic OKRs (annual + current quarter) · Out-of-scope (what we're NEVER building) · Hypothesis · **Defensibility / Moat (all 9 types with verdict yes/no/partial + rationale; primary moat(s) explicitly named)** · Measurement window (typically annual) · Check-in cadence (typically quarterly). Frontmatter: `type: foundational-product`, `status: proposed`.
-
-**Access & Data Posture (mandatory — explicitly elicit; do not infer or defer):**
-- Ask the user: *"What's the auth posture? (anonymous · registered · authenticated · MFA-required · regulated-identity)"*
-- Ask the user: *"What's the data sensitivity scope? (none · public · PII · sensitive · regulated)"*
-- Ask the user: *"What's the regulatory regime? (none · GDPR · HIPAA · SOC 2 · PCI DSS · sector-specific — name it · combination — name each)"*
-- These are **product decisions architecture derives from** — don't defer to `/setup-foundation-architecture`. Capture answers in the template's Access & Data Posture section. **Per Principle #14 — silent skipping is the failure mode; this is named explicitly because foundational-product bets have historically failed to surface auth.**
-
-**Postcondition (GATE):** `docs/foundation/product.md` exists. All required sections populated. Defensibility / Moat section has all 9 moat-type rows filled. **Access & Data Posture section has all 3 fields populated (auth posture, data sensitivity, regulatory regime) with a value OR explicit `n/a — <reason>`.** Frontmatter `status: proposed`.
-
-### 6. PM seeds DRI log
-
-**Precondition (GATE):** product.md drafted.
-
-**Work (Claude):** PM seeds the DRI Log section with initial Decisions, Risks, Issues per `compass/roles/pm.md` DRI conventions.
-
-**Postcondition (GATE):** product.md DRI Log has **≥1 PM Decision** entry. Risks and Issues populated as applicable.
-
-### 7. Mirror to Confluence/Jira (optional — config-gated)
-
-**Precondition (GATE):** DRI log seeded; `compass/config.yaml` `connectors.docs` and/or `connectors.ticketing` set.
-
-**Work (Claude):** If mirroring enabled, push product.md as a strategic epic to configured docs/ticketing system. If disabled, skip — and log the skip explicitly as a DRI Decision in product.md ("mirroring not configured; skipped").
-
-**Postcondition (GATE):** Either (a) epic exists in configured system with link captured, OR (b) skip logged as DRI Decision (per "no silent skips" — AGENTS.md principle #3).
-
-### 8. HITL gate (hard stop)
-
-**Precondition (GATE):** Every Verification item below passes.
-
-**Work (Claude):** Halt. Tell user: "product.md is ready for review. Verification items all pass. Flip `status: proposed` → `status: approved` in frontmatter when ready."
-
-**Postcondition (GATE):** product.md frontmatter `status: approved` (set by human, not Claude).
-
-### 9. Project Manager updates docs/status.md
-
-**Precondition (GATE):** product.md `status: approved`.
-
-**Work (Claude):** Load `compass/roles/project-manager.md`. Append note to `docs/status.md` recording that the foundation product bet exists and is approved (with date).
-
-**Postcondition (GATE):** `docs/status.md` mentions foundation product bet with approval date.
-
-## Verification (final GATE — workflow cannot complete until all checked)
-
-- [ ] (Step 1) State handled — no existing product.md, OR existing approved version renamed `product-v<N>.md` with `status: superseded`
-- [ ] (Step 3) **Per Principle #14:** Researcher produced cited evidence (not log-and-walk-away) in **User pain**, **Competitive**, **Moat** — each citation is a real source (no "TBD" / "see R-N")
-- [ ] (Step 3) **Per Principle #15** (cite-or-mark-n/a, 6-category Researcher framework): the remaining 3 categories (Technical, Quantitative, Trends) either cited OR explicit `n/a — <reason>`
-- [ ] (Step 3) **Per Principle #15** (9-moat sub-framework): all 9 classic moat types evaluated — each row has verdict (yes / no / partial) AND rationale; empty rows fail; "not applicable" requires rationale
-- [ ] (Step 3) Researcher DRI: **≥1 Decision AND ≥1 Risk** (Issues-only does not satisfy)
-- [ ] (Step 5) `docs/foundation/product.md` exists with all required sections (Vision, Personas, Positioning, North-star, OKRs, Out-of-scope, Hypothesis, Defensibility/Moat, Measurement window, Cadence)
-- [ ] (Step 5) **Primary moat(s) being bet on are explicitly named** in the Defensibility / Moat section
-- [ ] (Step 5) **Access & Data Posture section populated** — all 3 fields (auth posture, data sensitivity, regulatory regime) have a value OR explicit `n/a — <reason>`. Empty values fail. Unjustified `n/a` fails. **Per Principle #15** (cite-or-mark-n/a enforcement) — and **Per Principle #14**, this is named explicitly because foundational-product bets have historically failed to surface auth (the auth gap that drove v0.3.1).
-- [ ] (Step 5) Frontmatter: `type: foundational-product`, `status: proposed`
-- [ ] (Step 6) PM DRI has ≥1 Decision entry
-- [ ] (Step 7) Mirroring completed (epic linked) OR skip logged as DRI Decision
-- [ ] (Step 8) **HITL gate:** human flipped `status: approved`. **Per Principle #16:** if any item above is unchecked, HITL gate cannot pass — refuse to proceed; tell user which item needs work
-- [ ] (Step 9) `docs/status.md` mentions foundation product bet with approval date
+- [ ] (Step 1 — pm.setup-product-foundation) State handled — no existing product.md, OR existing approved version renamed `product-v<N>.md` with `status: superseded`
+- [ ] (Step 2 — researcher) **Per Principle #14:** cited evidence produced (not log-and-walk-away) in **User pain**, **Competitive**, **Moat** — each citation a real source (no "TBD" / "see R-N")
+- [ ] (Step 2 — researcher) **Per Principle #15** (6-category framework): the remaining 3 categories (Technical, Quantitative, Trends) either cited OR explicit `n/a — <reason>`
+- [ ] (Step 2 — researcher) **Per Principle #15** (9-moat sub-framework): all 9 classic moat types evaluated — each row has verdict (yes / no / partial) AND rationale; empty rows fail; "not applicable" requires rationale
+- [ ] (Step 2 — researcher) Researcher DRI: **≥1 Decision AND ≥1 Risk** (Issues-only does not satisfy)
+- [ ] (Step 1 — pm) `docs/foundation/product.md` exists with all required sections (Vision · Personas · Positioning · North-star · OKRs · Out-of-scope · Hypothesis · Defensibility/Moat · Measurement window · Cadence)
+- [ ] (Step 1 — pm) **Primary moat(s) being bet on are explicitly named** in the Defensibility / Moat section
+- [ ] (Step 1 — pm) **Access & Data Posture section populated** — all 3 fields (auth posture, data sensitivity, regulatory regime) have a value OR explicit `n/a — <reason>`. Empty values fail. Unjustified `n/a` fails. **Per Principle #15** + **Principle #14** (auth gap that drove v0.3.1).
+- [ ] (Step 1 — pm) Frontmatter: `type: foundational-product`, `status: proposed` (before HITL); `status: approved` (after HITL)
+- [ ] (Step 1 — pm) PM DRI: ≥1 Decision entry
+- [ ] (Step 1 — pm) Mirroring step completed (epic linked) OR skip logged as DRI Decision (per "no silent skips")
+- [ ] (Step 3 — HITL) **Per Principle #16:** if any item above is unchecked, HITL gate cannot pass — refuse to proceed; tell user which item needs work. Human flipped `status: approved`.
+- [ ] (Step 4 — project-manager) `docs/status.md` mentions foundation product bet with approval date
 
 Workflow is NOT complete until every item is checked.
 
 ## Output summary contract (mandatory to user)
 
-- **TL;DR** — 3 lines max: product.md drafted / current status / HITL pending
+After completion (or refusal), report in this exact shape:
+
+- **TL;DR** — 3 lines max: product.md drafted / current status / HITL pending or approved
 - **Files created / modified** — table with path + change type
 - **Next recommended command** — once approved: `/setup-foundation-architecture` (for new projects)
 - **Open questions or risks** — surfaced during research / drafting (only if applicable)
+- **Per-step agent dispatch** — which agent ran on which host (informs Finance / Time tracking when v0.4 orchestrator ships)
 
 ## Notes
 
+### What changed in v0.3.14
+
+- **Heavy step content moved out of this file** into `compass/agents/pm.md` (task `setup-product-foundation`) and `compass/agents/researcher.md` (task `cite-evidence-6-category-9-moat`). This file became a thin **dispatch graph** per `[agent-as-surface-independent-unit]` (canon v0.3.14).
+- **No behavior change.** Every gate/work/postcondition that existed in v0.3.0-alpha shape is preserved, now inside the agent task definitions. Verification items unchanged.
+- **Cross-host orchestration enabled.** Same workflow file works whether PM runs on ChatGPT and Engineer runs on Claude Code (today, with human dispatcher) or whether v0.4 orchestrator dispatches across hosts (later). The graph is the contract.
+- **Project Manager agent migration deferred to v0.3.15+.** Step 4 still uses `compass/roles/project-manager.md` until then. The dispatch graph reference (`project-manager.update-status`) stays stable across the migration.
+
 ### Anti-patterns
 
-- **Researcher log-and-walk-away** — filing missing research as DRI Issues instead of producing it. The deliverable is evidence, not "we should research X." (Closed by Step 3 postcondition + Verification principle #14 reference.)
-- **Empty moat verdicts** — leaving any of the 9 moat types unevaluated. "Not applicable" is valid only with rationale. (Closed by Verification principle #15 reference.)
-- **Vision-only without filling gaps** — if source material is vision-only, the Researcher must fill personas / market / metrics gaps, not log them as outstanding Issues.
+- **Reading the workflow file alone and trying to execute it.** This file does NOT contain the step-by-step work — that lives in agent task definitions. Always load the named agent file for each step.
+- **Cross-agent step bleed.** PM agent must not execute Researcher's task even on a host where both could run; the Researcher's task has its own gates and DRI requirements. Single-session multi-agent dispatch is allowed (one LLM session wearing two agent hats serially) but must respect each task's boundaries.
+- **Researcher log-and-walk-away** — filing missing research as DRI Issues instead of producing it. Closed inside `researcher.cite-evidence-6-category-9-moat` postconditions.
+- **Empty moat verdicts** — leaving any of the 9 moat types unevaluated. "Not applicable" valid only with rationale. Closed inside researcher task postconditions.
 
 ### Edge cases
 
-- **Amend mode** — if product.md exists with `status: approved`, user can amend (creates v2, supersedes v1). Existing file renamed `product-v<N>.md`, `status: superseded`. New v2 starts at `status: proposed` and goes through full HITL gate again. Handled in Step 1.
-- **Mirroring disabled** — if `compass/config.yaml` connectors don't include docs/ticketing, Step 7 skipped and logged as DRI Decision (per "no silent skips").
+- **Amend mode** — existing `status: approved` product.md → user can amend (creates v2). Handled inside `pm.setup-product-foundation` Step 1.
+- **Mirroring disabled** — if `compass/config.yaml` connectors don't include docs/ticketing, mirror step is skipped and logged as DRI Decision (per "no silent skips"). Handled inside `pm.setup-product-foundation`.
+- **Single-host run (e.g., all on Claude Code)** — works the same. Same Claude Code session sequentially loads PM agent then Researcher agent then PM agent again. Dispatch graph stays valid; only the runtime differs (single-host vs cross-host).
+- **Custom GPT-only run (e.g., PM Custom GPT on ChatGPT)** — Researcher's Step 2 dispatched to a Researcher Custom GPT on the same ChatGPT account, or PM Custom GPT temporarily wears the Researcher hat by loading the Researcher agent file. Either way, Researcher task's postconditions must be met.
 
-### Migration (v0.3.0-alpha hardening)
+### Migration (v0.3.0-alpha → v0.3.14)
 
-- Translated to gate/work/postcondition template per v0.3.0-alpha. **Behavior preserved; structure only.**
-- **Implicit preconditions made explicit:** "source material required" was inline in Step 4 free-text — now in workflow-level Preconditions with explicit refuse-and-redirect.
-- **Postconditions added** where previously implicit: each step now has a mechanically-checkable output (the v0.2.x "Verification (mandatory)" section was the only mechanical checkpoint).
-- **Verification items now reference principles #14, #15, #16 specifically** — each cite points at the exact output it enforces (not generic ceremony).
-- Notes section now names anti-patterns explicitly (closes the convention-discovery-lag observation from retros).
-- **No new steps. No removed steps. No new refusal cases beyond what was implicit. No removed refusal cases.**
+- **v0.3.0-alpha:** gate/work/postcondition step content lived in this workflow file (9 steps, 169 lines).
+- **v0.3.14:** content moved to `compass/agents/pm.md` and `compass/agents/researcher.md` as task definitions. This file became a dispatch graph. **No behavior change.** Per Principle #16, every refusal case + verification gate preserved.
+- **Why:** `[agent-as-surface-independent-unit]` — agents are now self-sufficient, surface-independent units; tasks live in agents; workflows sequence tasks. Enables cross-host orchestration (PM on ChatGPT + Engineer on Claude Code today; full orchestrator dispatch in v0.4).
+- **What still works the same:** workflow-level preconditions, verification checklist, HITL gates, output summary contract, named anti-patterns, edge cases. Read inside the agent task files for the gate/work/postcondition shape — it's all there.
 
 ---
 
-_Workflow hardened 2026-05-26 (v0.3.0-alpha) per `compass/templates/workflow-template.md`. First workflow translated; template validation observations in `compass/workflows/improvements.md`._
+_Workflow refactored 2026-06-04 (v0.3.14) per `[agent-as-surface-independent-unit]` (canon v0.3.14). First workflow refactored to thin dispatch graph shape; other 13 workflows migrate as their owning agents migrate (v0.3.15+)._

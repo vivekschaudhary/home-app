@@ -8,14 +8,14 @@ A vendor-neutral product development framework. Compass holds the shape of work 
 
 ## What Compass is
 
-A markdown-based framework that any AI tool can read. The framework lives in `compass/`. Tool-specific wrappers (Claude Code, OpenAI Codex CLI, others) are thin and point at the same source of truth.
+A markdown-based framework that any AI tool can read. The framework lives in `compass/`. **Agents are self-sufficient, surface-independent units** (`compass/agents/<agent>.md`) — the same agent file runs on ChatGPT Custom GPT Instructions, Claude Code session, Codex prompt, Gemini system message, or as a CrewAI / LangGraph agent definition. **Host wrappers** (`CLAUDE.md`, future host analogs) are thin runtime-notes, not role authorities. Per `[agent-as-surface-independent-unit]` (canon v0.3.14).
 
 ## Core ideas
 
 - **Every initiative is a bet.** Foundation product, OKRs, features, architectural initiatives — all measurable bets with a hypothesis, key metric, and an outcome: **won / learning / inconclusive**.
 - **Bets contain stories.** Stories contain implementation, tests, fixes, ops.
-- **Roles, not job titles.** 13 product roles played by AI tools loading the right context at each phase.
-- **Agent-agnostic by design; defaults built in.** Pick any agent per role (`claude`, `codex`, `openai`, `gemini`, `deepseek`, `codestral`, `custom`) from the registry in `compass/config.yaml`. **Default = Claude implements, Codex reviews** — independent models catch what one would miss (empirically validated). Per `[agent-agnostic-role-assignment]` (v0.3.8).
+- **Agents own tasks; workflows sequence agents.** 13 agent files in `compass/agents/` (migrating from `compass/roles/`; v0.3.14 ships pm + researcher + engineer, rest follow incrementally). Each agent file is self-sufficient: identity + inlined principles + tools required + task definitions (gate/work/postcondition) + refusal rules + handoffs. Workflow files in `compass/workflows/` are **thin dispatch graphs** that sequence `<agent>.<task>` references — they don't embed methodology; the methodology lives in the agent task definitions where it belongs.
+- **Surface-independent by design.** Each agent declares `preferred_hosts: [...]` in its own frontmatter (e.g., `pm.md` runs on ChatGPT or Claude; `engineer.md` prefers CLI hosts with filesystem access). Paste any agent file into the host's system-prompt slot → it works. **Cross-host orchestration today is human-dispatched** (open the right host for the active step); **v0.4 ships the orchestrator** that walks dispatch graphs and dispatches agents per step automatically. **Default Reviewer ≠ Implementer** for review independence — Compass empirically validates Claude implements, Codex reviews; the cross-model split is preserved structurally via agent `preferred_hosts:`. Per `[agent-as-surface-independent-unit]` (canon v0.3.14). *Legacy:* `compass/config.yaml.tool_assignments:` deprecated in v0.3.14; removed in v0.4.
 - **Discipline holds always.** Full review on every PR, no shortcuts under pressure.
 - **Decisions, Risks, Issues** logged at every stage (DRI logs).
 - **Compass scans your product like Snyk scans your code.** A continuous quality scanner runs across six SDLC phases — Product, Architecture, Build, Production Ready, GTM, Operate — and produces *findings, not failures*. Each finding has severity (Critical / High / Medium / Low) + confidence + location + reason + fix. Measurement is automatic (no manual self-assessment). Suppressions are explicit, justified, logged in DRI. Owners decide; the scanner informs.

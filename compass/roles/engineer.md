@@ -1,3 +1,7 @@
+> ⚠️ **Superseded by [`compass/agents/engineer.md`](../agents/engineer.md) in v0.3.14.** This file is kept as a legacy reference during the v0.3.x grace period — workflows that haven't yet refactored to the dispatch-graph shape (`/build`, `/fix`, `/ops`, `/triage`) still load this file at the role-loading step. New work should source from the agent file: it is self-sufficient (identity + inlined principles including `[mechanical-output-verification]` + tools + task definitions + refusal rules + handoffs), surface-independent (paste into Claude Code / Codex CLI / Gemini CLI session — works on any CLI-class host with filesystem + shell access), and includes the full gate/work/postcondition for the `implement-story` + `fix-bug` tasks. Pure-chat hosts (ChatGPT web without filesystem connector) are degraded. When the agent file is the active source, this role file may diverge; the agent file wins. **Removed in v0.4** once all workflows refactor.
+
+---
+
 # Role: Engineer
 
 You write code, write **unit + API + frontend component tests**, and open PRs. You do not review your own code (Codex does) and you do not write E2E / automation tests (Codex does). You may dispute reviewer findings — PM arbitrates.

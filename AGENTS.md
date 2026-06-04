@@ -4,14 +4,15 @@ Read by every AI tool working in this repo (Claude Code, OpenAI Codex CLI, Curso
 
 ## What this project uses
 
-**Compass** — a product development framework where every initiative is a measurable bet. Work flows: brief → architecture → story → build → review → release → measure. Roles load context per phase. One tool implements; another tool reviews.
+**Compass** — a product development framework where every initiative is a measurable bet. Work flows: brief → architecture → story → build → review → release → measure. **Agents own tasks; workflows sequence agents across hosts.** One agent implements; a different-host agent reviews (independent-model review for blind-spot coverage).
 
 The framework lives in `compass/`:
 
-- `compass/roles/` — 12 role definitions
-- `compass/workflows/` — phase flows
+- `compass/agents/` — **self-sufficient, surface-independent agent files** (v0.3.14+). Each declares identity + inlined principles + tools + task definitions + refusal rules + handoffs + `preferred_hosts:`. Paste into any LLM host's system-prompt slot → it works. v0.3.14 ships 3 agents (pm, researcher, engineer); other 10 migrate incrementally from `compass/roles/`.
+- `compass/roles/` — legacy role definitions (13 files; superseded for pm + researcher + engineer; remaining 10 still load-bearing for unmigrated workflows). Kept during v0.3.x grace period; removed in v0.4 once all agents migrate.
+- `compass/workflows/` — phase flows. v0.3.14+ workflows are **thin dispatch graphs** sequencing `<agent>.<task>` references; pre-v0.3.14 workflows still embed full methodology bodies (refactor as their owning agents migrate).
 - `compass/templates/` — artifact templates
-- `compass/config.yaml` — team decisions
+- `compass/config.yaml` — team decisions. `hitl_level:` + `connectors:` + `scanner.*` still load-bearing; `tool_assignments:` block **deprecated in v0.3.14** (legacy override mechanism; removed in v0.4) — per-agent `preferred_hosts:` in agent file frontmatter is the new source-of-truth.
 
 Artifacts the framework produces live in `docs/`:
 
@@ -21,69 +22,63 @@ Artifacts the framework produces live in `docs/`:
 - `docs/metrics/` — cached snapshots
 - `docs/ops/`, `docs/fixes/`, `docs/incidents/` — standalone (hygiene, etc.)
 
-## Tool division of labor
+## Host division of labor
 
-**Configurable per role; default = Claude implements, Codex reviews.** Per `[agent-agnostic-role-assignment]` (`compass/framework/canon.md`, v0.3.8). The actual per-role agent picks live in `compass/config.yaml` under `tool_assignments:`, validated against the `agents:` registry. To use a different agent for any role, edit the value — no other framework files need to change at the consumer level.
+**Configurable per agent; default = Claude implements, Codex reviews, ChatGPT supports product/research/UX.** Per `[agent-as-surface-independent-unit]` (`compass/framework/canon.md`, v0.3.14). Each agent declares `preferred_hosts:` in its own file's frontmatter — that's the source-of-truth. The host is an LLM runtime, not a role authority.
 
-**Supported agents (registry in `compass/config.yaml`):**
+**Supported hosts (LLM runtimes — same hosts that v0.3.8's `agents:` registry enumerated; the registry stays valid as the catalog of runtimes that agents can be paste-targeted into):**
 
-| Agent | Invocation | Production-ready? |
+| Host | Invocation | Production-ready? |
 | ----- | ---------- | ----------------- |
-| `claude` (Claude Code) | CLI / IDE plugin; reads local files automatically | Yes |
-| `codex` (Codex CLI) | CLI; reads `.codex/prompts/<role>.md` | Yes |
-| `openai` (ChatGPT / GPT API) | API call with role file as system prompt; Custom GPT; manual paste | API mature |
-| `gemini` (Google Gemini CLI) | CLI; mirrors codex with `.gemini/prompts/<role>.md` | Yes |
+| `claude` (Claude Code) | CLI / IDE plugin; reads local files automatically; auto-loads `CLAUDE.md` | Yes |
+| `codex` (Codex CLI) | CLI; reads `.codex/prompts/<agent>.md` | Yes |
+| `openai` (ChatGPT / GPT API) | Custom GPT Instructions = paste agent file; API call with agent file as system prompt; manual paste | Yes — Custom GPT is the recommended path for new projects |
+| `gemini` (Google Gemini CLI) | CLI; reads `.gemini/prompts/<agent>.md` | Yes |
 | `deepseek` | DeepSeek API | API mature |
 | `codestral` (Mistral) | Mistral API | API mature |
-| `apple` | Manual paste into Apple Intelligence | ⚠ Marked `unsupported: true` — system-level features only, no open API for arbitrary role-playing |
+| `apple` | Manual paste into Apple Intelligence | ⚠ Marked `unsupported: true` — system-level features only, no open API for arbitrary agent-playing |
 | `custom` | User-defined invocation | Escape valve |
 
-**Default configuration (out of the box):**
+**Default host preferences (read each agent file's `preferred_hosts:` frontmatter for the canonical declaration):**
 
-| Role category | Default agent | Why |
+| Agent | `preferred_hosts:` (default) | Why |
 | ------------- | ------------- | --- |
-| Implementer roles (engineer, architect, etc.) | `claude` | Claude Code's local-file reading + IDE integration is mature for code work |
-| Reviewer roles (reviewer, security_reviewer) | `codex` | **Independent model** — different from implementer; see structural rationale below |
-| Product roles (pm, researcher, designer, ux_writer, etc.) | `claude` | Default; user often overrides to `openai` or `gemini` for varied perspective |
-| Tech writer | `claude` | Default; can swap to any other agent without risk |
+| `engineer`, `architect`, `enterprise-architect`, `scanner` | `[claude, codex, gemini]` — CLI-class hosts | Filesystem + shell access required for build/test/scaffold work; pure-chat hosts are degraded |
+| `reviewer`, `security-reviewer` | `[codex, gemini]` — explicitly EXCLUDES claude | **Independent-model review** — must be a different model than the implementer (see structural rationale below) |
+| `pm`, `researcher`, `ux-writer`, `designer`, `tech-writer`, `project-manager` (= delivery manager) | `[chatgpt, claude, codex, gemini]` | Product / research / UX work runs on any host; ChatGPT often picked for browse + product-strategy strengths; Claude Code if filesystem-write needed |
+| `support` | `[any]` | Incident triage runs wherever the on-call is |
 
-Reviewer findings are real. Disputes go to PM, not auto-resolved by either tool.
+Reviewer findings are real. Disputes go to PM, not auto-resolved by either agent.
 
-**Why the reviewer split is structurally load-bearing, not procedural.** Same-model reviewer + same-model author share aesthetic priors — blind spots, assumptions about "clean code," default architectural patterns, "looks right" intuitions. A reviewer with identical priors can miss what an independent-model reviewer catches. **Empirically validated during aura-app CB-1.4 (2026-06-01):** user ran the same diff through both Codex (different model than Engineer) and Claude (same model as Engineer) as reviewers; Codex outperformed. This is not "pick whichever reviewer is cheaper" — switching to a same-model reviewer for cost reasons re-introduces the blind-spot overlap the framework exists to close. **The `tool_assignments.reviewer` value must be a different agent than `tool_assignments.engineer`** — this is enforced semantically by the agent-pairing constraint, not by a config validator (yet). The `compass/scripts/agent-handoff.yml` template ships Codex default-enabled for this structural reason, not ergonomic preference; the Claude-headless block is documented as a fallback for teams without Codex access, **not an equivalent alternative**. Same logic applies to any future role-pairing — Engineer + Reviewer is the canonical instance; Architect-pair, Researcher-pair, or other multi-agent reviews inherit the same constraint.
+**Why the reviewer split is structurally load-bearing, not procedural.** Same-model reviewer + same-model author share aesthetic priors — blind spots, assumptions about "clean code," default architectural patterns, "looks right" intuitions. A reviewer with identical priors can miss what an independent-model reviewer catches. **Empirically validated during aura-app CB-1.4 (2026-06-01):** user ran the same diff through both Codex (different model than Engineer) and Claude (same model as Engineer) as reviewers; Codex outperformed. This is not "pick whichever reviewer is cheaper" — switching to a same-model reviewer for cost reasons re-introduces the blind-spot overlap the framework exists to close. **The reviewer agent's `preferred_hosts:` must EXCLUDE the engineer agent's preferred hosts** — enforced structurally at the agent file level (not via config validator). The `compass/scripts/agent-handoff.yml` template ships Codex default-enabled for this structural reason, not ergonomic preference; the Claude-headless block is documented as a fallback for teams without Codex access, **not an equivalent alternative**. Same logic applies to any future agent-pairing — Engineer + Reviewer is the canonical instance; Architect-pair, Researcher-pair, or other multi-agent reviews inherit the same constraint.
 
-**How to override defaults.** Edit `compass/config.yaml` `tool_assignments:` — any agent key from the `agents:` registry is valid for any role (subject to the independent-model constraint above). Example overrides:
+**How to override defaults.** Edit the agent file's frontmatter directly — `compass/agents/<agent>.md` → change `preferred_hosts: [...]` line. Cross-host orchestration today is human-dispatched (open the right host for the active step); v0.4 orchestrator will walk dispatch graphs and dispatch agents per step automatically.
 
-```yaml
-tool_assignments:
-  pm:                  openai     # ChatGPT for PM work
-  researcher:          openai     # ChatGPT for research
-  designer:            gemini     # Gemini for design decisions
-  engineer:            claude     # Claude for engineering (default)
-  reviewer:            codex      # MUST differ from engineer
-  ...
-```
+**Legacy v0.3.8 mechanism (deprecated; grace-period support through v0.3.x).** Pre-v0.3.14, role-to-agent assignment lived in `compass/config.yaml` `tool_assignments:`. That block is now **documentation-only** (audit confirmed: zero programmatic reads; 10 files hardcoded the Claude+Codex split in prose). It remains as a legacy override mechanism during v0.3.x — if a project edits `tool_assignments.pm: openai`, that signals intent but doesn't route anything. Per-agent `preferred_hosts:` (in the agent file itself) is the new source-of-truth. `tool_assignments:` removed in v0.4 alongside `compass/roles/*` once all agents migrate. See `compass/framework/canon.md` → `[agent-as-surface-independent-unit]` for the full migration rationale.
 
-**Honest scope of v0.3.8.** The registry + defaults + per-role assignments are **declarative** today. `compass/config.yaml` is the source of truth; downstream prose still hardcodes the Claude+Codex split in ~10 files (this AGENTS.md section being the first to derive from config). v0.3.9 ships per-agent adapter docs at `compass/agents/<agent>.md`; v0.3.10 ships a `compass/scripts/setup-agent.py` propagation script that generates per-agent prompt directories from `tool_assignments`. Until then, picking a non-default agent for a role still requires manual setup of that agent's prompt files / invocation pattern (see registry `note:` for each agent).
+## The 13 agents / roles
 
-## The 13 roles
+v0.3.14+ source-of-truth is `compass/agents/<agent>.md` (self-sufficient, surface-independent). Files marked **(legacy)** still load from `compass/roles/<role>.md` until their agent migrates (incrementally; complete by v0.4).
 
-| Role                                       | Where defined                           |
-| ------------------------------------------ | --------------------------------------- |
-| Product Manager (merged PM + PO)           | `compass/roles/pm.md`                   |
-| Researcher                                 | `compass/roles/researcher.md`           |
-| Support                                    | `compass/roles/support.md`              |
-| Designer                                   | `compass/roles/designer.md`             |
-| UX Writer                                  | `compass/roles/ux-writer.md`            |
-| Architect (per-bet)                        | `compass/roles/architect.md`            |
-| Enterprise/Solution Architect              | `compass/roles/enterprise-architect.md` |
-| Engineer (writes unit/API/component tests) | `compass/roles/engineer.md`             |
-| Reviewer (Codex; writes E2E + automation)  | `compass/roles/reviewer.md`             |
-| Security Reviewer (Codex)                  | `compass/roles/security-reviewer.md`    |
-| Tech Writer                                | `compass/roles/tech-writer.md`          |
-| Project Manager                            | `compass/roles/project-manager.md`      |
-| Scanner (read-only; produces findings)     | `compass/roles/scanner.md`              |
+| Agent / Role                               | Source-of-truth                                                  | Migration status |
+| ------------------------------------------ | ---------------------------------------------------------------- | ---------------- |
+| Product Manager (merged PM + PO)           | `compass/agents/pm.md`                                           | ✅ v0.3.14       |
+| Researcher                                 | `compass/agents/researcher.md`                                   | ✅ v0.3.14       |
+| Engineer (writes unit/API/component tests) | `compass/agents/engineer.md`                                     | ✅ v0.3.14       |
+| Support                                    | `compass/roles/support.md`                                       | legacy           |
+| Designer                                   | `compass/roles/designer.md`                                      | legacy           |
+| UX Writer                                  | `compass/roles/ux-writer.md`                                     | legacy           |
+| Architect (per-bet)                        | `compass/roles/architect.md`                                     | legacy           |
+| Enterprise/Solution Architect              | `compass/roles/enterprise-architect.md`                          | legacy           |
+| Reviewer (Codex; writes E2E + automation)  | `compass/roles/reviewer.md` (+ `.codex/prompts/reviewer.md`)     | legacy           |
+| Security Reviewer (Codex)                  | `compass/roles/security-reviewer.md` (+ `.codex/prompts/security-reviewer.md`) | legacy |
+| Tech Writer                                | `compass/roles/tech-writer.md`                                   | legacy           |
+| Project Manager (→ Delivery Manager v0.4)  | `compass/roles/project-manager.md`                               | legacy           |
+| Scanner (read-only; produces findings)     | `compass/roles/scanner.md`                                       | legacy           |
 
-Load the role's full definition when playing it. Do not pattern-match — read the file.
+When playing an agent, **read its full file from the source-of-truth path above**. For migrated agents (✅), the file is self-sufficient and includes its own task definitions. For legacy roles, load the role file + read the workflow file for task steps (v0.3.0-alpha-shape workflows still embed step bodies).
+
+Do not pattern-match — read the file.
 
 ## Workflow structure
 
@@ -115,11 +110,13 @@ The template enforces:
 
 **Mechanical-output-verification pattern — when a workflow requires a build, deploy, or framework-discovery step, the postcondition is inspection of the build OUTPUT, not just the build PROCESS exit code.** Named Compass-original pattern in `compass/framework/canon.md` (v0.3.6). Source intent and build output can diverge silently — the build process completes cleanly while the runtime configuration drops what the source declared. **Inspect the artifact that actually runs.** Framework-specific anchors: Next.js 16 (`.next/server/functions-config-manifest.json` — `/_middleware` entry; routes/app-paths/prerender manifests); pre-v16 Next (legacy `middleware-manifest.json` — empty by design on 16.x); Vercel Functions (`.vercel/output/functions/`); Expo prebuild native config + bundle. General principle: when runtime configuration is data-driven (manifests, bundle indexes, config JSON written by the build), reading source ≠ reading runtime — inspect the runtime. Closes the **`polished-but-broken`** anti-pattern (tests pass + build green + narrative coherent + behavior wrong). **4th enforcement-class Compass-original** (joining cite-or-mark-n/a · refuse-escalate · soft-spec-hardening). Applied: `/build` Phase 2 step 7 (Engineer self-check) + `compass/roles/reviewer.md` Step 0 (Codex review process — framework-registration check before functional analysis). Compass-originals catalog now spans **five shapes**, balance **4 enforcement : 4 usability** (interaction · freshness · observability · handoff).
 
-**Scope-discipline patterns govern Compass's own scope at framework design time** (release planning, codification decisions, roadmap deferrals), distinct from the 5 workflow-execution shapes (enforcement · interaction · freshness · observability · handoff). **Catalog now spans 6 shapes / 11 patterns:** enforcement (4) · interaction (1) · freshness (1) · observability (1) · handoff (2) · **scope-discipline (2)**. Workflow-execution patterns total 9; scope-discipline patterns total 2. Ratio: 9 workflow-execution : 2 scope-discipline. **The scope-discipline shape is now structurally validated, not a one-off** — v0.3.9 introduced the shape with `[declare-not-implement]`; v0.3.10 grew it to 2 members with `[hard-line-declaration]`.
+**Scope-discipline patterns govern Compass's own scope at framework design time** (release planning, codification decisions, roadmap deferrals), distinct from the workflow-execution shapes. **Architecture-discipline patterns govern the structural composition of agents / workflows / hosts**, introduced in v0.3.14. **Catalog now spans 7 shapes / 12 patterns** (post-v0.3.14): enforcement (4) · interaction (1) · freshness (1) · observability (1) · handoff (2) · scope-discipline (2) · **architecture-discipline (1)**. Workflow-execution patterns total 9; scope-discipline patterns total 2; architecture-discipline patterns total 1. **The scope-discipline shape is structurally validated** — v0.3.9 introduced with `[declare-not-implement]`; v0.3.10 grew to 2 members with `[hard-line-declaration]`. **The architecture-discipline shape is new** — introduced v0.3.14 with `[agent-as-surface-independent-unit]`.
 
 **`[declare-not-implement]` (v0.3.9) — when Compass would build an integration with external tools/agents/services, declare the pattern + registry + manual fallback instead of writing the integration.** Two instances: (1) v0.3.5 `[agent-handoff]` declared 5-piece handoff shape + template with commented reviewer blocks; consumer wires per-CLI integration. (2) v0.3.8 same-day correction — declared `agents:` registry + delegated API-based-agent adapter layer to upstream libraries (LiteLLM / Vercel AI SDK / OpenRouter / LangChain); refused per-agent adapter docs duplicating upstream. **Anti-pattern: `integration-creep`** — integration scope grows linearly with integration count; Compass-maintainer scope does not. **Load-bearing oversight is the user** — v0.3.8's same-day correction was caught by user, not framework alone.
 
 **`[hard-line-declaration]` (v0.3.10) — when Compass commits to shipping something in a future release, the commitment gets explicit slip-counters + named consequences in CHANGELOG entries and improvements.md headers.** Mechanical structure: (1) counter visibility in load-bearing place; (2) named consequence at N+1 slip; (3) structural pressure overcomes the diffuse "next substantive release is more important" rationalization. Two instances: (1) freshness detection 3-slip → v0.3.7 ship (v0.3.6 CHANGELOG hard line worked). (2) Retro cadence 2-slip → Retro #005 on time (Retro #004 hard line worked). **Anti-pattern: `commitment-drift`** — each individual slip is defensible; the cumulative pattern is rationalization. Applied at framework design time, not workflow execution. Distinct from Principle #16 refuse-escalate (within-workflow scope) — hard-line-declaration creates structural pressure on roadmap commitments across releases.
+
+**`[agent-as-surface-independent-unit]` (v0.3.14) — agents are self-sufficient, surface-independent units; tasks live IN agents; workflows are thin dispatch graphs; hosts are LLM runtimes (not role authorities).** Each `compass/agents/<agent>.md` contains identity + inlined principles + tools + task definitions (gate/work/postcondition) + refusal rules + handoffs + `preferred_hosts:`. Workflow files become thin dispatch graphs sequencing `<agent>.<task>` references. Host files (`CLAUDE.md` + future `CODEX.md` analog) become thin runtime-notes — no role authority. **Three instances:** (1) config.yaml `tool_assignments:` audit (zero programmatic reads; 10 files hardcode the split in prose). (2) CHATGPT.md proposal died on its own logic (Custom GPT Instructions aren't auto-loaded from a repo file). (3) v0.4 multi-host orchestration vision requires agent files as the orchestrator's dispatch unit. **Anti-pattern: `host-coupled-role-definition`** — role definitions coupled to specific LLM hosts via wrapper files fragment across N host wrappers and create drift surfaces. **First architecture-discipline class member; introduces 7th pattern shape.** Hybrid inlining principle: discipline principles + task gates INLINED in the agent file (must hold without external file load); framework knowledge (canon.md, templates) REFERENCED with degraded-mode handling. Workflow-level invariants (cross-agent preconditions, HITL gate placement, cross-agent verification) live in the workflow file; per-step gate/work/postcondition lives in the agent task file. v0.3.14 ships 3 agents (pm, researcher, engineer) + 1 refactored workflow (/setup-product) as minimum viable migration; remaining 10 agents + 13 workflows migrate incrementally (complete in v0.4). Legacy `compass/config.yaml.tool_assignments:` deprecated; per-agent `preferred_hosts:` is the new source-of-truth.
 
 **Dashboard is the orchestrator entry point (v0.3.13).** `docs/dashboard.html` — already a stakeholder view of all living artifacts since v0.2.1 — gained a 7th "Actions" tab in v0.3.13. The Actions tab surfaces project state + pending HITL gates + Finance summary + quick-action workflow launchers (clipboard-copy buttons). Solopreneur opens `docs/dashboard.html` in browser → sees what's next → clicks a button → command is copied to clipboard → pastes into preferred web app (ChatGPT, Claude.ai) → Compass-aware AI runs the workflow → outputs commit to repo → dashboard regenerates. **This is the first concrete user-facing piece of the v0.4 Delivery Manager vision** (per v0.3.12 spec target). L1 (clipboard-copy) ships in v0.3.13; L2 (`compass://` protocol handler + Compass CLI for one-click execution) deferred to v0.3.14; L3 (localhost server with real-time state) deferred indefinitely. See `compass/workflows/dashboard.md` step 8 for the Actions block population spec.
 
@@ -235,8 +232,8 @@ Set in `compass/config.yaml` under `hitl_level`:
 
 ## When you're unsure
 
-- What role am I playing? → check the active workflow + load `compass/roles/<role>.md`
-- What artifact should I produce? → see the role file + matching template in `compass/templates/`
+- What agent am I playing? → check the active workflow's dispatch graph + load `compass/agents/<agent>.md` (migrated) or `compass/roles/<role>.md` (legacy; see migration table above)
+- What artifact should I produce? → see the agent's `Tasks I own` section (migrated agents) or the role file + matching template in `compass/templates/` (legacy)
 - What rules apply to this bet? → read the bet's brief, architecture (if any), parent bet, foundation docs
-- Do I need approval? → check `compass/config.yaml` and the HITL gates in the active workflow
+- Do I need approval? → check `compass/config.yaml` `hitl_level:` and the HITL gates in the active workflow's dispatch graph
 - What did past decisions say? → check the relevant artifact's `## DRI Log` section
