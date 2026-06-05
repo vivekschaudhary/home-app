@@ -1,0 +1,2 @@
+-- Seed data placeholder. Populated per environment as needed.
+-- No seed rows at foundation stage.

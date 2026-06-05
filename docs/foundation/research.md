@@ -1,125 +1,86 @@
 ---
-bet: FOUNDATION-PRODUCT
-author: Researcher
-created: 2026-06-04
-sources:
-  - user brief pasted in chat
-  - https://www.ynab.com/pricing
-  - https://www.monarchmoney.com/pricing
-  - https://plaid.com/docs/api/products/transactions/
-  - https://www.pcisecuritystandards.org/merchants/
-  - https://www.aicpa-cima.com/resources/landing/system-and-organization-controls-soc-suite-of-services
-  - https://commission.europa.eu/law/law-topic/data-protection_en
+type: research
+status: approved
+approved_date: 2026-06-05
+primary: gdrive://1PqhTQAfer6lRqNVfk8-bG3tWDa2nLS9Ez54-wnsZrO4
+last_synced: 2026-06-05
 ---
 
-# Research: Wealth at Your Fingertips
+> **Primary artifact (stakeholders read here):** https://docs.google.com/document/d/1PqhTQAfer6lRqNVfk8-bG3tWDa2nLS9Ez54-wnsZrO4/edit
+> This repo file is a slim pointer + inline cache for AI consumption. Edit the Google Doc; re-sync this cache.
 
-## Questions addressed
+# Foundation Research — Wealth at Your Fingertips
 
-1. Is there credible user pain around fragmented personal finance and inaccessible wealth management?
-2. Is the market fragmented enough to support an orchestration-layer position?
-3. Are the core enabling rails technically real today?
-4. Which moat types are plausible vs overstated for a new product?
-5. What constraints does the chosen security/compliance posture imply?
+Agent: `researcher.cite-evidence-6-category-9-moat` · Status: `proposed`
 
-## Findings
+Evidence is separated from recommendation. Every claim is cited or marked `n/a — <reason>`. Market-size figures are treated as directional only (see Limitations + DRI).
 
-### Finding 1: The brief targets a real access gap, but the strongest evidence today is fragmentation and self-directed money management, rather than direct proof that mass users are seeking a “private bank replacement”
+## 6-category evidence
 
-The source brief makes a coherent case that most existing products split budgeting, net-worth tracking, investing, and planning into separate tools, and that this leaves users without an orchestrated view of their finances. That framing is directionally supported by the current product landscape: YNAB positions itself around budgeting and method-based money management; Monarch positions itself as an all-in-one household finance product; Plaid's APIs support transactions and investments but do not themselves solve planning or orchestration.
+### 1. User pain — cited
+- ~62% of U.S. adults report living paycheck to paycheck in 2025 (range 53–67% across surveys); 44% of >$100k earners say little/nothing is left after monthly expenses. [Step; PYMNTS; LendEDU; Fortune/Bankrate 2025]
+- Federal Reserve: 37% could not cover a $400 emergency without borrowing/selling; 27% report no emergency savings (Bankrate). [JPMorganChase Institute; Federal Reserve; Bankrate 2025]
+- Mint shutdown (≈3.6M active users, wound down by Mar 2024) left budgeters without a home; Credit Karma dropped budgeting, MoM spend trends, and detailed categorization. [CNBC 2023; Monarch; Bloomberg 2023]
+- Bank-linking is itself a trust/friction barrier even for loyal users. [Experian; Amppfy]
+- *Evidence reading:* the gap is orchestration + trust, not information; the Mint exit created an unusually large, motivated switching cohort.
 
-- **Source:** user brief; YNAB features and pricing; Monarch homepage and pricing; Plaid docs
-- **Confidence:** medium
-- **Limitations:** this is market-structure evidence, not direct user-interview evidence from our own target audience.
+### 2. Competitive — cited
+| Player | Price | Gap vs. this platform |
+|---|---|---|
+| YNAB | $109/yr | Manual discipline; steep learning curve; no investment/wealth layer [Era; WalletGrower 2026] |
+| Monarch | Core $99.99 / Plus $199 (May 2026) | No workflow engine/marketplace; 13k+ institutions [WalletGrower; CostBench] |
+| Copilot | $95/yr | Apple-only; fixed feature set [PennyHoarder; Era] |
+| Advisory (disrupted) | $300/hr median; AUM 0.5–2%; plan $2.5–5k; retainer ~$4.5k/yr (2024) | Episodic, not real-time; inaccessible to most [Harness 2025; NerdWallet 2026] |
 
-### Finding 2: The competitive white space is “financial operating system,” not “no competitors”
+*Evidence reading:* incumbents confirm ~$95–$199/yr willingness-to-pay for tracking; advisory pricing confirms the value gap. None span the full stack.
 
-The brief is right that point solutions dominate distinct categories such as budgeting, household finance, investing, and advisory. However, the strongest defensible claim is not that no one spans multiple layers, but that few products combine daily cash-flow monitoring, multi-account aggregation, workflow automation, and long-range planning in one system. Monarch and Empower cover broad household finance and net-worth use cases; YNAB remains budgeting-centric; Plaid is infrastructure, not an end-user operating system.
+### 3. Moat / defensibility — cited (full table below)
+Helmer 7 Powers + NFX taxonomy: network economies trend winner-take-all past a tipping point; switching costs accumulate via connection graphs + learned workflows; data network effects compound with scale. Caution: Plaid's defensibility came from fixed build costs, not durable network effects. [NFX; productstrategy.co; platformchronicles]
 
-- **Source:** user brief; Monarch homepage and pricing; YNAB features and pricing; Plaid docs
-- **Confidence:** medium-high
-- **Limitations:** “financial operating system” is a positioning judgment, not an objective market truth.
+### 4. Technical — cited
+- Aggregation mature but uneven: Plaid covers 12k–16k+ institutions, excludes Fidelity + some credit unions/regional banks. [OpenBankingTracker 2026]
+- Cost shifting against aggregators: Plaid agreed in 2025 to **pay** JPMorgan for previously-free data access — a variable cost that scales with users. [Bloomberg Law 2025; Payments Dive 2025]
+- Liability precedent: Plaid paid $58M (2021) to settle a data-practices class action. [OpenBankingTracker; Fintech Review]
+- *Evidence reading:* multi-provider + CSV fallback is well-targeted; aggregation cost is a margin risk, not a feasibility risk.
 
-### Finding 3: The enabling infrastructure is real, but bank connectivity reliability is a first-order product risk, not a detail
+### 5. Quantitative — cited, low confidence on TAM
+- Robo-advisory: ~$14.29B (2025) → $54.73B (2030), CAGR ~30.8%; >$1.0T AUM by 2025. [Mordor; Coinlaw]
+- PFM-app market estimates diverge by ~2 orders of magnitude ($1.57B / $31.7B / $165.9B for 2025) — unreliable for sizing. [ResearchNester; VerifiedMarketResearch]
+- Users skew Millennial (~45%), Gen Z (~25%), Gen X (~20%). [Coinlaw]
 
-The product's infrastructure premise is technically plausible. Plaid publicly documents transaction retrieval, investment-holdings access, and item/access-token-based connection models, which support a multi-account aggregation model. But those same rails imply reliability variance across institutions and products, which makes connection health, fallback paths, and trust UX core product requirements rather than implementation details.
-
-- **Source:** user brief; Plaid docs (overview, transactions, items)
-- **Confidence:** high
-- **Limitations:** one vendor's docs do not prove universal coverage across banks or geographies.
-
-### Finding 4: The chosen compliance posture is coherent, but it materially raises the execution bar
-
-Your selected posture is:
-- Auth posture: **MFA-required**
-- Data sensitivity: **regulated**
-- Regulatory regime: **PCI DSS + SOC 2 + GDPR (if EU users)**
-
-That posture is coherent with the product concept. PCI DSS applies to entities that store, process, or transmit cardholder data or could impact that security; SOC reporting is the standard assurance framework for service-organization controls; GDPR applies to personal-data processing involving EU users. This means security/privacy architecture, data mapping, auditability, vendor diligence, and consent/data-rights flows need to be treated as foundational, not later-stage hardening.
-
-- **Source:** PCI SSC merchant resources; AICPA SOC suite; European Commission data protection overview
-- **Confidence:** high
-- **Limitations:** product-specific legal scoping still requires counsel by launch market and exact payment/data flows.
-
-## 6-category framework
-
-### 1. User pain
-Users face fragmented tooling, scattered accounts, and reactive money management rather than continuous orchestration. This is strongly supported by the source brief.
-
-### 2. Competitive
-The market is crowded by category specialists, but the “financial operating system” positioning remains differentiated if the product truly combines orchestration, automation, and extensibility.
-
-### 3. Technical
-Bank aggregation, transactions, and investment-data access are real and documented today. Plaid's Transactions and Items docs support that core infrastructure thesis.
-
-### 4. Quantitative
-n/a — the source set does not yet include first-party analytics, retention data, conversion funnels, or user-research sample sizes. The success metrics in the brief are goals, not observed baselines.
-
-### 5. Trends
-The market continues to support subscription-based consumer finance products and API-led fintech infrastructure, which is consistent with the brief's platform thesis.
-
-### 6. Moat / defensibility
-
-See full 9-moat evaluation below.
+### 6. Trends — cited
+- Hyper-personalization is the defining 2025 trend (real-time, user-level guidance) — matches the intent-first thesis. [MarketBusinessInsights; Mordor]
+- Hybrid models took 60.7% of 2024 robo revenue; 41% of under-40s comfortable delegating to AI (vs 14% of Boomers); generational wealth transfer favors tech-native cohorts. [Mordor]
+- Recent: BlackRock "Asimov" (Jun 2025); Betterment bought Ellevest robo arm (Feb 2025); Revolut robo at $100 min (Jan 2025). [Mordor]
 
 ## 9-moat evaluation
 
-| Moat type | Verdict | Rationale |
-|---|---|---|
-| Network effects | partial | The marketplace/workflow layer could create user-to-user value, but that effect does not exist at launch and must be earned through creator activity. |
-| Switching costs | partial | Multi-account connections, workflow configuration, and accumulated history can create real stickiness, but only after setup depth and recurring usage are established. |
-| Data / proprietary intelligence | partial | Proprietary behavioral data and personalization can become defensible over time, but early on the product relies heavily on third-party data rails rather than unique data exhaust. |
-| Scale economics | partial | Infrastructure and platform reuse may improve unit economics with scale, but compliance, support, and data-connection costs will remain meaningful. |
-| Brand / trust | partial | Trust is essential in financial-data products, but as a new entrant the brand moat is initially weak and must be built through security, transparency, and reliability. |
-| Regulatory / certification | partial | PCI/SOC/GDPR readiness can become a trust and distribution advantage, but these are table stakes in many financial-data contexts, not a standalone moat. |
-| Distribution / channel | no | No durable proprietary channel is evidenced yet. Potential future distribution via employers, advisors, or marketplace creators is still aspirational. |
-| Talent / domain expertise | partial | Success requires unusual overlap across consumer fintech, security/compliance, workflow systems, and creator ecosystems. That can matter, but no team-specific evidence is in the source set yet. |
-| Speed / iteration velocity | partial | Platform-plus-marketplace models can improve adaptation speed if the workflow/block architecture and review loops ship well. This is plausible, not yet proven. |
+| # | Moat | Verdict | Rationale |
+|---|---|---|---|
+| 1 | Network effects | **partial** | Marketplace is a real two-sided network; core single-player utility needs no other users — a layer, not the foundation. |
+| 2 | Switching costs | **yes** | 3–4 linked accounts + custom workflows + multi-year history = high exit friction. Strongest near-term moat. |
+| 3 | Data / proprietary intelligence | **yes** | Aggregated anonymized behavior powers anomaly detection + benchmarks no entrant can replicate; compounds with scale. **Primary bet.** |
+| 4 | Scale economics | **partial** | Infra amortizes, but rising per-user data-access fees (Plaid→JPMorgan) keep cost partly variable. |
+| 5 | Brand / trust | **partial** | Load-bearing in finance but must be earned; does not exist pre-launch. Prerequisite, not a claim. |
+| 6 | Regulatory / certification | **partial** | SOC 2 / PCI / GDPR is a floor incumbents also clear; "not advice" positioning is a modest counter-position. |
+| 7 | Distribution / channel | **no** | No exclusive/embedded channel yet; Mint cohort is an opportunity, not a moat. |
+| 8 | Talent / domain expertise | **no** | Valuable but hireable, non-compounding; "great team" ≠ defended. |
+| 9 | Speed / iteration velocity | **partial** | Marketplace = velocity-via-ecosystem, but rarely durable alone; overlaps row 1. |
 
-**Primary moat(s) we're plausibly betting on now:** switching costs, data/proprietary intelligence, and ecosystem/network effects.  
-**Secondary moat(s):** brand/trust and speed/iteration velocity.
+**Primary moat(s) bet on:** (1) Data / proprietary intelligence, (2) Switching costs, reinforced by (3) Workflow-marketplace network effects. Brand/trust + regulatory are prerequisites to earn.
 
-## What we couldn't answer
+## Recommendations (separated from evidence)
+- Anchor TAM on robo-advisory + advisory-displacement economics, not divergent PFM-app estimates.
+- Lead acquisition with the time-boxed Mint-refugee cohort.
+- Model aggregation data-access fees as a first-order margin risk.
+- Sequence moat investment: switching costs + data first, marketplace next, brand/trust earned continuously.
 
-- Whether target users will trust a new platform with full-account connectivity at the rate implied by the brief.
-- Whether users want no-code workflow customization themselves, or mainly want prebuilt automations.
-- The real willingness-to-pay curve by segment.
-- The legal boundary between “information/automation” and regulated financial advice in each launch market.
+## Limitations
+- TAM low-confidence (PFM estimates span $1.57B–$165.9B for 2025).
+- Geographic bias: user-pain quant is US-centric; brief references UK (ISA, Nutmeg, Emma) — UK data uncited.
+- No first-party telemetry pre-launch.
 
-## Recommendations
-
-1. **Position the product as a financial operating system, not “private banking for everyone.”** The latter is emotionally powerful, but more exposed to trust and regulatory skepticism.
-2. **Make trust and reliability first-release features.** Connection-health visibility, data-permission clarity, and deletion/export controls should be part of product value, not buried compliance work.
-3. **Treat marketplace/network effects as Phase 2+ upside, not the core launch moat.** The early moat should come from orchestration quality and setup stickiness.
-4. **Validate intent-first onboarding with real users before overbuilding the builder.** The brief already points this way; the research supports that prioritization.
-
-## DRI Log
-
-### Decisions
-- [2026-06-04] [Researcher] Used current official/product sources to validate drift-prone competitive and compliance claims; relied on the pasted brief for product vision and pain framing — rationale: separates source vision from external verification — area: source-trust — alternatives: rely only on brief, or over-index on third-party commentary — reversibility: easy
-
-### Risks
-- [2026-06-04] [Researcher] Source set lacks first-party interviews, analytics, and pricing research for this product — likelihood: high — impact: medium — mitigation: run user interviews and early pricing tests before finalizing GTM and KPI thresholds — area: validation
-
-### Issues
-- [2026-06-04] [Researcher] Legal scope of “not advice” posture is unresolved across launch markets — severity: P1 — owner: PM — status: open — area: compliance
+## Researcher DRI log
+- **Decision (source-trust):** Treat conflicting PFM market-size figures as directional only; anchor on robo-advisory data (Mordor) + advisory displacement. Area: market-sizing. Alt rejected: averaging estimates (launders noise). Reversibility: high.
+- **Risk:** Sample/recency + geographic bias — evidence US-centric, product targets US+UK. Likelihood med / impact med. Mitigation: commission UK (PSD2) research before UK launch; mark UK demand unvalidated. Area: research-coverage.
+- **Issue:** First-party telemetry unavailable pre-launch. Severity low. Owner PM/Researcher. Revisit moat sizing once usage data exists.

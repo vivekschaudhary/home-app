@@ -13,6 +13,8 @@ _See `docs/foundation/product.md` for the foundational product bet._
 
 _See `docs/foundation/architecture.md` for the foundational architecture bet._
 
+**Stack:** TypeScript + Vercel · Next.js (App Router, Turbopack, Tailwind) · REST/OpenAPI · **Supabase** (Postgres + Auth + Storage + Vault — MFA + RLS via `auth.uid()`) · **Inngest** durable jobs · **Sentry** observability · pnpm-workspace monorepo (`/app` + `/packages/*` + `/supabase`).
+
 ## Where things live
 
 - Foundation: `docs/foundation/`
