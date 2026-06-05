@@ -198,9 +198,9 @@ measurement:
 
 # ─── CI/CD ────────────────────────────────────────────────────────────
 ci_cd:
-  pipeline_command:       "make deploy"      # or "pnpm deploy", etc.
-  deploy_on_merge:        true
-  rollback_command:       "make rollback"
+  pipeline_command:       "pnpm build"               # Vercel git integration auto-deploys on push
+  deploy_on_merge:        true                       # Vercel production deploy on merge to main
+  rollback_command:       "vercel rollback"          # promote previous deployment
 
   # Canary artifacts — one per deploy target in the foundational stack.
   # Set by /setup-foundation-architecture Phase B step 16. Multi-target
@@ -220,7 +220,17 @@ ci_cd:
   #       notes: "EAS dev-build profile; installs on iOS sim + Pixel emulator"
   #
   # kind: web | mobile | container | other  (free-form via `other` + notes)
-  canary_artifacts: []
+  canary_artifacts:
+    - kind: web
+      url: "https://home-app-brown-nu.vercel.app/api/health"
+      verified_at: "2026-06-05T16:44:36Z"
+      notes: >-
+        Vercel preview deploy (project kind-tree/home-app, dpl_A8UstbS1EvsitB979SHYPzr5JBrq).
+        Built remotely in 30s; /api/health returns 200 {status:ok}. Proves the
+        Next.js + Vercel + pnpm-workspace (@wealth/jobs transpiled) + Inngest-route
+        composition deploys. Raw deployment URL is behind Vercel deployment
+        protection; the public production alias is the canary. Supabase/Inngest/
+        Sentry report "not-configured" until env keys are provisioned (follow-up).
 
 # ─── DRI logging ──────────────────────────────────────────────────────
 dri:
@@ -239,6 +249,29 @@ disputes:
 # Hard rule: product foundation must exist before architecture foundation.
 setup:
   enforce_product_before_architecture: true
+
+# ─── Foundation stack (Phase A decisions) ─────────────────────────────
+# Populated by /setup-foundation-architecture Phase B step 19 from the
+# elicited picks in docs/foundation/architecture.md (v1, approved 2026-06-05).
+# Source-of-truth is the architecture doc; this is the machine-readable cache.
+foundation_stack:
+  anchor:            typescript-vercel       # primary language + deployment model
+  frontend:         "Next.js + Turbopack + Tailwind"
+  backend:          "Next.js Route Handlers + REST/OpenAPI + Supabase Auth (TOTP + passkey MFA)"
+  data:             "Supabase (Postgres + Storage + Auth + Vault) + Upstash Redis"
+  ops:              "Vercel native CI/CD + Sentry + Inngest + GitHub Actions checks"
+  repo_shape:        monorepo                 # pnpm workspaces: /app + /packages/* + /supabase
+  package_manager:   pnpm
+  identity_strategy: uuid-v7
+  tenancy:           b2c-pooled-rls           # RLS keyed on auth.uid()
+  deploy_targets:    [web]                    # → canary kinds (see ci_cd.canary_artifacts)
+  fitness_functions:
+    reliability:        { uptime: "99.9%", rpo_min: 5, rto_min: 30 }
+    security:           { pii_encryption: "AES-256 + TLS1.2+", mfa: "100% accounts", compliance: "SOC2-TypeII-by-Q4-2026", gdpr_dsar_days: 30 }
+    performance:        { p95_api_ms: 200, ttfv_min: 3, concurrency_now: 500, concurrency_target: 3000 }
+    cost:               { all_in_per_mau_usd: 1.50, infra_only_per_mau_usd: 0.40 }
+    operational:        { deploy_frequency: "daily", mttr_min: 30, observability_coverage: "100% critical paths" }
+    sustainability:     "not load-bearing at current stage; revisit > 100k MAU"
 
 # ─── Continuous quality scanner ───────────────────────────────────────
 # Snyk-style continuous scanner across the six SDLC phases.

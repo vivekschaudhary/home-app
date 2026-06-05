@@ -1,0 +1,16 @@
+# Supabase CLI project config. The hosted project is the source of truth;
+# this pins local-dev + migration conventions. See architecture.md → Layer 3.
+project_id = "wealth-platform"
+
+[db]
+major_version = 15
+
+[auth]
+# Supabase Auth owns identity + MFA (TOTP + passkey), implementing the
+# product's MFA-required posture. RLS keys on auth.uid().
+enable_signup = true
+
+[auth.mfa]
+# MFA-required posture (product.md L29) — TOTP enabled; passkey via WebAuthn.
+totp_enroll_enabled = true
+totp_verify_enabled = true
