@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026-06-05 17:30 UTC_
+_Last updated: 2026-06-05 18:25 UTC_
 
 ## In flight
 
@@ -8,7 +8,7 @@ _None — portfolio approved 2026-06-05; no bet has started. First starts per pl
 
 | Bet | Phase | Owner role | Awaiting | Started | ETA |
 |-----|-------|-----------|----------|---------|-----|
-| — | — | — | — | — | — |
+| WLT-1 | story (WLT-6 `ready`) | PM → Engineer | `/build WLT-6` | 2026-06-05 | 2026-06-19 |
 
 ## Next up (from `docs/foundation/plan.md`)
 
@@ -21,7 +21,7 @@ Blocked behind them: WLT-2 ∥ WLT-3 (need WLT-1), then WLT-4 (needs both). MVP-
 
 ## Awaiting human approval
 
-_None blocking._ The 5 stub briefs (`docs/bets/WLT-{1..5}/brief.md`) are `status: proposed` **by design** (`portfolio_stub: true`) — they await `/create-brief <bet-id>` promotion, not approval. No action needed until promotion.
+_None blocking._ **WLT-1 brief approved 2026-06-05** — ready for `/create-story WLT-1`. The 4 remaining stubs (`WLT-2..WLT-5`) are `status: proposed` **by design** (`portfolio_stub: true`) — they await promotion, not approval.
 
 ## Recently shipped
 
@@ -38,7 +38,7 @@ _None._
 ## Risks
 
 - **All Compass artifacts are uncommitted** (untracked/modified in git: foundation docs, portfolio, plan, all 5 stubs, config) — approval state lives only in the working tree; a lost checkout loses the project record — likelihood: low / impact: high — owner: PM — mitigation: commit `docs/` + `compass/config.yaml` now, before first promotion
-- **GDrive/repo approval drift** — portfolio Doc title still `[PROPOSED]` while repo frontmatter says `approved` (Drive connector lacks rename) — likelihood: certain / impact: low — owner: Vivek — mitigation: rename Doc title manually
+- **GDrive/repo approval drift** — portfolio Doc title may still read `[PROPOSED]` while repo says `approved` (Drive connector lacks rename; WLT-1 brief Doc title already cleaned by Vivek) — likelihood: medium / impact: low — owner: Vivek — mitigation: verify/rename portfolio Doc title manually
 - **Parallel calendar assumes parallel capacity** — solo build serializes streams; realistic loop-complete drifts toward mid-August — carried from `plan.md` risks
 - **WLT-4 convergence slip cascades 1:1** to the headline date — carried from portfolio + plan DRI — mitigation: promote WLT-4's brief early
 
