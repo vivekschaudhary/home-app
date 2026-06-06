@@ -47,7 +47,7 @@ A new user creates an account with email + password, is required to enroll a pas
 
 ## Tech notes
 
-- Supabase Auth: email+password primary factor; passkey (WebAuthn) as MFA factor; enforce AAL2 **server-side** for app surfaces — middleware/route-handler check, not client-only.
+- Supabase Auth: email+password = primary factor (AAL1) + sessions. **Passkey second factor is a custom WebAuthn layer (`@simplewebauthn`), NOT Supabase-native MFA** — Supabase passkey is experimental (see architecture **ADR-001**, 2026-06-05). Credentials stored in `WebAuthnCredential` (own table, default-deny RLS); challenge nonce single-use, origin/RP-ID pinned. Enforce **AAL2 server-side** (middleware/route-handler check sets a verified-2FA session claim — never client-only). Supabase-native TOTP = recovery/fallback factor.
 - RLS keyed on `auth.uid()` per foundational architecture (Layers 2/3); policies + cross-tenant tests in `/supabase`; default-deny.
 - Session via Supabase SSR helpers (App Router); no tokens in client storage beyond Supabase defaults.
 - `AuditEvent`: append-only, server-side inserts only; no PII in Sentry breadcrumbs (cross-cutting standards).

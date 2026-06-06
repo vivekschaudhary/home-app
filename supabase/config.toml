@@ -10,7 +10,8 @@ major_version = 15
 # product's MFA-required posture. RLS keys on auth.uid().
 enable_signup = true
 
-[auth.mfa]
-# MFA-required posture (product.md L29) — TOTP enabled; passkey via WebAuthn.
-totp_enroll_enabled = true
-totp_verify_enabled = true
+[auth.mfa.totp]
+# Supabase-native TOTP = recovery/fallback factor (architecture ADR-001).
+# The passkey 2FA is a custom WebAuthn layer, not Supabase-native MFA.
+enroll_enabled = true
+verify_enabled = true
