@@ -1,8 +1,7 @@
-// Custom WebAuthn passkey second factor (architecture ADR-001). All ceremony
-// verification happens HERE, server-side. Challenges are single-use + expiring;
-// the signature counter is persisted to resist replay (DRI Risk R5). Challenges
-// and credential writes use the service-role client because users cannot write
-// webauthn_challenges under default-deny RLS and counter updates are server-owned.
+// WebAuthn passkey ceremonies — the second factor. All verification happens HERE,
+// server-side. Challenges are single-use + expiring; the signature counter is
+// persisted to resist replay. User verification (face/fingerprint/PIN) is
+// required. Challenges + credential writes use the service-role client.
 
 import {
   generateAuthenticationOptions,
@@ -12,9 +11,9 @@ import {
   type AuthenticationResponseJSON,
   type RegistrationResponseJSON,
 } from "@simplewebauthn/server";
-import type { WebAuthnCredentialRow } from "@wealth/db";
-import { createServiceSupabase } from "@wealth/db/server";
-import { expectedOrigin, rpID, rpName } from "./auth-config";
+import { expectedOrigin, rpID, rpName } from "./config";
+import { createServiceSupabase } from "./supabase";
+import type { WebAuthnCredentialRow } from "./types";
 
 export interface AuthUser {
   id: string;
@@ -24,9 +23,6 @@ export interface AuthUser {
 const CHALLENGE_TTL_MS = 5 * 60 * 1000;
 type ChallengeType = "registration" | "authentication";
 
-// Return type is inferred (a fresh ArrayBuffer-backed Uint8Array) so it
-// satisfies @simplewebauthn's WebAuthnCredential.publicKey without an explicit
-// generic annotation.
 function b64urlToBytes(s: string) {
   const b = Buffer.from(s, "base64url");
   const out = new Uint8Array(b.byteLength);
@@ -39,7 +35,6 @@ function bytesToB64url(b: Uint8Array): string {
 
 async function storeChallenge(userId: string, challenge: string, type: ChallengeType): Promise<void> {
   const svc = createServiceSupabase();
-  // One live challenge per (user, type): clear prior, then insert.
   await svc.from("webauthn_challenges").delete().eq("user_id", userId).eq("type", type);
   await svc.from("webauthn_challenges").insert({
     user_id: userId,
@@ -82,8 +77,6 @@ export async function createRegistrationOptions(user: AuthUser) {
       id: c.credential_id,
       transports: (c.transports ?? undefined) as never,
     })),
-    // User verification REQUIRED (face/fingerprint/PIN) — Security Review HIGH;
-    // matches the MFA-required financial posture + the enrollment copy.
     authenticatorSelection: { residentKey: "preferred", userVerification: "required" },
   });
   await storeChallenge(user.id, options.challenge, "registration");
@@ -104,7 +97,7 @@ export async function verifyRegistration(
       expectedChallenge,
       expectedOrigin: expectedOrigin(),
       expectedRPID: rpID(),
-      requireUserVerification: true, // Security Review HIGH
+      requireUserVerification: true,
     });
   } catch {
     return { verified: false, reason: "verify" };
@@ -142,7 +135,7 @@ export async function createAuthenticationOptions(user: AuthUser) {
       id: c.credential_id,
       transports: (c.transports ?? undefined) as never,
     })),
-    userVerification: "required", // Security Review HIGH
+    userVerification: "required",
   });
   await storeChallenge(user.id, options.challenge, "authentication");
   return options;
@@ -172,7 +165,7 @@ export async function verifyAuthentication(
       expectedChallenge,
       expectedOrigin: expectedOrigin(),
       expectedRPID: rpID(),
-      requireUserVerification: true, // Security Review HIGH
+      requireUserVerification: true,
       credential: {
         id: cred.credential_id,
         publicKey: b64urlToBytes(cred.public_key),

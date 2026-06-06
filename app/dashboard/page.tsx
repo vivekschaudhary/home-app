@@ -1,5 +1,5 @@
+import { getSessionUser, requireAal2 } from "@vivekschaudhary/passkey-2fa";
 import { SignOutButton } from "@/app/components/SignOutButton";
-import { getSessionUser, requireAal2 } from "@/app/lib/auth-guard";
 
 export const dynamic = "force-dynamic";
 

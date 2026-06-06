@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { signAal2Token, verifyAal2Token } from "./mfa";
+import { signAal2Token, verifyAal2Token } from "./aal2";
 
 const SECRET = "test-secret";
 const USER = "11111111-1111-1111-1111-111111111111";

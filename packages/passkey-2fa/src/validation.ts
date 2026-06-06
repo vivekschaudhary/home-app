@@ -1,7 +1,6 @@
 import { z } from "zod";
 
-// Password policy: length over complexity (copy.md `signup.password.helper`
-// nudges a passphrase). ≥12 chars per AC1.
+// Password policy: length over complexity (a passphrase works well). ≥12 chars.
 export const PASSWORD_MIN = 12;
 
 export const emailSchema = z.string().trim().email();
@@ -20,7 +19,7 @@ export const signInSchema = z.object({
 export type SignUpInput = z.infer<typeof signUpSchema>;
 export type SignInInput = z.infer<typeof signInSchema>;
 
-/** Password strength score 0–4 for the meter (text-equivalent provided in UI). */
+/** Password strength score 0–4 for a meter (provide a text equivalent in UI). */
 export function passwordStrength(password: string): {
   score: 0 | 1 | 2 | 3 | 4;
   label: "Too short" | "Weak" | "Fair" | "Good" | "Strong";

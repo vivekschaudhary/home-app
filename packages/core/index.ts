@@ -1,7 +1,5 @@
 // @wealth/core — domain logic: intents, goals, the workflow/block engine.
-// WLT-6 seeds: auth validation + the WLT-5 funnel-event contract + audit actions.
-// Server-only crypto (AAL2 token) lives in ./mfa — import it directly, not via
-// this barrel, to keep node:crypto out of client bundles.
-export * from "./validation";
+// Auth observability contract (WLT-5 funnel events + audit actions). The auth
+// mechanics (validation, AAL2, WebAuthn) live in @vivekschaudhary/passkey-2fa.
 export * from "./funnel";
 export * from "./audit";

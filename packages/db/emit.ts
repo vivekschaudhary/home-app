@@ -1,5 +1,5 @@
+import { createServiceSupabase } from "@vivekschaudhary/passkey-2fa";
 import type { AuditAction, FunnelEvent } from "@wealth/core";
-import { createServiceSupabase } from "./server";
 
 // Server-side, best-effort writers for the append-only audit trail (AC9) and
 // the auth funnel (AC10). Both run under the service role (RLS-bypassing) since

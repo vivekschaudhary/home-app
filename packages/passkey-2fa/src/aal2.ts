@@ -1,15 +1,14 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-// AAL2 session marker (architecture ADR-001). After a passkey ceremony verifies
-// server-side, we issue a short-lived HMAC-signed token in an httpOnly cookie.
-// Middleware requires BOTH a valid Supabase (AAL1) session AND a valid AAL2
-// token whose `sub` matches the signed-in user before granting app access.
-//
-// This is NOT a bearer credential for the API — it only attests "this session
-// completed the second factor". Security Reviewer scrutiny per DRI Risk R5.
+// AAL2 session marker. After a passkey ceremony verifies server-side, the app
+// issues a short-lived HMAC-signed token in an httpOnly cookie. The guard
+// requires BOTH a valid Supabase (AAL1) session AND a valid AAL2 token whose
+// `sub` matches the user (and, when present, whose `sid` matches the live
+// Supabase session) before granting app access. This is NOT an API bearer
+// credential — it only attests "this session completed the second factor".
 
 export const AAL2_COOKIE = "wlt_mfa";
-export const AAL2_TTL_SECONDS = 60 * 60; // 1h; re-challenge after (Security Review).
+export const AAL2_TTL_SECONDS = 60 * 60; // 1h; re-challenge after.
 
 function b64url(input: Buffer | string): string {
   return Buffer.from(input).toString("base64url");
@@ -24,11 +23,7 @@ interface Aal2Payload extends Aal2Claims {
   exp: number; // epoch seconds
 }
 
-/**
- * Mint a signed AAL2 token for `userId`, bound to the Supabase session `sid`,
- * valid for `ttlSeconds`. Binding to the session id means a stolen AAL2 cookie
- * cannot elevate a *different* session (Security Review MEDIUM).
- */
+/** Mint a signed AAL2 token for `userId`, bound to the Supabase session `sid`. */
 export function signAal2Token(
   userId: string,
   sid: string | null,

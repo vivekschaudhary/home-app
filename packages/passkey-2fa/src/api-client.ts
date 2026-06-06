@@ -1,6 +1,6 @@
-// Client-side POST helper that discriminates network vs server failures (AC6).
-// A thrown fetch (offline) → "network"; a non-ok response carries the server's
-// error code; anything else → "server".
+// Client-side POST helpers used by ./client. `postJSON` discriminates network
+// vs server failures; `postForOptions` returns raw JSON for the WebAuthn options
+// endpoints (which return the ceremony options object directly).
 
 export type ApiErrorCode =
   | "validation_email"
@@ -42,11 +42,8 @@ export async function postJSON(url: string, body?: unknown): Promise<ApiResult> 
   return { ok: false, error: (data.error as ApiErrorCode) ?? "server" };
 }
 
-/**
- * POST that returns the raw parsed JSON body on a 2xx response, or null on
- * failure. Used for the WebAuthn options endpoints, which return the ceremony
- * options object directly (no `{ ok: true }` envelope) for @simplewebauthn.
- */
+/** POST returning the raw parsed JSON body on a 2xx, or null on failure. Used for
+ *  the WebAuthn options endpoints (no `{ ok: true }` envelope). */
 export async function postForOptions(url: string): Promise<Record<string, unknown> | null> {
   try {
     const res = await fetch(url, {

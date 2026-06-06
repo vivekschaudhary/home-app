@@ -12,4 +12,11 @@ export default [
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  {
+    // Node CLI scripts (e.g. the package's bin) — give them Node globals.
+    files: ["**/bin/**/*.mjs", "**/scripts/**/*.mjs"],
+    languageOptions: {
+      globals: { console: "readonly", process: "readonly", Buffer: "readonly" },
+    },
+  },
 ];
