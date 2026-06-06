@@ -2,7 +2,7 @@
 id: WLT-6
 bet: WLT-1
 type: story
-status: ready
+status: in-review
 priority: P1
 created: 2026-06-05
 author: PM
@@ -56,7 +56,7 @@ A new user creates an account with email + password, is required to enroll a pas
 
 ## PRs
 
-_Auto-populated as PRs open._
+- [#2](https://github.com/vivekschaudhary/home-app/pull/2) — feat(WLT-6): Sign up with passkey MFA + sign in — opened 2026-06-06, Engineer (Claude); awaiting Codex E2E (Phase 3) + review (Phase 5) + Security Review (R5).
 
 ## Tests
 
