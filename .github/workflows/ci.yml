@@ -8,6 +8,29 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # RLS test runs against the local Postgres service (Supabase auth shim).
+      SUPABASE_DB_URL: postgres://postgres:postgres@localhost:5432/postgres
+      # Placeholder public/runtime env so `next build` never reads an empty value.
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+      SUPABASE_SERVICE_ROLE_KEY: ci-placeholder-service-role-key
+
     steps:
       - uses: actions/checkout@v4
 
@@ -28,5 +51,61 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Test
+      - name: Provision RLS test DB (Supabase auth shim + migration 0001)
+        run: |
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/ci-bootstrap.sql
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/0001_init.sql
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
+            -c "grant select, insert, update, delete on all tables in schema public to authenticated;"
+
+      - name: Test (incl. live cross-tenant RLS — AC8)
         run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Verify route-handler registration (mechanical-output-verification)
+        run: |
+          python3 - <<'PY'
+          import json, sys
+          m = json.load(open(".next/server/app-paths-manifest.json"))
+          need = [
+            "/api/auth/sign-in/route",
+            "/api/auth/sign-up/route",
+            "/api/auth/sign-out/route",
+            "/api/auth/webauthn/register/options/route",
+            "/api/auth/webauthn/register/verify/route",
+            "/api/auth/webauthn/authenticate/options/route",
+            "/api/auth/webauthn/authenticate/verify/route",
+            "/dashboard/page",
+            "/sign-in/page",
+            "/sign-up/page",
+            "/unsupported/page",
+          ]
+          missing = [k for k in need if k not in m]
+          if missing:
+              print("MISSING from app-paths-manifest:", missing)
+              sys.exit(1)
+          print(f"all {len(need)} app routes registered in the build output")
+          PY
+
+  e2e:
+    runs-on: ubuntu-latest
+    env:
+      # Placeholder env: the guard + smoke specs exercise routing / redirects /
+      # the non-revealing error path, which don't need a live Supabase. The full
+      # passkey happy-path spec is gated on E2E_PASSKEY=1 and stays skipped here.
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+      SUPABASE_SERVICE_ROLE_KEY: ci-placeholder-service-role-key
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: E2E (guard + smoke — AC2/AC3/AC6; passkey happy-path gated)
+        run: pnpm e2e

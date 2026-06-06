@@ -24,7 +24,10 @@ export interface AuthUser {
 const CHALLENGE_TTL_MS = 5 * 60 * 1000;
 type ChallengeType = "registration" | "authentication";
 
-function b64urlToBytes(s: string): Uint8Array<ArrayBuffer> {
+// Return type is inferred (a fresh ArrayBuffer-backed Uint8Array) so it
+// satisfies @simplewebauthn's WebAuthnCredential.publicKey without an explicit
+// generic annotation.
+function b64urlToBytes(s: string) {
   const b = Buffer.from(s, "base64url");
   const out = new Uint8Array(b.byteLength);
   out.set(b);
