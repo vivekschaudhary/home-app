@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { signOut } from "@vivekschaudhary/passkey-2fa/client";
+import { signOut } from "@vc1023/passkey-2fa/client";
 import { COPY } from "@/app/lib/copy";
 
 export function SignOutButton({ className = "" }: { className?: string }) {

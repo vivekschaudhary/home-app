@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // Boundary packages are TypeScript source — Next transpiles them.
   transpilePackages: [
-    "@vivekschaudhary/passkey-2fa",
+    "@vc1023/passkey-2fa",
     "@wealth/jobs",
     "@wealth/db",
     "@wealth/core",

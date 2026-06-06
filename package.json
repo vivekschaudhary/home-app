@@ -16,7 +16,7 @@
     "e2e": "playwright test"
   },
   "dependencies": {
-    "@vivekschaudhary/passkey-2fa": "workspace:*",
+    "@vc1023/passkey-2fa": "workspace:*",
     "@wealth/core": "workspace:*",
     "@wealth/db": "workspace:*",
     "@wealth/jobs": "workspace:*",

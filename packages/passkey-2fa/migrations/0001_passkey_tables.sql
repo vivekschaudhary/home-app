@@ -1,4 +1,4 @@
--- @vivekschaudhary/passkey-2fa — apply this to your Supabase project (SQL editor
+-- @vc1023/passkey-2fa — apply this to your Supabase project (SQL editor
 -- or `supabase db push`). Creates the two tables the passkey 2FA layer needs,
 -- with default-deny RLS keyed on auth.uid(). Audit/analytics tables are NOT
 -- created here — wire those via the route handlers' onEvent hook in your app.

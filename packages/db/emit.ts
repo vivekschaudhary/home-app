@@ -1,4 +1,4 @@
-import { createServiceSupabase } from "@vivekschaudhary/passkey-2fa";
+import { createServiceSupabase } from "@vc1023/passkey-2fa";
 import type { AuditAction, FunnelEvent } from "@wealth/core";
 
 // Server-side, best-effort writers for the append-only audit trail (AC9) and

@@ -11,7 +11,7 @@ function fromEnvOrDevDefault(name: string, devDefault: string): string {
   if (value && value.length > 0) return value;
   if (isProd()) {
     throw new Error(
-      `[@vivekschaudhary/passkey-2fa] Missing required production env: ${name}. ` +
+      `[@vc1023/passkey-2fa] Missing required production env: ${name}. ` +
         `A dev default (${devDefault}) is only used outside production.`,
     );
   }
@@ -23,7 +23,7 @@ export function expectedOrigin(): string {
   const origin = fromEnvOrDevDefault("WEBAUTHN_ORIGIN", "http://localhost:3000");
   if (isProd() && !origin.startsWith("https://")) {
     throw new Error(
-      `[@vivekschaudhary/passkey-2fa] WEBAUTHN_ORIGIN must be https:// in production (got "${origin}").`,
+      `[@vc1023/passkey-2fa] WEBAUTHN_ORIGIN must be https:// in production (got "${origin}").`,
     );
   }
   return origin;
@@ -42,7 +42,7 @@ export function rpID(): string {
     }
     if (id !== host) {
       throw new Error(
-        `[@vivekschaudhary/passkey-2fa] WEBAUTHN_RP_ID ("${id}") must equal the WEBAUTHN_ORIGIN host ("${host}") in production.`,
+        `[@vc1023/passkey-2fa] WEBAUTHN_RP_ID ("${id}") must equal the WEBAUTHN_ORIGIN host ("${host}") in production.`,
       );
     }
   }

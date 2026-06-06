@@ -11,7 +11,7 @@ import {
   signUp,
   signUpSchema,
   type ApiErrorCode,
-} from "@vivekschaudhary/passkey-2fa/client";
+} from "@vc1023/passkey-2fa/client";
 import {
   AuthCard,
   Banner,
