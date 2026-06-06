@@ -21,3 +21,11 @@ next-env.d.ts
 *.tsbuildinfo
 .DS_Store
 
+# Supabase CLI local state
+supabase/.temp/
+
+# Playwright
+/test-results/
+/playwright-report/
+/playwright/.cache/
+

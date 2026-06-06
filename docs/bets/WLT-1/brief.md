@@ -63,7 +63,7 @@ WLT-1 is the root of the portfolio dependency graph — WLT-2 and WLT-3 cannot s
 
 ## Hypothesis (the bet)
 
-If we ship passkey-first MFA sign-up (passkey as default factor, TOTP fallback) via Supabase Auth, then new users will clear the MFA-required trust gate without abandoning, measured by **≥80% of started sign-ups reaching MFA-enrolled with median enrollment <60s**, within 30 days of launch.
+If we ship passkey-first MFA sign-up (passkey as default factor, TOTP fallback) — Supabase Auth for email+password + sessions, **passkey second factor via a custom WebAuthn layer** (architecture ADR-001, 2026-06-05; Supabase-native passkey is experimental) — then new users will clear the MFA-required trust gate without abandoning, measured by **≥80% of started sign-ups reaching MFA-enrolled with median enrollment <60s**, within 30 days of launch.
 
 Evidence the friction bet is winnable: passkeys deliver ~4x faster logins and 25–70% higher login success vs passwords (HubSpot via Descope; PayPal case study), and fintech leads passkey adoption at ~60% of eligible users in 2026.
 

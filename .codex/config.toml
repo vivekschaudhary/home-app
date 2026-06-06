@@ -2,6 +2,10 @@
 # Codex CLI auto-discovers AGENTS.md at repo root.
 # This file adds MCP servers and notes.
 
+# Model is a top-level STRING key (Codex rejects a [model] table). It must sit
+# above the [mcp.*] tables, or TOML would nest it under the last table.
+model = "gpt-5"
+
 [mcp.github]
 type = "http"
 url = "https://api.githubcopilot.com/mcp/"
@@ -17,9 +21,6 @@ url = "https://mcp.sentry.dev/mcp"
 [mcp.figma]
 type = "http"
 url = "https://mcp.figma.com/mcp"
-
-[model]
-default = "gpt-5"
 
 # Notes for whoever runs Codex here:
 # - Compass uses compass/ as the framework source of truth.

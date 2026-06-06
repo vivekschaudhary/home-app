@@ -46,7 +46,7 @@ The measurable architectural targets this bet must satisfy. ≥1 per Well-Archit
 
 ## Decision
 
-Build a **TypeScript full-stack platform on Vercel**: a single Next.js (App Router) application serving both the intent-first front end (React + Turbopack + Tailwind) and a REST/OpenAPI backend (Route Handlers). The system of record is **Supabase** — Postgres + Storage + **Auth** + Vault — used as one coherent managed-data platform. **Supabase Auth** owns identity and **MFA** (TOTP + passkey, SOC 2 Type II provider), which lets Postgres **row-level security key natively on `auth.uid()`** for the pooled B2C tenancy model. Postgres fits the foundational data model's relational entities, UUID v7 identity, JSONB workflow/block configs, append-only audit, and encryption-at-rest; aggregation OAuth tokens are held in **Supabase Vault** (envelope-encrypted, never plaintext). Long-running and scheduled work (aggregation sync, anomaly scans) runs in **Inngest** durable functions, off the request path. Observability is **Sentry** (matches the configured connector); CI/CD is **Vercel-native with GitHub Actions** gates. Single deploy target: **web (URL)**.
+Build a **TypeScript full-stack platform on Vercel**: a single Next.js (App Router) application serving both the intent-first front end (React + Turbopack + Tailwind) and a REST/OpenAPI backend (Route Handlers). The system of record is **Supabase** — Postgres + Storage + **Auth** + Vault — used as one coherent managed-data platform. **Supabase Auth** owns identity, sessions, and the **email+password first factor (AAL1)** on a SOC 2 Type II provider, which lets Postgres **row-level security key natively on `auth.uid()`** for the pooled B2C tenancy model. The **second factor is a passkey (WebAuthn)** enforced by a **thin custom layer** (`@simplewebauthn`) — Supabase's own passkey MFA is experimental and not first-class, so we own the WebAuthn ceremony, store credentials in a `WebAuthnCredential` table, and enforce **AAL2 server-side**; TOTP (Supabase-native) is the recovery/fallback factor. See **ADR-001**. Postgres fits the foundational data model's relational entities, UUID v7 identity, JSONB workflow/block configs, append-only audit, and encryption-at-rest; aggregation OAuth tokens are held in **Supabase Vault** (envelope-encrypted, never plaintext). Long-running and scheduled work (aggregation sync, anomaly scans) runs in **Inngest** durable functions, off the request path. Observability is **Sentry** (matches the configured connector); CI/CD is **Vercel-native with GitHub Actions** gates. Single deploy target: **web (URL)**.
 
 ## Foundational Data Model
 
@@ -71,6 +71,7 @@ Each entity traces back to a line in `docs/foundation/product.md`.
 | Anomaly            | A detected irregularity/alert acted on by the user                                            | "act on an anomaly/alert" L38; data-as-moat anomaly detection L68                                |
 | Budget             | A monthly plan the user is measured against                                                   | "≥ 70% of users within 10% of monthly budget plan" KR4 L46                                       |
 | AuditEvent         | Append-only record of financial-data access + actions + auth events                           | Regulatory moat L71 (SOC2/PCI/GDPR audit trail); data-as-moat L68                                |
+| WebAuthnCredential | A user's registered passkey (credential id, public key, sign counter, transports, AAGUID) — the second factor | MFA-required posture (product L29); auth model (ADR-001 — custom WebAuthn 2FA)        |
 
 No invented entities — every row cites the product bet.
 
@@ -185,11 +186,11 @@ Captured via the **elicitation-with-options** pattern in `/setup-foundation-arch
 
 ### Layer 2 — Backend stack
 
-- **Picked option:** **Next.js Route Handlers + REST/OpenAPI + Supabase Auth** (TOTP + passkey MFA)
+- **Picked option:** **Next.js Route Handlers + REST/OpenAPI + Supabase Auth (email+password, AAL1) + custom WebAuthn passkey second factor** (`@simplewebauthn`); TOTP fallback via Supabase. *(Amended by ADR-001 — original pick named Supabase-native passkey MFA, which is experimental.)*
 - **Cascaded from anchor + frontend pick:** One Next.js app serves API routes alongside the front end; REST/OpenAPI (over tRPC) chosen because the OpenAPI contract serves the developer/SDK persona (~5%, product L25) and the marketplace/B2B packages (L25) — an internal-only RPC would not.
-- **Auth model derived from foundation-product Access & Data Posture:** Product posture is **MFA-required** (product.md L29). **Supabase Auth** implements this via managed **TOTP + passkey MFA** on a SOC 2 Type II provider; auth/identity lives in the same Supabase project as the data store, so **Postgres RLS keys natively on `auth.uid()`** with no custom identity bridging. **Alignment check (principle #16): the picked auth model satisfies — does not diverge from — the MFA-required posture. No refuse/escalate triggered.**
-- **Rationale:** Coherent single managed-data platform — Supabase Auth + RLS is its core competency, removing the custom-RLS-wiring risk and offloading MFA correctness + a share of SOC2/PCI evidence to a compliant provider.
-- **Per-pillar implication:** + Security (managed MFA + native RLS tenancy, less auth code to get wrong) · + Operational excellence (one less moving part vs. self-hosted auth) · − Reversibility (adds Supabase Auth / GoTrue lock-in on the identity layer) · + Performance (co-located with the data layer).
+- **Auth model derived from foundation-product Access & Data Posture:** Product posture is **MFA-required** (product.md L29). **Supabase Auth** provides identity + sessions + the **email+password first factor (AAL1)** on a SOC 2 Type II provider; auth/identity lives in the same Supabase project as the data store, so **Postgres RLS keys natively on `auth.uid()`** with no custom identity bridging. The **passkey second factor is a custom WebAuthn layer** (`@simplewebauthn`) because Supabase-native passkey MFA is experimental (verified 2026-06-05 — ADR-001); Supabase-native **TOTP** is the recovery/fallback factor. **Alignment check (principle #16): satisfies — does not diverge from — the MFA-required posture. The change in *mechanism* (custom WebAuthn vs Supabase-native passkey) is the deviation recorded in ADR-001.**
+- **Rationale:** Keeps Supabase for identity/sessions/RLS coherence while preserving the product's lowest-friction passkey-MFA vision via a thin, owned WebAuthn layer rather than waiting on Supabase's experimental roadmap.
+- **Per-pillar implication:** + Security (passkey 2FA + native RLS tenancy) · − Security-burden (we now own the WebAuthn ceremony + AAL2 enforcement + credential storage — a financial-app security surface requiring Security Reviewer scrutiny) · − Operational excellence (more auth code to run vs a fully-managed factor) · + Performance (co-located with the data layer).
 
 ### Layer 3 — Data stack
 
@@ -219,7 +220,7 @@ Captured via the **elicitation-with-options** pattern in `/setup-foundation-arch
 | Cache                     | Upstash Redis                                                                                                          | medium                                |
 | Object storage            | Supabase Storage                                                                                                       | medium                                |
 | Contracts format          | REST + OpenAPI                                                                                                         | medium                                |
-| Auth model                | Supabase Auth — TOTP + passkey MFA (implements MFA-required posture); RLS via `auth.uid()`                             | hard (GoTrue lock-in)                 |
+| Auth model                | Supabase Auth (email+password AAL1) + **custom WebAuthn passkey 2FA** (`@simplewebauthn`, AAL2 server-side) + TOTP fallback; RLS via `auth.uid()` — see ADR-001 | hard (GoTrue + owned WebAuthn layer)  |
 | Secrets management        | Supabase Vault (aggregation tokens) + Vercel env vars (app config)                                                     | hard                                  |
 | Background/scheduled jobs | Inngest (durable functions)                                                                                            | medium                                |
 | Deployment target         | Vercel (serverless, cloud) — target: web (URL)                                                                         | one-way (platform)                    |
@@ -423,7 +424,20 @@ _(Phase B — completed 2026-06-05 after HITL approval.)_
 
 ## ADR / Amendments
 
-_No ADR entries required for version 1 (initial draft). Amendments (version > 1) each add ≥ 1 ADR entry citing the triggering bet/source._
+### ADR-001 — Passkey MFA moves from Supabase-native to a custom WebAuthn layer (2026-06-05)
+
+**Triggered by:** Bet **WLT-1 / story WLT-6** (`/build WLT-6`) hit the deviation gate. Implementing the story surfaced that the v1 auth model's claim — "Supabase Auth — TOTP + passkey MFA" — is **factually wrong**: Supabase Auth's MFA second factors are **TOTP and Phone only**; WebAuthn/passkeys are **experimental** (`auth.experimental.passkey`), "not first-class," and not on Supabase's immediate roadmap. The v1 claim was written without primary-source verification.
+
+**What changed:**
+- **Decision** paragraph, **Layer 2** pick, **Stack table** "Auth model" row, and **§5 pillar-fit** updated: passkey is now a **custom WebAuthn second factor** (`@simplewebauthn`) over Supabase email+password (AAL1); **AAL2 enforced server-side** in our middleware/route handlers; Supabase-native **TOTP** is the recovery/fallback factor.
+- **Foundational Data Model** gains the **`WebAuthnCredential`** entity (credential id, public key, sign counter, transports, AAGUID, `user_id`) under the same default-deny RLS + UUID-v7 conventions.
+- Auth model **reversibility** downgraded: we now own the WebAuthn ceremony + credential storage (a financial-app security surface).
+
+**Why:** Product posture is **MFA-required** with the lowest-friction factor (passkey-first — WLT-1 brief). The v1 mechanism (Supabase-native passkey) cannot deliver it on supported infra. Options weighed: (A) ship TOTP-only — supported but abandons the passkey vision; (B) **custom WebAuthn layer — chosen** — preserves passkey-first at the cost of owned auth code; (C) Supabase experimental passkey — rejected as too unstable for a financial trust-gate. User direction 2026-06-05.
+
+**Reversibility:** medium — WebAuthn is a W3C standard; credentials live in our Postgres (`WebAuthnCredential`), portable. Exit path: adopt Supabase-native passkey MFA if/when it goes first-class, migrating stored credentials.
+
+**Cited signal:** Supabase MFA docs (https://supabase.com/docs/guides/auth/auth-mfa — TOTP + Phone only); Supabase MFA features page; Supabase WebAuthn factors (experimental). Verified via WebFetch + WebSearch on 2026-06-05. Foundational fitness functions unchanged (Security FF still "MFA on 100% of accounts").
 
 ## Check-in log
 
@@ -463,6 +477,12 @@ _Populated automatically by `/measure` cron._
   - **Alternatives considered:** block on mirroring (rejected — would stall an otherwise-complete draft).
   - **Reversibility:** easy (re-run mirror when MCP connected).
 
+- [2026-06-05] [Enterprise Architect] **Passkey MFA via custom WebAuthn layer, not Supabase-native (ADR-001)** _(supersedes the 2026-06-05 "Supabase Auth — TOTP + passkey MFA" decision; that claim was unverified and is factually wrong — Supabase MFA = TOTP/Phone only, passkey experimental)_
+  - **Rationale:** Preserve the product's passkey-first MFA-required posture (lowest-friction factor) by owning a thin `@simplewebauthn` second-factor layer over Supabase email+password, rather than abandoning passkeys for TOTP or depending on Supabase's experimental passkey feature.
+  - **Area:** security / architectural
+  - **Alternatives considered:** TOTP-only (rejected — abandons passkey vision); Supabase experimental passkey (rejected — unstable for a financial trust gate).
+  - **Reversibility:** medium — WebAuthn is a W3C standard; credentials in our Postgres; migrate to Supabase-native passkey if/when first-class.
+
 ### Risks
 
 - [2026-06-05] [Enterprise Architect] **R1 — Auth/data overlap: Supabase RLS must be wired to Auth.js identities (not Supabase Auth)**
@@ -470,6 +490,12 @@ _Populated automatically by `/measure` cron._
   - **Mitigation:** default-deny RLS + `set local app.user_id` from Auth.js session + app-layer scoping + dedicated RLS cross-tenant tests; **validate in the Phase-B web canary** before any bet builds on it.
   - **Area:** security / data
   - **Resolution:** [2026-06-05] **Resolved by design** — per user direction, dropped Auth.js and adopted **Supabase Auth**, so RLS keys natively on `auth.uid()` with no custom identity bridging. The split-identity failure mode is eliminated. Residual concern downgraded to standard RLS hygiene: default-deny policies + cross-tenant RLS tests still required (folded into Cross-cutting standards → Testing) and still validated in the Phase-B canary.
+
+- [2026-06-05] [Enterprise Architect] **R5 — Owned WebAuthn layer is a self-built auth security surface on a financial app (ADR-001)**
+  - **Likelihood:** medium · **Impact:** high (auth bypass / AAL2 not truly enforced / credential mishandling)
+  - **Mitigation:** use vetted `@simplewebauthn` (no hand-rolled crypto); enforce AAL2 in server middleware + route handlers (never client-only); challenge nonce single-use + origin/RP-ID pinned; cross-tenant + AAL RLS tests; **mandatory Security Reviewer (Codex) pass** before merge (diff touches auth → Phase 5 step 16 auto-engages).
+  - **Area:** security
+  - **Resolution:** [pending — gated on WLT-6 Security Review]
 
 - [2026-06-05] [Enterprise Architect] **R2 — Aggregation token handling + variable data-access cost**
   - **Likelihood:** medium-high · **Impact:** high (PII exposure + margin erosion)
