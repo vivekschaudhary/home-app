@@ -7,7 +7,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
--
+- **Identity & MFA onboarding (WLT-1, story WLT-6):** create an account with email + password and a **mandatory passkey** enrolled in the same flow; sign in with a passkey challenge. Sessions persist across reloads; the second factor is enforced server-side. Unsupported browsers get an honest block. _(Supabase Auth + a custom WebAuthn 2FA layer — architecture ADR-001.)_
 
 ### Changed
 -

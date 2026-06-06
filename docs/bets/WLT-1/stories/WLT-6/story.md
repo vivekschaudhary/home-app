@@ -2,7 +2,7 @@
 id: WLT-6
 bet: WLT-1
 type: story
-status: in-review
+status: shipped
 priority: P1
 created: 2026-06-05
 author: PM
@@ -56,7 +56,8 @@ A new user creates an account with email + password, is required to enroll a pas
 
 ## PRs
 
-- [#2](https://github.com/vivekschaudhary/home-app/pull/2) — feat(WLT-6): Sign up with passkey MFA + sign in — opened 2026-06-06, Engineer (Claude); awaiting Codex E2E (Phase 3) + review (Phase 5) + Security Review (R5).
+- [#2](https://github.com/vivekschaudhary/home-app/pull/2) — feat(WLT-6): Sign up with passkey MFA + sign in — **merged 2026-06-06** (squash `4ea04c6`). Code Review ✅ Approve · Security Review ✅ Approve · CI green (incl. live RLS + build-registration check + E2E). Full passkey ceremony verified E2E (virtual authenticator).
+- **Shipped to production:** https://home-app.kindtree.us (Supabase Auth + custom WebAuthn 2FA live). Security follow-ups tracked in [issue #3](https://github.com/vivekschaudhary/home-app/issues/3).
 
 ## Tests
 
@@ -83,7 +84,8 @@ _None._
 ### Issues
 
 - [2026-06-05] [Designer] No design system tokens yet; this story seeds `/packages/ui` — severity: low — owner: Designer — status: open
+- [2026-06-06] [Engineer] First production deploy (merge auto-deploy) 500'd site-wide — Vercel had **no env vars**, so middleware crashed (`MIDDLEWARE_INVOCATION_FAILED`) on every route. The fail-loud guards behaved correctly; the gap was env never being mirrored to Vercel. — severity: high — owner: Engineer — status: **resolved** [2026-06-06] set 8 production env vars (Supabase + WEBAUTHN_* for `home-app.kindtree.us` + generated `AUTH_MFA_SECRET`), attached the custom domain, redeployed; `/api/health` 200 + auth smoke green. **Follow-up:** add a deploy-time env preflight + wire Preview env (so PR previews don't crash) — tracked toward [issue #3](https://github.com/vivekschaudhary/home-app/issues/3).
 
 ---
 
-_Story closed: <pending>, brief link: docs/bets/WLT-1/brief.md_
+_Story closed: 2026-06-06 (shipped), brief link: docs/bets/WLT-1/brief.md_
