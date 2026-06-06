@@ -4,11 +4,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
-  browserSupportsWebAuthn,
-  startRegistration,
-  type PublicKeyCredentialCreationOptionsJSON,
-} from "@simplewebauthn/browser";
-import { passwordStrength, signUpSchema } from "@wealth/core";
+  browserSupportsPasskeys,
+  enrollPasskey,
+  passwordStrength,
+  signOut,
+  signUp,
+  signUpSchema,
+  type ApiErrorCode,
+} from "@vivekschaudhary/passkey-2fa/client";
 import {
   AuthCard,
   Banner,
@@ -19,7 +22,6 @@ import {
   TextField,
   Toast,
 } from "@wealth/ui";
-import { postForOptions, postJSON, type ApiErrorCode } from "@/app/lib/api-client";
 import { COPY } from "@/app/lib/copy";
 
 function bannerCopy(error?: ApiErrorCode): string | null {
@@ -87,11 +89,11 @@ export function SignUpFlow() {
     }
 
     setLoading(true);
-    const res = await postJSON("/api/auth/sign-up", { email, password });
+    const res = await signUp(email, password);
     setLoading(false);
 
     if (res.ok) {
-      if (!browserSupportsWebAuthn()) {
+      if (!browserSupportsPasskeys()) {
         router.push("/unsupported");
         return;
       }
@@ -114,47 +116,28 @@ export function SignUpFlow() {
   async function onCreatePasskey() {
     setEnrollError(null);
     setEnrollLoading(true);
-
-    const options = await postForOptions("/api/auth/webauthn/register/options");
-    if (!options) {
-      setEnrollLoading(false);
-      setEnrollError("error");
-      return;
-    }
-
-    let attResp;
-    try {
-      attResp = await startRegistration({
-        optionsJSON: options as unknown as PublicKeyCredentialCreationOptionsJSON,
-      });
-    } catch (err) {
-      setEnrollLoading(false);
-      const name = (err as Error)?.name;
-      if (name === "NotAllowedError" || name === "AbortError") {
-        setEnrollError("cancelled");
-        createPasskeyRef.current?.focus();
-        return;
-      }
-      if (name === "NotSupportedError") {
-        router.push("/unsupported");
-        return;
-      }
-      setEnrollError("error");
-      return;
-    }
-
-    const verify = await postJSON("/api/auth/webauthn/register/verify", { response: attResp });
+    const result = await enrollPasskey();
     setEnrollLoading(false);
-    if (verify.ok) {
+
+    if (result.ok) {
       setEnrolled(true);
       setTimeout(() => router.push("/dashboard"), 1200);
+      return;
+    }
+    if (result.reason === "cancelled") {
+      setEnrollError("cancelled");
+      createPasskeyRef.current?.focus();
+      return;
+    }
+    if (result.reason === "unsupported") {
+      router.push("/unsupported");
       return;
     }
     setEnrollError("error");
   }
 
   async function onSignOut() {
-    await postJSON("/api/auth/sign-out");
+    await signOut();
     router.push("/sign-in");
   }
 

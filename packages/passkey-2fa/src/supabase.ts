@@ -4,9 +4,8 @@ import { cookies } from "next/headers";
 import { SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL } from "./env";
 
 /**
- * Request-scoped Supabase client bound to the Next cookie store (App Router).
- * Carries the user's AAL1 session; RLS keys on auth.uid(). SSR-safe so sessions
- * persist across reload + restart (AC2).
+ * Request-scoped server client bound to the Next cookie store (App Router).
+ * Carries the user's AAL1 session; RLS keys on auth.uid(). SSR-safe.
  */
 export async function createServerSupabase() {
   const cookieStore = await cookies();
@@ -31,10 +30,8 @@ export async function createServerSupabase() {
 
 /**
  * Service-role client — bypasses RLS. SERVER-ONLY. Used strictly for
- * server-controlled writes the user can't make under RLS: webauthn_challenges,
- * audit_events, auth_funnel_events, and credential counter updates during auth.
- * Never expose to the client; never use it to read user data without an
- * explicit user_id scope.
+ * server-controlled writes the user can't make under RLS (webauthn_challenges,
+ * credential counter updates). Never expose to the client.
  */
 export function createServiceSupabase() {
   return createClient(SUPABASE_URL(), SUPABASE_SERVICE_ROLE_KEY(), {

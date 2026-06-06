@@ -4,13 +4,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  browserSupportsWebAuthn,
-  startAuthentication,
-  type PublicKeyCredentialRequestOptionsJSON,
-} from "@simplewebauthn/browser";
-import { signInSchema } from "@wealth/core";
+  browserSupportsPasskeys,
+  challengePasskey,
+  signIn,
+  signInSchema,
+  type ApiErrorCode,
+} from "@vivekschaudhary/passkey-2fa/client";
 import { AuthCard, Banner, Button, PasswordField, StepHeading, TextField, Toast } from "@wealth/ui";
-import { postForOptions, postJSON, type ApiErrorCode } from "@/app/lib/api-client";
 import { COPY } from "@/app/lib/copy";
 
 function bannerCopy(error?: ApiErrorCode): string {
@@ -51,38 +51,14 @@ export function SignInFlow() {
   const runChallenge = useCallback(async () => {
     setChallengeError(null);
     setChallengeLoading(true);
-
-    const options = await postForOptions("/api/auth/webauthn/authenticate/options");
-    if (!options) {
-      setChallengeLoading(false);
-      setChallengeError("error");
-      return;
-    }
-
-    let authResp;
-    try {
-      authResp = await startAuthentication({
-        optionsJSON: options as unknown as PublicKeyCredentialRequestOptionsJSON,
-      });
-    } catch (err) {
-      setChallengeLoading(false);
-      const name = (err as Error)?.name;
-      if (name === "NotAllowedError" || name === "AbortError") {
-        setChallengeError("cancelled");
-        return;
-      }
-      setChallengeError("error");
-      return;
-    }
-
-    const verify = await postJSON("/api/auth/webauthn/authenticate/verify", { response: authResp });
+    const result = await challengePasskey();
     setChallengeLoading(false);
-    if (verify.ok) {
+    if (result.ok) {
       setSuccess(true);
       setTimeout(() => router.push("/dashboard"), 900);
       return;
     }
-    setChallengeError("error");
+    setChallengeError(result.reason === "cancelled" ? "cancelled" : "error");
   }, [router]);
 
   useEffect(() => {
@@ -113,11 +89,11 @@ export function SignInFlow() {
     }
 
     setLoading(true);
-    const res = await postJSON("/api/auth/sign-in", { email, password });
+    const res = await signIn(email, password);
     setLoading(false);
 
     if (res.ok) {
-      if (!browserSupportsWebAuthn()) {
+      if (!browserSupportsPasskeys()) {
         router.push("/unsupported");
         return;
       }

@@ -1,11 +1,10 @@
 // Lightweight in-memory sliding-window rate limiter for the sensitive auth
-// routes (Security Review MEDIUM).
+// routes.
 //
-// SCOPE LIMIT (documented, not hidden): this is PER-INSTANCE. On Vercel Fluid
-// Compute it protects within a warm instance but is NOT distributed across
-// instances/regions. Production should back this with Upstash Redis (architecture
-// Layer 3 names Upstash for cache/rate-limit) or Vercel Firewall rate-limiting.
-// Tracked as a follow-up; the call sites below are the integration points.
+// SCOPE LIMIT (documented, not hidden): this is PER-INSTANCE. On serverless /
+// Fluid Compute it protects within a warm instance but is NOT distributed across
+// instances/regions. For production at scale, back it with Upstash Redis or a
+// platform firewall (the call sites are the integration points).
 
 interface Bucket {
   count: number;
@@ -33,7 +32,8 @@ export function rateLimit(key: string, limit: number, windowMs: number): RateLim
   return { ok: true, retryAfterSeconds: 0 };
 }
 
-/** Best-effort client IP from proxy headers (Vercel sets x-forwarded-for). */
+/** Best-effort client IP from proxy headers (Vercel sets x-forwarded-for).
+ *  Trust only behind a trusted proxy — the header is spoofable otherwise. */
 export function clientIp(req: Request): string {
   const xff = req.headers.get("x-forwarded-for");
   return xff?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "unknown";
@@ -43,9 +43,6 @@ export function clientIp(req: Request): string {
 export function tooManyRequests(retryAfterSeconds: number): Response {
   return new Response(JSON.stringify({ ok: false, error: "rate_limited" }), {
     status: 429,
-    headers: {
-      "content-type": "application/json",
-      "retry-after": String(retryAfterSeconds),
-    },
+    headers: { "content-type": "application/json", "retry-after": String(retryAfterSeconds) },
   });
 }

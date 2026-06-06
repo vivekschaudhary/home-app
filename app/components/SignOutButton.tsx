@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { postJSON } from "@/app/lib/api-client";
+import { signOut } from "@vivekschaudhary/passkey-2fa/client";
 import { COPY } from "@/app/lib/copy";
 
 export function SignOutButton({ className = "" }: { className?: string }) {
@@ -10,7 +10,7 @@ export function SignOutButton({ className = "" }: { className?: string }) {
     <button
       type="button"
       onClick={async () => {
-        await postJSON("/api/auth/sign-out");
+        await signOut();
         router.push("/sign-in");
       }}
       className={`text-sm font-medium text-gray-600 underline hover:text-gray-900 ${className}`}

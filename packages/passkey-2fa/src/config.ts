@@ -1,6 +1,6 @@
-// Server-only auth/WebAuthn configuration. Dev defaults are baked in; in
-// production a missing value throws at module use (fail-loud per /build Phase 2
-// runtime-config audit) rather than silently shipping a localhost RP ID.
+// WebAuthn + AAL2 configuration, read from env (env-only convention). Dev
+// defaults are baked in; in production a missing/invalid value throws at use
+// (fail-loud) rather than shipping a localhost RP-ID or an insecure origin.
 
 function isProd(): boolean {
   return process.env.VERCEL_ENV === "production" || process.env.NODE_ENV === "production";
@@ -11,24 +11,26 @@ function fromEnvOrDevDefault(name: string, devDefault: string): string {
   if (value && value.length > 0) return value;
   if (isProd()) {
     throw new Error(
-      `Missing required production env: ${name}. A dev default (${devDefault}) is only used outside production.`,
+      `[@vivekschaudhary/passkey-2fa] Missing required production env: ${name}. ` +
+        `A dev default (${devDefault}) is only used outside production.`,
     );
   }
   return devDefault;
 }
 
-/** Expected origin of the WebAuthn ceremony (scheme + host + port). In prod it
- *  MUST be https (Security Review MEDIUM). */
+/** Expected origin of the WebAuthn ceremony (scheme + host + port). https in prod. */
 export function expectedOrigin(): string {
   const origin = fromEnvOrDevDefault("WEBAUTHN_ORIGIN", "http://localhost:3000");
   if (isProd() && !origin.startsWith("https://")) {
-    throw new Error(`WEBAUTHN_ORIGIN must be https:// in production (got "${origin}").`);
+    throw new Error(
+      `[@vivekschaudhary/passkey-2fa] WEBAUTHN_ORIGIN must be https:// in production (got "${origin}").`,
+    );
   }
   return origin;
 }
 
-/** WebAuthn Relying Party ID — the registrable domain (no scheme/port). In prod
- *  it MUST equal the WEBAUTHN_ORIGIN host (Security Review MEDIUM). */
+/** WebAuthn Relying Party ID — registrable domain (no scheme/port). In prod it
+ *  MUST equal the WEBAUTHN_ORIGIN host. */
 export function rpID(): string {
   const id = fromEnvOrDevDefault("WEBAUTHN_RP_ID", "localhost");
   if (isProd()) {
@@ -40,7 +42,7 @@ export function rpID(): string {
     }
     if (id !== host) {
       throw new Error(
-        `WEBAUTHN_RP_ID ("${id}") must equal the WEBAUTHN_ORIGIN host ("${host}") in production.`,
+        `[@vivekschaudhary/passkey-2fa] WEBAUTHN_RP_ID ("${id}") must equal the WEBAUTHN_ORIGIN host ("${host}") in production.`,
       );
     }
   }
@@ -48,7 +50,7 @@ export function rpID(): string {
 }
 
 export function rpName(): string {
-  return process.env.WEBAUTHN_RP_NAME || "Wealth at Your Fingertips";
+  return process.env.WEBAUTHN_RP_NAME || "Passkey 2FA";
 }
 
 export function appUrl(): string {

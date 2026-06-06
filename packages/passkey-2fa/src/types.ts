@@ -1,5 +1,6 @@
-// Row types for the WLT-6 auth tables (supabase/migrations/0002_auth_webauthn.sql).
-// Hand-written for now; replace with `supabase gen types` output in a later bet.
+// Row types for the package's WebAuthn tables
+// (migrations/0001_passkey_tables.sql). Hand-written; replace with generated
+// Supabase types in your app if you prefer.
 
 export interface WebAuthnCredentialRow {
   id: string;
@@ -22,20 +23,4 @@ export interface WebAuthnChallengeRow {
   type: "registration" | "authentication";
   expires_at: string;
   created_at: string;
-}
-
-export interface AuditEventRow {
-  id: string;
-  user_id: string | null;
-  action: string;
-  context: Record<string, unknown>;
-  created_at: string;
-}
-
-export interface AuthFunnelEventRow {
-  id: string;
-  user_id: string | null;
-  event: string;
-  context: Record<string, unknown>;
-  occurred_at: string;
 }

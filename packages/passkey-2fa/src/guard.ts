@@ -1,17 +1,11 @@
-// Server-side AAL2 enforcement (architecture ADR-001; AC2 "MFA enforced
-// server-side"). Used by protected Server Components + the WebAuthn route
-// handlers. Runs in the Node runtime (node:crypto via @wealth/core/mfa).
+// Server-side AAL2 enforcement. Used by protected Server Components + the route
+// handlers. Runs in the Node runtime (node:crypto via ./aal2).
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import {
-  AAL2_COOKIE,
-  AAL2_TTL_SECONDS,
-  signAal2Token,
-  verifyAal2Token,
-} from "@wealth/core/mfa";
-import { createServerSupabase } from "@wealth/db/server";
-import { mfaSecret } from "./auth-config";
+import { AAL2_COOKIE, AAL2_TTL_SECONDS, signAal2Token, verifyAal2Token } from "./aal2";
+import { mfaSecret } from "./config";
+import { createServerSupabase } from "./supabase";
 
 /** The current AAL1 (email+password) user, or null. */
 export async function getSessionUser() {
@@ -47,7 +41,6 @@ export async function getAal2UserId(): Promise<string | null> {
   const store = await cookies();
   const claims = verifyAal2Token(store.get(AAL2_COOKIE)?.value, mfaSecret());
   if (!claims || claims.sub !== user.id) return null;
-  // Session binding: if the token carries a sid, it must match the live session.
   if (claims.sid) {
     const sid = await currentSessionId();
     if (sid && claims.sid !== sid) return null;
@@ -55,10 +48,10 @@ export async function getAal2UserId(): Promise<string | null> {
   return user.id;
 }
 
-/** Redirect to /sign-in unless the session is fully AAL2. Returns the user id. */
-export async function requireAal2(): Promise<string> {
+/** Redirect to `signInPath` unless the session is fully AAL2. Returns the user id. */
+export async function requireAal2(signInPath = "/sign-in"): Promise<string> {
   const id = await getAal2UserId();
-  if (!id) redirect("/sign-in");
+  if (!id) redirect(signInPath);
   return id;
 }
 
@@ -70,7 +63,7 @@ export async function setAal2Cookie(userId: string): Promise<void> {
   store.set(AAL2_COOKIE, signAal2Token(userId, sid, mfaSecret()), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "strict", // Security Review MEDIUM
+    sameSite: "strict",
     path: "/",
     maxAge: AAL2_TTL_SECONDS,
   });

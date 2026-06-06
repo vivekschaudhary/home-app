@@ -1,12 +1,12 @@
-// Centralized env access with fail-loud semantics (build/runtime audit per
-// /build Phase 2). A missing required value throws at call time with a clear
-// message rather than letting the app boot into a broken auth state.
+// Env access with fail-loud semantics — a missing required value throws at call
+// time with a clear, named message rather than letting the app boot broken.
 
 export function requireEnv(name: string, value: string | undefined): string {
   if (!value || value.length === 0) {
     throw new Error(
-      `Missing required environment variable: ${name}. ` +
-        `Set it in .env.local (local) and Vercel project env (deployed).`,
+      `[@vivekschaudhary/passkey-2fa] Missing required environment variable: ${name}. ` +
+        `Set it in .env.local (local) and your host's env (deployed). ` +
+        `Run \`npx passkey-2fa check-env\` to see everything that's required.`,
     );
   }
   return value;
