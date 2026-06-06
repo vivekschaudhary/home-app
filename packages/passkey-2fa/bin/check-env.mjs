@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// `npx passkey-2fa check-env` — verify the env @vivekschaudhary/passkey-2fa needs.
+// `npx passkey-2fa check-env` — verify the env @vc1023/passkey-2fa needs.
 // Reads the project's .env.local (if present) merged over process.env, then
 // reports which required vars are set/missing. Exit 1 if any required is missing.
 
@@ -36,7 +36,7 @@ function loadEnvLocal() {
 const env = { ...loadEnvLocal(), ...process.env };
 const isSet = (k) => typeof env[k] === "string" && env[k].length > 0;
 
-console.log("\n@vivekschaudhary/passkey-2fa — env check\n");
+console.log("\n@vc1023/passkey-2fa — env check\n");
 let missing = 0;
 for (const k of REQUIRED) {
   const ok = isSet(k);
@@ -50,7 +50,7 @@ for (const k of OPTIONAL) {
 if (missing > 0) {
   console.error(
     `\n${missing} required variable(s) missing. Copy .env.example, fill them, and re-run.` +
-      `\nSee node_modules/@vivekschaudhary/passkey-2fa/.env.example\n`,
+      `\nSee node_modules/@vc1023/passkey-2fa/.env.example\n`,
   );
   process.exit(1);
 }

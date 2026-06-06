@@ -1,4 +1,4 @@
-import { createPasskeyAuthHandlers, type AuthEvent } from "@vivekschaudhary/passkey-2fa/routes";
+import { createPasskeyAuthHandlers, type AuthEvent } from "@vc1023/passkey-2fa/routes";
 import { AUDIT_ACTIONS, FUNNEL_EVENTS } from "@wealth/core";
 import { emitAudit, emitFunnel } from "@wealth/db/emit";
 

@@ -4,7 +4,7 @@
 export function requireEnv(name: string, value: string | undefined): string {
   if (!value || value.length === 0) {
     throw new Error(
-      `[@vivekschaudhary/passkey-2fa] Missing required environment variable: ${name}. ` +
+      `[@vc1023/passkey-2fa] Missing required environment variable: ${name}. ` +
         `Set it in .env.local (local) and your host's env (deployed). ` +
         `Run \`npx passkey-2fa check-env\` to see everything that's required.`,
     );

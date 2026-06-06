@@ -9,7 +9,7 @@ import {
   signIn,
   signInSchema,
   type ApiErrorCode,
-} from "@vivekschaudhary/passkey-2fa/client";
+} from "@vc1023/passkey-2fa/client";
 import { AuthCard, Banner, Button, PasswordField, StepHeading, TextField, Toast } from "@wealth/ui";
 import { COPY } from "@/app/lib/copy";
 
