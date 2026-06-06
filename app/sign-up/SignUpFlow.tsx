@@ -19,7 +19,7 @@ import {
   TextField,
   Toast,
 } from "@wealth/ui";
-import { postJSON, type ApiErrorCode } from "@/app/lib/api-client";
+import { postForOptions, postJSON, type ApiErrorCode } from "@/app/lib/api-client";
 import { COPY } from "@/app/lib/copy";
 
 function bannerCopy(error?: ApiErrorCode): string | null {
@@ -115,8 +115,8 @@ export function SignUpFlow() {
     setEnrollError(null);
     setEnrollLoading(true);
 
-    const opt = await postJSON("/api/auth/webauthn/register/options");
-    if (!opt.ok) {
+    const options = await postForOptions("/api/auth/webauthn/register/options");
+    if (!options) {
       setEnrollLoading(false);
       setEnrollError("error");
       return;
@@ -125,7 +125,7 @@ export function SignUpFlow() {
     let attResp;
     try {
       attResp = await startRegistration({
-        optionsJSON: opt.data as PublicKeyCredentialCreationOptionsJSON,
+        optionsJSON: options as unknown as PublicKeyCredentialCreationOptionsJSON,
       });
     } catch (err) {
       setEnrollLoading(false);

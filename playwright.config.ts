@@ -8,18 +8,26 @@ const baseURL = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 
 export default defineConfig({
   testDir: "./e2e",
+  // Output under node_modules/.cache so writes don't land in the project root,
+  // where `next dev`'s file-watcher would trigger Fast Refresh and remount the
+  // multi-step auth flow mid-test. `list` reporter avoids a playwright-report/ dir.
+  outputDir: "node_modules/.cache/playwright-output",
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: 0,
-  reporter: process.env.CI ? "list" : "html",
+  reporter: "list",
   use: {
     baseURL,
     trace: "on-first-retry",
   },
+  // Dev server: NODE_ENV=development → cookies aren't secure-only (works over
+  // http://localhost) and the WEBAUTHN_* prod fail-loud guards use dev defaults.
+  // Production behaviour (https origin, secure cookies, RP-ID match) is covered
+  // by the `check` job's build + manifest inspection, not here.
   webServer: process.env.E2E_BASE_URL
     ? undefined
     : {
-        command: "pnpm build && pnpm start",
+        command: "pnpm dev",
         url: "http://localhost:3000",
         timeout: 180_000,
         reuseExistingServer: !process.env.CI,

@@ -10,7 +10,7 @@ import {
 } from "@simplewebauthn/browser";
 import { signInSchema } from "@wealth/core";
 import { AuthCard, Banner, Button, PasswordField, StepHeading, TextField, Toast } from "@wealth/ui";
-import { postJSON, type ApiErrorCode } from "@/app/lib/api-client";
+import { postForOptions, postJSON, type ApiErrorCode } from "@/app/lib/api-client";
 import { COPY } from "@/app/lib/copy";
 
 function bannerCopy(error?: ApiErrorCode): string {
@@ -52,8 +52,8 @@ export function SignInFlow() {
     setChallengeError(null);
     setChallengeLoading(true);
 
-    const opt = await postJSON("/api/auth/webauthn/authenticate/options");
-    if (!opt.ok) {
+    const options = await postForOptions("/api/auth/webauthn/authenticate/options");
+    if (!options) {
       setChallengeLoading(false);
       setChallengeError("error");
       return;
@@ -62,7 +62,7 @@ export function SignInFlow() {
     let authResp;
     try {
       authResp = await startAuthentication({
-        optionsJSON: opt.data as PublicKeyCredentialRequestOptionsJSON,
+        optionsJSON: options as unknown as PublicKeyCredentialRequestOptionsJSON,
       });
     } catch (err) {
       setChallengeLoading(false);
