@@ -17,18 +17,38 @@ function fromEnvOrDevDefault(name: string, devDefault: string): string {
   return devDefault;
 }
 
-/** WebAuthn Relying Party ID — the registrable domain (no scheme/port). */
+/** Expected origin of the WebAuthn ceremony (scheme + host + port). In prod it
+ *  MUST be https (Security Review MEDIUM). */
+export function expectedOrigin(): string {
+  const origin = fromEnvOrDevDefault("WEBAUTHN_ORIGIN", "http://localhost:3000");
+  if (isProd() && !origin.startsWith("https://")) {
+    throw new Error(`WEBAUTHN_ORIGIN must be https:// in production (got "${origin}").`);
+  }
+  return origin;
+}
+
+/** WebAuthn Relying Party ID — the registrable domain (no scheme/port). In prod
+ *  it MUST equal the WEBAUTHN_ORIGIN host (Security Review MEDIUM). */
 export function rpID(): string {
-  return fromEnvOrDevDefault("WEBAUTHN_RP_ID", "localhost");
+  const id = fromEnvOrDevDefault("WEBAUTHN_RP_ID", "localhost");
+  if (isProd()) {
+    let host = "";
+    try {
+      host = new URL(expectedOrigin()).hostname;
+    } catch {
+      host = "";
+    }
+    if (id !== host) {
+      throw new Error(
+        `WEBAUTHN_RP_ID ("${id}") must equal the WEBAUTHN_ORIGIN host ("${host}") in production.`,
+      );
+    }
+  }
+  return id;
 }
 
 export function rpName(): string {
   return process.env.WEBAUTHN_RP_NAME || "Wealth at Your Fingertips";
-}
-
-/** Expected origin of the WebAuthn ceremony (scheme + host + port). */
-export function expectedOrigin(): string {
-  return fromEnvOrDevDefault("WEBAUTHN_ORIGIN", "http://localhost:3000");
 }
 
 export function appUrl(): string {

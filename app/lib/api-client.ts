@@ -10,7 +10,8 @@ export type ApiErrorCode =
   | "network"
   | "server"
   | "unknown"
-  | "verify";
+  | "verify"
+  | "rate_limited";
 
 export interface ApiResult {
   ok: boolean;

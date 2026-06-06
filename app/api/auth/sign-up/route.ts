@@ -2,10 +2,15 @@ import { NextResponse } from "next/server";
 import { AUDIT_ACTIONS, FUNNEL_EVENTS, signUpSchema } from "@wealth/core";
 import { emitAudit, emitFunnel } from "@wealth/db/emit";
 import { createServerSupabase } from "@wealth/db/server";
+import { clientIp, rateLimit, tooManyRequests } from "@/app/lib/rate-limit";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
+  // Throttle account creation per IP (Security Review MEDIUM).
+  const limit = rateLimit(`signup:${clientIp(req)}`, 5, 10 * 60 * 1000);
+  if (!limit.ok) return tooManyRequests(limit.retryAfterSeconds);
+
   let body: unknown;
   try {
     body = await req.json();

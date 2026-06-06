@@ -82,7 +82,9 @@ export async function createRegistrationOptions(user: AuthUser) {
       id: c.credential_id,
       transports: (c.transports ?? undefined) as never,
     })),
-    authenticatorSelection: { residentKey: "preferred", userVerification: "preferred" },
+    // User verification REQUIRED (face/fingerprint/PIN) — Security Review HIGH;
+    // matches the MFA-required financial posture + the enrollment copy.
+    authenticatorSelection: { residentKey: "preferred", userVerification: "required" },
   });
   await storeChallenge(user.id, options.challenge, "registration");
   return options;
@@ -102,7 +104,7 @@ export async function verifyRegistration(
       expectedChallenge,
       expectedOrigin: expectedOrigin(),
       expectedRPID: rpID(),
-      requireUserVerification: false, // slice 1; Security Review may tighten to true
+      requireUserVerification: true, // Security Review HIGH
     });
   } catch {
     return { verified: false, reason: "verify" };
@@ -140,7 +142,7 @@ export async function createAuthenticationOptions(user: AuthUser) {
       id: c.credential_id,
       transports: (c.transports ?? undefined) as never,
     })),
-    userVerification: "preferred",
+    userVerification: "required", // Security Review HIGH
   });
   await storeChallenge(user.id, options.challenge, "authentication");
   return options;
@@ -170,7 +172,7 @@ export async function verifyAuthentication(
       expectedChallenge,
       expectedOrigin: expectedOrigin(),
       expectedRPID: rpID(),
-      requireUserVerification: false,
+      requireUserVerification: true, // Security Review HIGH
       credential: {
         id: cred.credential_id,
         publicKey: b64urlToBytes(cred.public_key),

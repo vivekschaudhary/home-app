@@ -31,6 +31,7 @@ function bannerCopy(error?: ApiErrorCode): string | null {
       return COPY.errors.server;
     case "verify":
     case "unknown":
+    case "rate_limited": // no dedicated rate-limit copy yet (UX Writer follow-up)
       return COPY.errors.unknown;
     default:
       return null; // field-level errors render inline

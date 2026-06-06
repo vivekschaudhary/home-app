@@ -22,13 +22,37 @@ export async function getSessionUser() {
   return user;
 }
 
-/** User id IFF the session has both AAL1 (Supabase) and a valid AAL2 token. */
+/** The current Supabase session id (from the access-token `session_id` claim),
+ *  or null. Stable across token refresh within a session. */
+async function currentSessionId(): Promise<string | null> {
+  const supabase = await createServerSupabase();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  if (!token) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());
+    return typeof payload.session_id === "string" ? payload.session_id : null;
+  } catch {
+    return null;
+  }
+}
+
+/** User id IFF the session has AAL1 (Supabase) AND a valid AAL2 token whose
+ *  `sub` matches the user AND whose bound `sid` matches the live session. */
 export async function getAal2UserId(): Promise<string | null> {
   const user = await getSessionUser();
   if (!user) return null;
   const store = await cookies();
-  const sub = verifyAal2Token(store.get(AAL2_COOKIE)?.value, mfaSecret());
-  return sub === user.id ? user.id : null;
+  const claims = verifyAal2Token(store.get(AAL2_COOKIE)?.value, mfaSecret());
+  if (!claims || claims.sub !== user.id) return null;
+  // Session binding: if the token carries a sid, it must match the live session.
+  if (claims.sid) {
+    const sid = await currentSessionId();
+    if (sid && claims.sid !== sid) return null;
+  }
+  return user.id;
 }
 
 /** Redirect to /sign-in unless the session is fully AAL2. Returns the user id. */
@@ -38,13 +62,15 @@ export async function requireAal2(): Promise<string> {
   return id;
 }
 
-/** Mint the AAL2 marker after a verified passkey ceremony. Route-handler only. */
+/** Mint the AAL2 marker after a verified passkey ceremony, bound to the live
+ *  Supabase session. Route-handler only. */
 export async function setAal2Cookie(userId: string): Promise<void> {
+  const sid = await currentSessionId();
   const store = await cookies();
-  store.set(AAL2_COOKIE, signAal2Token(userId, mfaSecret()), {
+  store.set(AAL2_COOKIE, signAal2Token(userId, sid, mfaSecret()), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    sameSite: "strict", // Security Review MEDIUM
     path: "/",
     maxAge: AAL2_TTL_SECONDS,
   });

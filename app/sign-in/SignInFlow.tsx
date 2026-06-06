@@ -21,6 +21,7 @@ function bannerCopy(error?: ApiErrorCode): string {
       return COPY.errors.network;
     case "server":
       return COPY.errors.server;
+    // "rate_limited" has no dedicated copy yet (UX Writer follow-up) → generic.
     default:
       return COPY.errors.unknown;
   }

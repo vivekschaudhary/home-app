@@ -2,10 +2,15 @@ import { NextResponse } from "next/server";
 import { AUDIT_ACTIONS, signInSchema } from "@wealth/core";
 import { emitAudit } from "@wealth/db/emit";
 import { createServerSupabase } from "@wealth/db/server";
+import { clientIp, rateLimit, tooManyRequests } from "@/app/lib/rate-limit";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
+  // Throttle credential attempts per IP (Security Review MEDIUM).
+  const limit = rateLimit(`signin:${clientIp(req)}`, 10, 5 * 60 * 1000);
+  if (!limit.ok) return tooManyRequests(limit.retryAfterSeconds);
+
   let body: unknown;
   try {
     body = await req.json();
