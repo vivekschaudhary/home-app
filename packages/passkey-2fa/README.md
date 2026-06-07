@@ -1,4 +1,4 @@
-# @vivekschaudhary/passkey-2fa
+# @vc1023/passkey-2fa
 
 Drop-in **password + passkey (WebAuthn) 2FA** for **Next.js App Router + Supabase**.
 
@@ -11,19 +11,19 @@ It ships server route-handler factories, an Edge middleware factory, browser hel
 ## 1. Install
 
 ```bash
-npm install @vivekschaudhary/passkey-2fa
+npm install @vc1023/passkey-2fa
 ```
 
 Add it to `transpilePackages` (it ships TypeScript source):
 
 ```ts
 // next.config.ts
-const nextConfig = { transpilePackages: ["@vivekschaudhary/passkey-2fa"] };
+const nextConfig = { transpilePackages: ["@vc1023/passkey-2fa"] };
 ```
 
 ## 2. Environment
 
-Copy `node_modules/@vivekschaudhary/passkey-2fa/.env.example` into `.env.local` and fill it. Then verify:
+Copy `node_modules/@vc1023/passkey-2fa/.env.example` into `.env.local` and fill it. Then verify:
 
 ```bash
 npx passkey-2fa check-env
@@ -44,7 +44,7 @@ In **production** these are required and validated (origin must be https; RP-ID 
 Apply the migration to your Supabase project (SQL editor or `supabase db push`):
 
 ```
-node_modules/@vivekschaudhary/passkey-2fa/migrations/0001_passkey_tables.sql
+node_modules/@vc1023/passkey-2fa/migrations/0001_passkey_tables.sql
 ```
 
 ## 4. Mount the route handlers
@@ -53,7 +53,7 @@ Create one file per endpoint under `app/api/auth/…`, all delegating to a share
 
 ```ts
 // app/lib/auth.ts
-import { createPasskeyAuthHandlers } from "@vivekschaudhary/passkey-2fa/routes";
+import { createPasskeyAuthHandlers } from "@vc1023/passkey-2fa/routes";
 
 export const handlers = createPasskeyAuthHandlers({
   // optional: audit / analytics / funnel — never required
@@ -76,7 +76,7 @@ Repeat for: `sign-in` → `handlers.signIn`, `sign-out` → `handlers.signOut`,
 
 ```ts
 // middleware.ts
-import { createPasskeyMiddleware } from "@vivekschaudhary/passkey-2fa/middleware";
+import { createPasskeyMiddleware } from "@vc1023/passkey-2fa/middleware";
 
 export const middleware = createPasskeyMiddleware({ protectedPaths: ["/dashboard"] });
 export const config = {
@@ -88,7 +88,7 @@ export const config = {
 
 ```tsx
 // app/dashboard/page.tsx
-import { requireAal2, getSessionUser } from "@vivekschaudhary/passkey-2fa";
+import { requireAal2, getSessionUser } from "@vc1023/passkey-2fa";
 export const dynamic = "force-dynamic";
 
 export default async function Dashboard() {
@@ -106,7 +106,7 @@ You own the screens/copy; the package gives the network + ceremony:
 "use client";
 import {
   signUp, enrollPasskey, signIn, challengePasskey, signOut, browserSupportsPasskeys,
-} from "@vivekschaudhary/passkey-2fa/client";
+} from "@vc1023/passkey-2fa/client";
 
 // sign-up: await signUp(email, password) → if ok, await enrollPasskey()
 // sign-in: await signIn(email, password) → if ok, await challengePasskey()

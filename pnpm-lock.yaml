@@ -20,7 +20,7 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.45.4
         version: 2.107.0
-      '@vivekschaudhary/passkey-2fa':
+      '@vc1023/passkey-2fa':
         specifier: workspace:*
         version: link:packages/passkey-2fa
       '@wealth/core':
@@ -117,7 +117,7 @@ importers:
 
   packages/db:
     dependencies:
-      '@vivekschaudhary/passkey-2fa':
+      '@vc1023/passkey-2fa':
         specifier: workspace:*
         version: link:../passkey-2fa
       '@wealth/core':

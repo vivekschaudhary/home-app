@@ -1,4 +1,4 @@
-import { getSessionUser, requireAal2 } from "@vivekschaudhary/passkey-2fa";
+import { getSessionUser, requireAal2 } from "@vc1023/passkey-2fa";
 import { SignOutButton } from "@/app/components/SignOutButton";
 
 export const dynamic = "force-dynamic";

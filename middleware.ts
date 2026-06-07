@@ -1,4 +1,4 @@
-import { createPasskeyMiddleware } from "@vivekschaudhary/passkey-2fa/middleware";
+import { createPasskeyMiddleware } from "@vc1023/passkey-2fa/middleware";
 
 export const middleware = createPasskeyMiddleware({
   protectedPaths: ["/dashboard"],
