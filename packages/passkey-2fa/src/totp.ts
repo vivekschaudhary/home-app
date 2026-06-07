@@ -25,6 +25,16 @@ export function wouldLeaveNoSecondFactor(passkeyCount: number, totpCountAfterRem
 
 type SupabaseLike = Awaited<ReturnType<typeof createServerSupabase>>;
 
+export type VerifyReason = "expired_code" | "invalid_code" | "no_factor" | "server";
+
+/** Map a Supabase MFA verify error to a discriminated UI reason (AC7). GoTrue
+ *  surfaces an expired challenge in the error code/message; everything else is a
+ *  wrong code. */
+function classifyVerifyError(error: { code?: string; message?: string } | null): VerifyReason {
+  const s = `${error?.code ?? ""} ${error?.message ?? ""}`.toLowerCase();
+  return s.includes("expired") ? "expired_code" : "invalid_code";
+}
+
 async function verifiedTotpFactors(supabase: SupabaseLike) {
   // Per the Supabase types, `data.totp` is verified-only; unverified factors
   // live in `data.all`.
@@ -69,24 +79,24 @@ export async function enrollTotp(): Promise<TotpEnrollResult | { error: string }
 export async function verifyTotpEnrollment(
   factorId: string,
   code: string,
-): Promise<{ verified: boolean; reason?: string }> {
+): Promise<{ verified: boolean; reason?: VerifyReason }> {
   const supabase = await createServerSupabase();
   const { data: ch, error: cErr } = await supabase.auth.mfa.challenge({ factorId });
-  if (cErr || !ch) return { verified: false, reason: "challenge" };
+  if (cErr || !ch) return { verified: false, reason: "server" };
   const { error } = await supabase.auth.mfa.verify({ factorId, challengeId: ch.id, code });
-  if (error) return { verified: false, reason: "verify" };
+  if (error) return { verified: false, reason: classifyVerifyError(error) };
   return { verified: true };
 }
 
 /** Sign-in fallback: verify a code against the user's verified TOTP factor (AAL1). */
 export async function verifyTotpChallenge(
   code: string,
-): Promise<{ verified: boolean; reason?: string }> {
+): Promise<{ verified: boolean; reason?: VerifyReason }> {
   const supabase = await createServerSupabase();
   const factor = (await verifiedTotpFactors(supabase))[0];
   if (!factor) return { verified: false, reason: "no_factor" };
   const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: factor.id, code });
-  if (error) return { verified: false, reason: "verify" };
+  if (error) return { verified: false, reason: classifyVerifyError(error) };
   return { verified: true };
 }
 

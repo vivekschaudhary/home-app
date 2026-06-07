@@ -75,6 +75,7 @@ export function SignInFlow() {
   const [totpError, setTotpError] = useState<ApiErrorCode | null>(null);
   const [totpLoading, setTotpLoading] = useState(false);
   const [showNoBackup, setShowNoBackup] = useState(false);
+  const [passkeysSupported, setPasskeysSupported] = useState(true);
 
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
@@ -104,12 +105,21 @@ export function SignInFlow() {
   }, [router]);
 
   useEffect(() => {
-    if (step === "challenge") {
-      challengeHeadingRef.current?.focus();
-      void runChallenge();
-      void getFactors().then(setFactors); // gates the authenticator fallback link
-    }
+    if (step !== "challenge") return;
+    challengeHeadingRef.current?.focus();
+    const supported = browserSupportsPasskeys();
+    setPasskeysSupported(supported);
+    if (supported) void runChallenge(); // only ceremony-capable browsers auto-challenge
+    void getFactors().then(setFactors); // gates the authenticator fallback link
   }, [step, runChallenge]);
+
+  // If the passkey can't be used here, route straight to the authenticator
+  // (AC3/AC4): use it when enrolled, otherwise the no-backup path renders.
+  useEffect(() => {
+    if (step === "challenge" && !passkeysSupported && factors?.totp && subStep === "passkey") {
+      setSubStep("totp");
+    }
+  }, [step, passkeysSupported, factors, subStep]);
 
   async function onTotpSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -151,10 +161,9 @@ export function SignInFlow() {
     setLoading(false);
 
     if (res.ok) {
-      if (!browserSupportsPasskeys()) {
-        router.push("/unsupported");
-        return;
-      }
+      // Always advance to the second factor. The challenge step decides what to
+      // show based on passkey support + which factors the account has — never
+      // dead-end a user who has an authenticator backup (AC3/AC4).
       setStep("challenge");
       return;
     }
@@ -240,16 +249,28 @@ export function SignInFlow() {
   // step === "challenge", passkey sub-step (default)
   return (
     <AuthCard>
-      <StepHeading ref={challengeHeadingRef} subtitle={COPY.mfaChallenge.body}>
+      <StepHeading
+        ref={challengeHeadingRef}
+        subtitle={passkeysSupported ? COPY.mfaChallenge.body : undefined}
+      >
         {COPY.mfaChallenge.title}
       </StepHeading>
 
-      {challengeError === "error" ? <Banner>{COPY.errors.server}</Banner> : null}
-      {challengeError === "cancelled" ? <Banner variant="info">{COPY.mfaChallenge.body}</Banner> : null}
-
-      <Button onClick={runChallenge} loading={challengeLoading} loadingLabel={COPY.mfaEnroll.loading}>
-        {COPY.mfaChallenge.retry}
-      </Button>
+      {passkeysSupported ? (
+        <>
+          {challengeError === "error" ? <Banner>{COPY.errors.server}</Banner> : null}
+          {challengeError === "cancelled" ? (
+            <Banner variant="info">{COPY.mfaChallenge.body}</Banner>
+          ) : null}
+          <Button
+            onClick={runChallenge}
+            loading={challengeLoading}
+            loadingLabel={COPY.mfaEnroll.loading}
+          >
+            {COPY.mfaChallenge.retry}
+          </Button>
+        </>
+      ) : null}
 
       {factors?.totp ? (
         <button
@@ -265,7 +286,9 @@ export function SignInFlow() {
         </button>
       ) : factors && !factors.totp ? (
         <div className="mt-4 text-center">
-          {showNoBackup ? (
+          {/* When passkeys can't be used here, surface the honest no-backup
+              explainer directly (no passkey to fall back from). */}
+          {!passkeysSupported || showNoBackup ? (
             <div className="rounded-md border border-gray-200 bg-gray-50 p-3 text-left" role="status">
               <p className="text-sm font-medium text-gray-900">{COPY.signinFallback.noBackupTitle}</p>
               <p className="mt-1 text-sm text-gray-600">{COPY.signinFallback.noBackupBody}</p>

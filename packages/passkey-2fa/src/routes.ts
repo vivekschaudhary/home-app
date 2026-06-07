@@ -231,7 +231,7 @@ export function createPasskeyAuthHandlers(opts: PasskeyAuthOptions = {}): Passke
         return json({ ok: false, error: "unknown" }, 400);
       }
       const result = await verifyTotpEnrollment(factorId, code);
-      if (!result.verified) return json({ ok: false, error: "invalid_code" }, 400);
+      if (!result.verified) return json({ ok: false, error: result.reason ?? "invalid_code" }, 400);
       await setAal2Cookie(userId);
       await emit({ type: "totp_enrolled", userId });
       return json({ ok: true });
@@ -252,7 +252,7 @@ export function createPasskeyAuthHandlers(opts: PasskeyAuthOptions = {}): Passke
       const result = await verifyTotpChallenge(code);
       if (!result.verified) {
         await emit({ type: "totp_challenge_failure", userId: user.id });
-        return json({ ok: false, error: "invalid_code" }, 401);
+        return json({ ok: false, error: result.reason ?? "invalid_code" }, 401);
       }
       await setAal2Cookie(user.id);
       await emit({ type: "signin_success", userId: user.id });

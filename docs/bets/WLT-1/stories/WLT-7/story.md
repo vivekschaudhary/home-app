@@ -88,6 +88,7 @@ _None._
 ### Issues
 
 - [2026-06-07] [Designer] No `CodeInput` / `QrPanel` design-system components yet; this story seeds them in `/packages/ui` — severity: low — owner: Designer — status: open
+- [2026-06-07] [Reviewer→Engineer] Codex review round 1 — 3 blockers fixed: (1) sign-in no longer dead-ends no-WebAuthn browsers at `/unsupported` — it advances to the challenge step and uses the authenticator if enrolled, honest no-backup otherwise (AC3/AC4); (2) TOTP verify now discriminates `expired_code` vs `invalid_code` from the Supabase error (AC7); (3) E2E now exercises the real unenroll route + ConfirmDialog (remove → re-enroll) — severity: high — status: resolved. Note: the last-factor *block* branch is unreachable while a passkey is mandatory, so it stays unit-tested (`wouldLeaveNoSecondFactor`) + server-enforced.
 
 ---
 

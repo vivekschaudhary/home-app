@@ -59,12 +59,28 @@ test.describe("authenticator-app (TOTP) backup (AC1, AC3)", () => {
 
     // Read the manual key (the QR's text equivalent) and verify with a real code.
     await expect(page.getByRole("heading", { name: "Add your authenticator app" })).toBeVisible();
-    const secret = (await page.locator("code").first().innerText()).trim();
-    const totp = totpFrom(secret);
-    const enrollCode = await freshCode(totp);
-    await page.getByLabel("6-digit code").fill(enrollCode);
+    let secret = (await page.locator("code").first().innerText()).trim();
+    let totp = totpFrom(secret);
+    let lastCode = await freshCode(totp);
+    await page.getByLabel("6-digit code").fill(lastCode);
     await page.getByRole("button", { name: "Verify and add" }).click();
     // Enrolled → the Remove action only renders for an enrolled factor (AC5).
+    await expect(page.getByRole("button", { name: "Remove" })).toBeVisible({ timeout: 15_000 });
+
+    // Remove the factor through the real unenroll route + confirm dialog (AC5),
+    // then re-enroll a fresh secret for the sign-in part.
+    await page.getByRole("button", { name: "Remove" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Remove" }).click();
+    await expect(page.getByRole("button", { name: "Add authenticator app" })).toBeVisible({
+      timeout: 15_000,
+    });
+    await page.getByRole("button", { name: "Add authenticator app" }).click();
+    await expect(page.getByRole("heading", { name: "Add your authenticator app" })).toBeVisible();
+    secret = (await page.locator("code").first().innerText()).trim();
+    totp = totpFrom(secret);
+    lastCode = await freshCode(totp);
+    await page.getByLabel("6-digit code").fill(lastCode);
+    await page.getByRole("button", { name: "Verify and add" }).click();
     await expect(page.getByRole("button", { name: "Remove" })).toBeVisible({ timeout: 15_000 });
 
     // Sign out, then make the passkey unavailable so the fallback is required.
@@ -80,7 +96,7 @@ test.describe("authenticator-app (TOTP) backup (AC1, AC3)", () => {
     await page.getByRole("button", { name: "Use your authenticator app instead" }).click();
 
     await expect(page.getByRole("heading", { name: "Enter your authenticator code" })).toBeVisible();
-    const signinCode = await freshCode(totp, enrollCode);
+    const signinCode = await freshCode(totp, lastCode);
     await page.getByLabel("6-digit code").fill(signinCode);
     await page.getByRole("button", { name: "Verify", exact: true }).click();
 
