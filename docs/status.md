@@ -1,23 +1,24 @@
 # Project Status
 
-_Last updated: 2026-06-07 — `/create-story WLT-1` → WLT-7 ready_
+_Last updated: 2026-06-07 — WLT-7 shipped (`@vc1023/passkey-2fa@0.3.0`)_
 
 ## In flight
 
-| Bet | Phase | Owner role | Awaiting | Started | ETA |
-|-----|-------|-----------|----------|---------|-----|
-| WLT-1 | story (WLT-7 `ready`) | PM → Engineer | `/build WLT-7` | 2026-06-05 | 2026-06-19 |
+_None._ WLT-1's shipped stories (WLT-6 + WLT-7) cover identity + passkey + authenticator backup. No story is in build; next move is a deliberate choice (see Next up).
 
-WLT-1's first story **WLT-6 shipped** (live at `home-app.kindtree.us`). The next slice **WLT-7 — authenticator-app (TOTP) backup factor** is `ready`. Support-gated recovery (both factors lost) is queued as **WLT-8**.
+WLT-6 + **WLT-7 — authenticator-app (TOTP) backup factor — `shipped`** (2026-06-07). **WLT-8** (support-gated recovery, both-factors-lost) is **parked** by decision: revisit once WLT-7 is in real use and backup-adoption is measured — not auto-queued.
 
 ## Next up (from `docs/foundation/plan.md`)
 
-| Bet | Title | Est. start | Duration | Confidence |
-|-----|-------|------------|----------|------------|
-| WLT-1 | Identity & MFA — finish (WLT-7 TOTP, then WLT-8 recovery) | in progress | — | low |
-| WLT-5 | TTFV + WAWU instrumentation | 2026-06-08 | 2 wk | low |
+No story auto-queues. When ready, promote the next bet via `/create-brief`:
 
-Blocked behind them: WLT-2 ∥ WLT-3 (need WLT-1), then WLT-4 (needs both). MVP-loop forecast ~2026-07-17 (low confidence, stub estimates).
+| Bet | Title | Why next | Confidence |
+|-----|-------|----------|------------|
+| WLT-5 | TTFV + WAWU instrumentation | measures the backup-adoption that gates WLT-8 + the north-star | low |
+| WLT-2 ∥ WLT-3 | Account aggregation ∥ Intent-first onboarding | the core loop; need WLT-1 (done) | low |
+| WLT-4 | Workflow engine | needs WLT-2 + WLT-3 | low |
+
+MVP-loop forecast ~2026-07-17 (low confidence, stub estimates).
 
 ## Awaiting human approval
 
@@ -25,7 +26,8 @@ _None blocking._ WLT-7 auto-advanced to `ready` (`hitl_level: milestones`). The 
 
 ## Recently shipped
 
-- **`@vc1023/passkey-2fa` published to npm** — 0.1.1 then **0.2.0** (pluggable rate limiter + strict session binding); reusable password + passkey-2FA for Next.js + Supabase, extracted from WLT-6.
+- **WLT-7 — Authenticator-app (TOTP) backup factor** — `shipped` 2026-06-07 (PR #12). Optional TOTP second factor + sign-in fallback; closes the passkey-lockout DRI risk. Codex code + Security review clean (cross-model); 3 review rounds + an independent package audit (fixed credential-table RLS + signing-key hardening). Published as **`@vc1023/passkey-2fa@0.3.0`** (password + passkey + authenticator).
+- **`@vc1023/passkey-2fa` published to npm** — 0.1.1 → 0.2.0 → **0.3.0**; reusable password + passkey + authenticator(TOTP) 2FA for Next.js + Supabase, extracted from WLT-6.
 - **WLT-6 — Sign up with passkey MFA + sign in** — `shipped` 2026-06-06 to production (`home-app.kindtree.us`); PR #2; Codex review + Security review approved; full passkey E2E green.
 - **Foundational architecture bet** — `approved` 2026-06-05 (+ **ADR-001**: passkey via custom WebAuthn, TOTP as Supabase-native fallback).
 - **MVP bet portfolio + plan + product + research + architecture** — all `approved` 2026-06-05.
