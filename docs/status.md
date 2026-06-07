@@ -1,10 +1,12 @@
 # Project Status
 
-_Last updated: 2026-06-07 — WLT-7 shipped (`@vc1023/passkey-2fa@0.3.0`)_
+_Last updated: 2026-06-07 — WLT-2 brief approved_
 
 ## In flight
 
-_None._ WLT-1's shipped stories (WLT-6 + WLT-7) cover identity + passkey + authenticator backup. No story is in build; next move is a deliberate choice (see Next up).
+**WLT-2 — Account aggregation + CSV fallback** — brief **`approved`** (HITL 2026-06-07). Next: `/create-bet-architecture WLT-2` (provider ADR + token-vault + ingest design) before stories.
+
+WLT-1's shipped stories (WLT-6 + WLT-7) cover identity + passkey + authenticator backup. No story is in build.
 
 WLT-6 + **WLT-7 — authenticator-app (TOTP) backup factor — `shipped`** (2026-06-07). **WLT-8** (support-gated recovery, both-factors-lost) is **parked** by decision: revisit once WLT-7 is in real use and backup-adoption is measured — not auto-queued.
 
@@ -22,7 +24,7 @@ MVP-loop forecast ~2026-07-17 (low confidence, stub estimates).
 
 ## Awaiting human approval
 
-_None blocking._ WLT-7 auto-advanced to `ready` (`hitl_level: milestones`). The 4 stubs (`WLT-2..WLT-5`) remain `proposed` by design (`portfolio_stub: true`) — they await promotion via `/create-brief`, not approval.
+_None blocking._ **WLT-2 brief approved** (HITL 2026-06-07) — ready for `/create-bet-architecture WLT-2`. The 3 remaining stubs (`WLT-3..WLT-5`) stay `proposed` by design (`portfolio_stub: true`) — they await promotion via `/create-brief`, not approval.
 
 ## Recently shipped
 
