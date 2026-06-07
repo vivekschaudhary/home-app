@@ -47,18 +47,27 @@ export function SignInFlow() {
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
   const challengeHeadingRef = useRef<HTMLHeadingElement>(null);
+  // Guards against concurrent challenges — e.g. React StrictMode double-invoking
+  // the auto-challenge effect in dev would otherwise race two ceremonies.
+  const inFlight = useRef(false);
 
   const runChallenge = useCallback(async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setChallengeError(null);
     setChallengeLoading(true);
-    const result = await challengePasskey();
-    setChallengeLoading(false);
-    if (result.ok) {
-      setSuccess(true);
-      setTimeout(() => router.push("/dashboard"), 900);
-      return;
+    try {
+      const result = await challengePasskey();
+      if (result.ok) {
+        setSuccess(true);
+        setTimeout(() => router.push("/dashboard"), 900);
+        return;
+      }
+      setChallengeError(result.reason === "cancelled" ? "cancelled" : "error");
+    } finally {
+      setChallengeLoading(false);
+      inFlight.current = false;
     }
-    setChallengeError(result.reason === "cancelled" ? "cancelled" : "error");
   }, [router]);
 
   useEffect(() => {
