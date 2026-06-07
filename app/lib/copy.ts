@@ -40,6 +40,59 @@ export const COPY = {
     retry: "Try again",
   },
   signinSuccess: "Welcome back.",
+  // ── WLT-7: authenticator-app (TOTP) backup factor ────────────────────────
+  security: {
+    title: "Security",
+    subtitle: "How you sign in and protect your account.",
+    passkeyLabel: "Passkey",
+    passkeyStatus: "Added",
+    totpLabel: "Authenticator app",
+    totpEmptyStatus: "Not set up",
+    totpEmptyCta: "Add authenticator app",
+    totpEnrolledStatus: "Added",
+    totpRemove: "Remove",
+    cancel: "Cancel",
+  },
+  nudge: {
+    title: "Add a backup way to sign in",
+    body: "Right now your passkey is the only way in. Add an authenticator app so you're not locked out if you lose your device.",
+    cta: "Add a backup",
+    dismiss: "Not now",
+  },
+  totpEnroll: {
+    title: "Add your authenticator app",
+    body: "Scan this with an authenticator app like Google Authenticator, 1Password, or Authy, then enter the 6-digit code it shows.",
+    manualKeyLabel: "Can't scan? Enter this key in your app",
+    manualKeyCopy: "Copy key",
+    codeLabel: "6-digit code",
+    cta: "Verify and add",
+    loading: "Preparing…",
+    verifying: "Verifying…",
+    success: "Authenticator app added. You now have a backup.",
+  },
+  totpChallenge: {
+    title: "Enter your authenticator code",
+    body: "Open your authenticator app and enter the current 6-digit code.",
+    codeLabel: "6-digit code",
+    cta: "Verify",
+    verifying: "Verifying…",
+    retry: "Try again",
+    usePasskey: "Use your passkey instead",
+  },
+  signinFallback: {
+    useAuthenticator: "Use your authenticator app instead",
+    noBackupTitle: "Can't use your passkey?",
+    noBackupBody:
+      "This account doesn't have a backup set up yet. Contact support and we'll help you get back in.",
+  },
+  totpRemove: {
+    confirmTitle: "Remove your authenticator app?",
+    confirmBody:
+      "You'll go back to using only your passkey. You can add an authenticator again anytime.",
+    confirmCta: "Remove",
+    lastFactor:
+      "You can't remove your only backup while it's your sole protection. Add another way to sign in first.",
+  },
   errors: {
     validationEmail: "Enter a valid email address, like name@example.com.",
     validationPassword: "Your password needs at least 12 characters.",
@@ -48,10 +101,15 @@ export const COPY = {
     server: "Something went wrong on our side — your information is safe. Try again in a minute.",
     unknown:
       "That didn't work, and we're not sure why. Try again; if it keeps happening, contact support.",
+    totpInvalidCode: "That code isn't right. Check your authenticator app and try again.",
+    totpExpiredCode: "That code expired. Enter the current one from your app.",
+    totpAlreadyEnrolled: "You already have an authenticator app set up.",
   },
   a11y: {
     passwordShow: "Show password",
     passwordHide: "Hide password",
     capslock: "Caps Lock is on",
+    codeHint: "Enter the 6 digits from your authenticator app.",
+    copyKeyDone: "Key copied",
   },
 } as const;

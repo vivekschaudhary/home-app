@@ -9,6 +9,9 @@ export type AuthEvent =
   | { type: "mfa_enroll_started"; userId: string }
   | { type: "mfa_enrolled"; userId: string }
   | { type: "mfa_challenge_failure"; userId: string }
+  | { type: "totp_enroll_started"; userId: string }
+  | { type: "totp_enrolled"; userId: string }
+  | { type: "totp_challenge_failure"; userId: string }
   | { type: "signout"; userId: string };
 
 export type OnAuthEvent = (event: AuthEvent) => void | Promise<void>;

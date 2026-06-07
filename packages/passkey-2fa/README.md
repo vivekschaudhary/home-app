@@ -4,6 +4,7 @@ Drop-in **password + passkey (WebAuthn) 2FA** for **Next.js App Router + Supabas
 
 - Email + password = first factor (Supabase Auth, AAL1)
 - A **passkey** = mandatory second factor (custom WebAuthn, AAL2), enforced server-side
+- An **authenticator app (TOTP)** = optional backup second factor (Supabase-native MFA) — both factors mint the same AAL2 session (since 0.3.0)
 - Single-use expiring challenges · replay-protected counter · session-bound AAL2 cookie · per-route rate limiting · fail-loud config
 
 It ships server route-handler factories, an Edge middleware factory, browser helpers, and the SQL migration. Audit/analytics stay yours via an `onEvent` hook.
@@ -71,6 +72,15 @@ export const POST = handlers.signUp;
 Repeat for: `sign-in` → `handlers.signIn`, `sign-out` → `handlers.signOut`,
 `webauthn/register/options` → `handlers.registerOptions`, `webauthn/register/verify` → `handlers.registerVerify`,
 `webauthn/authenticate/options` → `handlers.authenticateOptions`, `webauthn/authenticate/verify` → `handlers.authenticateVerify`.
+
+### Authenticator-app (TOTP) backup factor — optional (since 0.3.0)
+
+Mount these for a backup second factor (no DB migration — Supabase owns the MFA tables):
+`totp/enroll/start` → `handlers.totpEnrollStart`, `totp/enroll/verify` → `handlers.totpEnrollVerify`,
+`totp/challenge/verify` → `handlers.totpChallengeVerify`, `totp/unenroll` → `handlers.totpUnenroll`,
+`factors` → `handlers.factorsList`.
+
+Client helpers: `startTotpEnroll()`, `verifyTotpEnroll(factorId, code)`, `signInWithTotp(code)`, `getFactors()`, `removeTotp()` from `@vc1023/passkey-2fa/client`. A verified TOTP code mints the same AAL2 session as the passkey. Enable TOTP MFA in your Supabase project (Auth → it's on by default).
 
 ## 5. Middleware
 

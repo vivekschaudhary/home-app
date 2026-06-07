@@ -27,6 +27,16 @@ async function onEvent(e: AuthEvent): Promise<void> {
     case "mfa_challenge_failure":
       await emitAudit(AUDIT_ACTIONS.MFA_CHALLENGE_FAILURE, e.userId);
       break;
+    case "totp_enroll_started":
+      await emitFunnel(FUNNEL_EVENTS.TOTP_ENROLL_STARTED, e.userId);
+      break;
+    case "totp_enrolled":
+      await emitAudit(AUDIT_ACTIONS.TOTP_ENROLL, e.userId);
+      await emitFunnel(FUNNEL_EVENTS.TOTP_ENROLLED, e.userId);
+      break;
+    case "totp_challenge_failure":
+      await emitAudit(AUDIT_ACTIONS.TOTP_CHALLENGE_FAILURE, e.userId);
+      break;
     case "signout":
       await emitAudit(AUDIT_ACTIONS.SIGNOUT, e.userId);
       break;

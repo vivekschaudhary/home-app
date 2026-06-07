@@ -6,6 +6,8 @@ export const FUNNEL_EVENTS = {
   SIGNUP_CREDENTIALS_CREATED: "signup_credentials_created",
   MFA_ENROLL_STARTED: "mfa_enroll_started",
   MFA_ENROLLED: "mfa_enrolled",
+  TOTP_ENROLL_STARTED: "totp_enroll_started",
+  TOTP_ENROLLED: "totp_enrolled",
   SIGNIN_SUCCESS: "signin_success",
 } as const;
 

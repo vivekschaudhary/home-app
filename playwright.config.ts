@@ -8,13 +8,21 @@ const baseURL = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 
 export default defineConfig({
   testDir: "./e2e",
+  // Warm dev-server route compilation before tests (see e2e/global-setup.ts).
+  globalSetup: "./e2e/global-setup.ts",
   // Output under node_modules/.cache so writes don't land in the project root,
   // where `next dev`'s file-watcher would trigger Fast Refresh and remount the
   // multi-step auth flow mid-test. `list` reporter avoids a playwright-report/ dir.
   outputDir: "node_modules/.cache/playwright-output",
   fullyParallel: false,
+  // One worker: the gated passkey/TOTP specs share a single dev server, create
+  // real Supabase users, and each drive a WebAuthn virtual authenticator —
+  // running them across parallel workers makes the concurrent ceremonies hang.
+  workers: 1,
   forbidOnly: !!process.env.CI,
-  retries: 0,
+  // The gated specs drive a real Supabase project + a WebAuthn virtual
+  // authenticator (simulated ceremonies occasionally flake); allow a retry.
+  retries: process.env.E2E_PASSKEY ? 2 : 0,
   reporter: "list",
   use: {
     baseURL,

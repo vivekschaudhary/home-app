@@ -14,6 +14,7 @@ export * from "./aal2";
 export * from "./validation";
 export * from "./guard";
 export * from "./webauthn";
+export * from "./totp";
 export * from "./rate-limit";
 export * from "./supabase";
 export * from "./types";

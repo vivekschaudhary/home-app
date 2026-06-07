@@ -3,6 +3,8 @@
 export const AUDIT_ACTIONS = {
   SIGNUP: "auth.signup",
   MFA_ENROLL: "auth.mfa.enroll",
+  TOTP_ENROLL: "auth.totp.enroll",
+  TOTP_CHALLENGE_FAILURE: "auth.totp.challenge.failure",
   SIGNIN_SUCCESS: "auth.signin.success",
   SIGNIN_FAILURE: "auth.signin.failure",
   MFA_CHALLENGE_FAILURE: "auth.mfa.challenge.failure",
