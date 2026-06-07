@@ -8,3 +8,7 @@ export { Toast } from "./Toast";
 export { AuthCard } from "./AuthCard";
 export { StepHeading } from "./StepHeading";
 export { PasswordStrength } from "./PasswordStrength";
+export { CodeInput } from "./CodeInput";
+export { FactorRow } from "./FactorRow";
+export { QrPanel } from "./QrPanel";
+export { ConfirmDialog } from "./ConfirmDialog";

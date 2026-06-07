@@ -2,7 +2,7 @@
 id: WLT-7
 bet: WLT-1
 type: story
-status: ready
+status: in-review
 priority: P1
 created: 2026-06-07
 author: PM
@@ -56,7 +56,7 @@ A signed-in user can add an **authenticator app** (TOTP) as a backup second fact
 
 ## PRs
 
-_Auto-populated as PRs open._
+- PR #12 — feat(WLT-7): authenticator-app (TOTP) backup factor — in-review (Codex + Security Review pending)
 
 ## Tests
 
@@ -75,6 +75,9 @@ _None._
 - [2026-06-07] [PM] TOTP added to **`@vc1023/passkey-2fa` (0.3.0)**, not app-side — rationale: the package was extracted for reuse across the user's apps; a complete "passkey or authenticator" MFA package is more reusable and keeps AAL2 ownership in one place — area: architecture — alternatives: app-side via Supabase MFA + the package's `setAal2Cookie` (rejected — splits auth across two homes, less reusable) — reversibility: medium
 - [2026-06-07] [PM] Authenticator is an **optional backup** via Security + nudge, not mandatory at sign-up — rationale: passkey is already the required factor (WLT-6); a forced second enroll fights the <60s TTFV target — area: scope — alternatives: mandatory dual-enroll (rejected — friction) — reversibility: easy
 - [2026-06-07] [PM] Jira mirror **skipped** — no Jira MCP on host (consistent with WLT-6) — area: tooling — reversibility: easy
+- [2026-06-07] [Engineer] TOTP `unenroll` finds the user's verified factor server-side (no client-supplied factorId) — rationale: a user has at most one verified TOTP factor; keeps the factorId off the wire — area: api — reversibility: easy
+- [2026-06-07] [Engineer] E2E determinism: `workers: 1` + `globalSetup` route-warming + `retries: 2` for the gated specs — rationale: `next dev` compiles routes on first hit and two WebAuthn-virtual-authenticator ceremonies can't share one dev server; production `next start` is unusable locally (forces Secure cookies + https RP-ID) — area: test-infra — reversibility: easy
+- [2026-06-07] [Engineer] Added a neutral `security.cancel` ("Cancel") string for the enroll/remove dialogs (mirrored into copy.md) — rationale: copy.md lacked a dialog cancel label — area: copy — issue: UX Writer to confirm wording
 
 ### Risks
 
@@ -85,6 +88,8 @@ _None._
 ### Issues
 
 - [2026-06-07] [Designer] No `CodeInput` / `QrPanel` design-system components yet; this story seeds them in `/packages/ui` — severity: low — owner: Designer — status: open
+- [2026-06-07] [Reviewer→Engineer] Codex review round 2 + independent audit — consolidated fixes: (Codex AC9) `signin_success` now carries `method` (passkey|totp) → audit row context distinguishes the factor (verified in `audit_events`); (independent HIGH) dropped the `webauthn_credentials` anon insert/delete RLS policies so a signed-in user can't plant/remove a passkey credential outside the ceremony — writes are service-role-only (applied to 0001 + live DB); (independent HIGH) `mfaSecret()` no longer returns a usable default outside `NODE_ENV` dev/test — fail-loud everywhere else (no forgeable AAL2 by omission); (independent MED) `enrollTotp` maps failures to a stable `ApiErrorCode` instead of leaking the raw GoTrue message; (MED) rate-limiter relabeled fixed-window (was mislabeled sliding); (LOW) dropped unused `react`/`react-dom` peerDeps, pinned `next >=15 <16`, added `sideEffects:false`. Deferred (noted): last-factor guard TOCTOU (unreachable while passkey mandatory → WLT-8), multi-client-per-request consolidation, `webauthn_challenges` expiry sweep, server-side AAL2 revocation — severity: high — status: resolved
+- [2026-06-07] [Reviewer→Engineer] Codex review round 1 — 3 blockers fixed: (1) sign-in no longer dead-ends no-WebAuthn browsers at `/unsupported` — it advances to the challenge step and uses the authenticator if enrolled, honest no-backup otherwise (AC3/AC4); (2) TOTP verify now discriminates `expired_code` vs `invalid_code` from the Supabase error (AC7); (3) E2E now exercises the real unenroll route + ConfirmDialog (remove → re-enroll) — severity: high — status: resolved. Note: the last-factor *block* branch is unreachable while a passkey is mandatory, so it stays unit-tested (`wouldLeaveNoSecondFactor`) + server-enforced.
 
 ---
 

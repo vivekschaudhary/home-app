@@ -26,6 +26,7 @@ Calm, plain, reassuring. The user is financially anxious and may not know what a
 | `security.totp.empty.cta` | Add authenticator app | Says what it does |
 | `security.totp.enrolled.status` | Added | Past-tense confirmation |
 | `security.totp.enrolled.remove` | Remove | |
+| `security.cancel` | Cancel | Neutral cancel for the enroll/remove dialogs (added during build) |
 | `nudge.title` | Add a backup way to sign in | |
 | `nudge.body` | Right now your passkey is the only way in. Add an authenticator app so you're not locked out if you lose your device. | The why, in plain terms |
 | `nudge.cta` | Add a backup | |

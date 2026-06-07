@@ -1,11 +1,13 @@
 // Rate limiting for the sensitive auth routes.
 //
 // The limiter is PLUGGABLE: `createPasskeyAuthHandlers` accepts a `rateLimit`
-// (RateLimiter). The default is the in-memory sliding window below — fine for a
-// single instance, but PER-INSTANCE: on serverless / Fluid Compute it protects
-// within a warm instance, NOT across instances/regions. For production at scale,
-// inject a distributed limiter (e.g. Upstash Redis) — see the README. Because
-// RateLimiter may be async, all call sites await it.
+// (RateLimiter). The default is the in-memory FIXED-WINDOW counter below — fine
+// for a single instance, but note two limits: (1) PER-INSTANCE — on serverless /
+// Fluid Compute it protects within a warm instance, NOT across instances/regions;
+// (2) fixed-window allows up to ~2× `limit` across a window boundary (not a true
+// sliding window). For production at scale, inject a distributed/sliding limiter
+// (e.g. Upstash Redis) — see the README. Because RateLimiter may be async, all
+// call sites await it.
 
 export interface RateLimitResult {
   ok: boolean;
@@ -27,7 +29,7 @@ interface Bucket {
 
 const buckets = new Map<string, Bucket>();
 
-/** Default per-instance in-memory sliding-window limiter. */
+/** Default per-instance in-memory fixed-window limiter. */
 export const inMemoryRateLimit: RateLimiter = (key, limit, windowMs) => {
   const now = Date.now();
   const b = buckets.get(key);

@@ -6,11 +6,22 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   browserSupportsPasskeys,
   challengePasskey,
+  getFactors,
   signIn,
   signInSchema,
+  signInWithTotp,
   type ApiErrorCode,
 } from "@vc1023/passkey-2fa/client";
-import { AuthCard, Banner, Button, PasswordField, StepHeading, TextField, Toast } from "@wealth/ui";
+import {
+  AuthCard,
+  Banner,
+  Button,
+  CodeInput,
+  PasswordField,
+  StepHeading,
+  TextField,
+  Toast,
+} from "@wealth/ui";
 import { COPY } from "@/app/lib/copy";
 
 function bannerCopy(error?: ApiErrorCode): string {
@@ -24,6 +35,19 @@ function bannerCopy(error?: ApiErrorCode): string {
     // "rate_limited" has no dedicated copy yet (UX Writer follow-up) → generic.
     default:
       return COPY.errors.unknown;
+  }
+}
+
+function totpErrorCopy(error: ApiErrorCode | null): string {
+  switch (error) {
+    case "invalid_code":
+      return COPY.errors.totpInvalidCode;
+    case "expired_code":
+      return COPY.errors.totpExpiredCode;
+    case "network":
+      return COPY.errors.network;
+    default:
+      return COPY.errors.server;
   }
 }
 
@@ -44,9 +68,19 @@ export function SignInFlow() {
   const [challengeError, setChallengeError] = useState<ChallengeError>(null);
   const [success, setSuccess] = useState(false);
 
+  // Authenticator-app (TOTP) fallback (WLT-7).
+  const [subStep, setSubStep] = useState<"passkey" | "totp">("passkey");
+  const [factors, setFactors] = useState<{ passkey: boolean; totp: boolean } | null>(null);
+  const [code, setCode] = useState("");
+  const [totpError, setTotpError] = useState<ApiErrorCode | null>(null);
+  const [totpLoading, setTotpLoading] = useState(false);
+  const [showNoBackup, setShowNoBackup] = useState(false);
+  const [passkeysSupported, setPasskeysSupported] = useState(true);
+
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
   const challengeHeadingRef = useRef<HTMLHeadingElement>(null);
+  const codeRef = useRef<HTMLInputElement>(null);
   // Guards against concurrent challenges — e.g. React StrictMode double-invoking
   // the auto-challenge effect in dev would otherwise race two ceremonies.
   const inFlight = useRef(false);
@@ -71,11 +105,36 @@ export function SignInFlow() {
   }, [router]);
 
   useEffect(() => {
-    if (step === "challenge") {
-      challengeHeadingRef.current?.focus();
-      void runChallenge();
-    }
+    if (step !== "challenge") return;
+    challengeHeadingRef.current?.focus();
+    const supported = browserSupportsPasskeys();
+    setPasskeysSupported(supported);
+    if (supported) void runChallenge(); // only ceremony-capable browsers auto-challenge
+    void getFactors().then(setFactors); // gates the authenticator fallback link
   }, [step, runChallenge]);
+
+  // If the passkey can't be used here, route straight to the authenticator
+  // (AC3/AC4): use it when enrolled, otherwise the no-backup path renders.
+  useEffect(() => {
+    if (step === "challenge" && !passkeysSupported && factors?.totp && subStep === "passkey") {
+      setSubStep("totp");
+    }
+  }, [step, passkeysSupported, factors, subStep]);
+
+  async function onTotpSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setTotpError(null);
+    setTotpLoading(true);
+    const res = await signInWithTotp(code);
+    setTotpLoading(false);
+    if (res.ok) {
+      setSuccess(true);
+      setTimeout(() => router.push("/dashboard"), 900);
+      return;
+    }
+    setTotpError(res.error ?? "server");
+    codeRef.current?.focus();
+  }
 
   async function onCredentialsSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -102,10 +161,9 @@ export function SignInFlow() {
     setLoading(false);
 
     if (res.ok) {
-      if (!browserSupportsPasskeys()) {
-        router.push("/unsupported");
-        return;
-      }
+      // Always advance to the second factor. The challenge step decides what to
+      // show based on passkey support + which factors the account has — never
+      // dead-end a user who has an authenticator backup (AC3/AC4).
       setStep("challenge");
       return;
     }
@@ -153,19 +211,99 @@ export function SignInFlow() {
     );
   }
 
-  // step === "challenge"
+  // step === "challenge", authenticator-app sub-step (AC3)
+  if (subStep === "totp") {
+    return (
+      <AuthCard>
+        <StepHeading ref={challengeHeadingRef} subtitle={COPY.totpChallenge.body}>
+          {COPY.totpChallenge.title}
+        </StepHeading>
+        <form onSubmit={onTotpSubmit} noValidate className="space-y-4">
+          <CodeInput
+            ref={codeRef}
+            label={COPY.totpChallenge.codeLabel}
+            hint={COPY.a11y.codeHint}
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+            error={totpError ? totpErrorCopy(totpError) : undefined}
+          />
+          <Button type="submit" loading={totpLoading} loadingLabel={COPY.totpChallenge.verifying}>
+            {totpError ? COPY.totpChallenge.retry : COPY.totpChallenge.cta}
+          </Button>
+        </form>
+        <button
+          type="button"
+          onClick={() => {
+            setSubStep("passkey");
+            setTotpError(null);
+          }}
+          className="mt-4 w-full text-center text-sm font-medium text-gray-600 underline hover:text-gray-900"
+        >
+          {COPY.totpChallenge.usePasskey}
+        </button>
+        {success ? <Toast message={COPY.signinSuccess} /> : null}
+      </AuthCard>
+    );
+  }
+
+  // step === "challenge", passkey sub-step (default)
   return (
     <AuthCard>
-      <StepHeading ref={challengeHeadingRef} subtitle={COPY.mfaChallenge.body}>
+      <StepHeading
+        ref={challengeHeadingRef}
+        subtitle={passkeysSupported ? COPY.mfaChallenge.body : undefined}
+      >
         {COPY.mfaChallenge.title}
       </StepHeading>
 
-      {challengeError === "error" ? <Banner>{COPY.errors.server}</Banner> : null}
-      {challengeError === "cancelled" ? <Banner variant="info">{COPY.mfaChallenge.body}</Banner> : null}
+      {passkeysSupported ? (
+        <>
+          {challengeError === "error" ? <Banner>{COPY.errors.server}</Banner> : null}
+          {challengeError === "cancelled" ? (
+            <Banner variant="info">{COPY.mfaChallenge.body}</Banner>
+          ) : null}
+          <Button
+            onClick={runChallenge}
+            loading={challengeLoading}
+            loadingLabel={COPY.mfaEnroll.loading}
+          >
+            {COPY.mfaChallenge.retry}
+          </Button>
+        </>
+      ) : null}
 
-      <Button onClick={runChallenge} loading={challengeLoading} loadingLabel={COPY.mfaEnroll.loading}>
-        {COPY.mfaChallenge.retry}
-      </Button>
+      {factors?.totp ? (
+        <button
+          type="button"
+          onClick={() => {
+            setSubStep("totp");
+            setCode("");
+            setTotpError(null);
+          }}
+          className="mt-4 w-full text-center text-sm font-medium text-gray-600 underline hover:text-gray-900"
+        >
+          {COPY.signinFallback.useAuthenticator}
+        </button>
+      ) : factors && !factors.totp ? (
+        <div className="mt-4 text-center">
+          {/* When passkeys can't be used here, surface the honest no-backup
+              explainer directly (no passkey to fall back from). */}
+          {!passkeysSupported || showNoBackup ? (
+            <div className="rounded-md border border-gray-200 bg-gray-50 p-3 text-left" role="status">
+              <p className="text-sm font-medium text-gray-900">{COPY.signinFallback.noBackupTitle}</p>
+              <p className="mt-1 text-sm text-gray-600">{COPY.signinFallback.noBackupBody}</p>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowNoBackup(true)}
+              className="text-sm font-medium text-gray-600 underline hover:text-gray-900"
+            >
+              {COPY.signinFallback.noBackupTitle}
+            </button>
+          )}
+        </div>
+      ) : null}
 
       {success ? <Toast message={COPY.signinSuccess} /> : null}
     </AuthCard>

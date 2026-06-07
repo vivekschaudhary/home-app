@@ -11,7 +11,14 @@ export type ApiErrorCode =
   | "server"
   | "unknown"
   | "verify"
-  | "rate_limited";
+  | "rate_limited"
+  // Authenticator-app (TOTP) factor (WLT-7)
+  | "invalid_code"
+  | "expired_code"
+  | "already_enrolled"
+  | "aal2_required"
+  | "last_factor"
+  | "no_factor";
 
 export interface ApiResult {
   ok: boolean;
