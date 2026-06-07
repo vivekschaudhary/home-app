@@ -57,7 +57,20 @@ export function appUrl(): string {
   return fromEnvOrDevDefault("NEXT_PUBLIC_APP_URL", "http://localhost:3000");
 }
 
-/** HMAC secret for the AAL2 session token. MUST be set in production. */
+/** HMAC secret for the AAL2 session token. A signing key must never have a
+ *  usable default: the hardcoded value is allowed ONLY in explicit local
+ *  dev/test (NODE_ENV development|test). Any other context (production, a
+ *  self-hosted box that didn't set NODE_ENV, CI builds) must provide
+ *  AUTH_MFA_SECRET or this throws — so a forgeable token can't ship by omission. */
 export function mfaSecret(): string {
-  return fromEnvOrDevDefault("AUTH_MFA_SECRET", "dev-insecure-mfa-secret-do-not-use-in-prod");
+  const value = process.env.AUTH_MFA_SECRET;
+  if (value && value.length > 0) return value;
+  const env = process.env.NODE_ENV;
+  if (env === "development" || env === "test") {
+    return "dev-insecure-mfa-secret-do-not-use-in-prod";
+  }
+  throw new Error(
+    "[@vc1023/passkey-2fa] AUTH_MFA_SECRET is required (no default outside local " +
+      "dev/test). Generate one with `openssl rand -hex 32` and set it in your host env.",
+  );
 }

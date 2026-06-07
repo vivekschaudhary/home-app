@@ -28,6 +28,9 @@ test.describe("authenticator-app (TOTP) backup (AC1, AC3)", () => {
     page,
     context,
   }) => {
+    // enroll + remove + re-enroll + sign-in, and freshCode() may wait up to a
+    // full ~30s TOTP window to avoid replaying a code — well past the 30s default.
+    test.setTimeout(120_000);
     const client: CDPSession = await context.newCDPSession(page);
     await client.send("WebAuthn.enable");
     const { authenticatorId } = await client.send("WebAuthn.addVirtualAuthenticator", {

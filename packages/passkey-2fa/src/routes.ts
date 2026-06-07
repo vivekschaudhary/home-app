@@ -193,7 +193,7 @@ export function createPasskeyAuthHandlers(opts: PasskeyAuthOptions = {}): Passke
         return json({ ok: false, error: "verify" }, 401);
       }
       await setAal2Cookie(user.id);
-      await emit({ type: "signin_success", userId: user.id });
+      await emit({ type: "signin_success", userId: user.id, method: "passkey" });
       return json({ ok: true });
     },
 
@@ -255,7 +255,7 @@ export function createPasskeyAuthHandlers(opts: PasskeyAuthOptions = {}): Passke
         return json({ ok: false, error: result.reason ?? "invalid_code" }, 401);
       }
       await setAal2Cookie(user.id);
-      await emit({ type: "signin_success", userId: user.id });
+      await emit({ type: "signin_success", userId: user.id, method: "totp" });
       return json({ ok: true });
     },
 

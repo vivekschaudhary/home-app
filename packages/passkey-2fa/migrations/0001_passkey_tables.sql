@@ -38,15 +38,18 @@ create trigger trg_webauthn_credentials_updated_at
 
 alter table webauthn_credentials enable row level security;
 
+-- Read-own only. Credential rows are WRITTEN exclusively by the server via the
+-- service role (which bypasses RLS) after a verified WebAuthn ceremony — there
+-- is intentionally NO user-facing insert/delete policy, so a signed-in user
+-- cannot plant or remove a passkey credential directly through the anon client
+-- (which would skip attestation / the last-factor guard). The drops below also
+-- remove the insert/delete policies from any database created by an earlier
+-- version of this migration.
 drop policy if exists webauthn_credentials_select_own on webauthn_credentials;
 drop policy if exists webauthn_credentials_insert_own on webauthn_credentials;
 drop policy if exists webauthn_credentials_delete_own on webauthn_credentials;
 create policy webauthn_credentials_select_own on webauthn_credentials
   for select using (auth.uid() = user_id);
-create policy webauthn_credentials_insert_own on webauthn_credentials
-  for insert with check (auth.uid() = user_id);
-create policy webauthn_credentials_delete_own on webauthn_credentials
-  for delete using (auth.uid() = user_id);
 
 -- ─── webauthn_challenges: single-use server-issued ceremony nonces ───
 create table if not exists webauthn_challenges (

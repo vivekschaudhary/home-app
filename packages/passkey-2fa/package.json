@@ -1,13 +1,14 @@
 {
   "name": "@vc1023/passkey-2fa",
   "version": "0.3.0",
-  "description": "Drop-in password + passkey (WebAuthn) 2FA for Next.js App Router + Supabase.",
+  "description": "Drop-in password + passkey (WebAuthn) + authenticator (TOTP) 2FA for Next.js App Router + Supabase.",
   "license": "MIT",
   "private": false,
   "publishConfig": {
     "access": "public"
   },
   "type": "module",
+  "sideEffects": false,
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
@@ -44,8 +45,6 @@
     "zod": "^3.23.8"
   },
   "peerDependencies": {
-    "next": ">=15",
-    "react": ">=19",
-    "react-dom": ">=19"
+    "next": ">=15 <16"
   }
 }

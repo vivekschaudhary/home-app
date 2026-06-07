@@ -14,7 +14,9 @@ async function onEvent(e: AuthEvent): Promise<void> {
       await emitAudit(AUDIT_ACTIONS.SIGNIN_FAILURE, null);
       break;
     case "signin_success":
-      await emitAudit(AUDIT_ACTIONS.SIGNIN_SUCCESS, e.userId);
+      // AC9: the audit trail distinguishes the second factor used (passkey vs
+      // authenticator app) via context; the funnel event stays method-agnostic.
+      await emitAudit(AUDIT_ACTIONS.SIGNIN_SUCCESS, e.userId, { method: e.method });
       await emitFunnel(FUNNEL_EVENTS.SIGNIN_SUCCESS, e.userId);
       break;
     case "mfa_enroll_started":

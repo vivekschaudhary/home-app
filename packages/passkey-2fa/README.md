@@ -125,7 +125,7 @@ import {
 
 ## Distributed rate limiting (optional)
 
-The default limiter is in-memory and **per-instance** (fine for one instance; not shared across serverless instances/regions). For multi-instance production, inject a distributed `RateLimiter` — e.g. Upstash Redis:
+The default limiter is in-memory, **per-instance**, and **fixed-window** (fine for one instance; not shared across serverless instances/regions, and allows up to ~2× the limit across a window boundary). For multi-instance production, inject a distributed sliding-window `RateLimiter` — e.g. Upstash Redis:
 
 ```ts
 // app/lib/auth.ts

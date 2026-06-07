@@ -65,7 +65,8 @@ export async function enrollTotp(): Promise<TotpEnrollResult | { error: string }
   }
   const { data, error } = await supabase.auth.mfa.enroll({ factorType: "totp" });
   if (error || !data || data.type !== "totp") {
-    return { error: error?.message ?? "enroll_failed" };
+    // Never surface the raw GoTrue message to the client — keep a stable code.
+    return { error: "server" };
   }
   return {
     factorId: data.id,
