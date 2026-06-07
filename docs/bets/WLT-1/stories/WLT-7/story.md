@@ -56,7 +56,7 @@ A signed-in user can add an **authenticator app** (TOTP) as a backup second fact
 
 ## PRs
 
-_Auto-populated as PRs open._
+- PR #12 — feat(WLT-7): authenticator-app (TOTP) backup factor — in-review (Codex + Security Review pending)
 
 ## Tests
 
