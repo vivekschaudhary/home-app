@@ -109,8 +109,8 @@ Evidence the friction bet is winnable: passkeys deliver ~4x faster logins and 25
 ## Stories
 
 - **WLT-6** — Sign up with passkey MFA + sign in — `shipped` (2026-06-06)
-- **WLT-7** — Authenticator-app (TOTP) backup factor — `ready`
-- WLT-8 _(planned)_ — support-gated recovery (both factors lost)
+- **WLT-7** — Authenticator-app (TOTP) backup factor — `shipped` (2026-06-07; `@vc1023/passkey-2fa@0.3.0`)
+- WLT-8 _(parked)_ — support-gated recovery (both factors lost) — deferred until WLT-7 is in use and backup-adoption is measured
 
 _Decomposed one at a time via `/create-story WLT-1`._
 

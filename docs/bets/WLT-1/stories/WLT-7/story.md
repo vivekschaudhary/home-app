@@ -2,7 +2,7 @@
 id: WLT-7
 bet: WLT-1
 type: story
-status: in-review
+status: shipped
 priority: P1
 created: 2026-06-07
 author: PM
@@ -56,7 +56,7 @@ A signed-in user can add an **authenticator app** (TOTP) as a backup second fact
 
 ## PRs
 
-- PR #12 — feat(WLT-7): authenticator-app (TOTP) backup factor — in-review (Codex + Security Review pending)
+- PR #12 — feat(WLT-7): authenticator-app (TOTP) backup factor — **merged** 2026-06-07; Codex code review + Security review both clean (cross-model); published as `@vc1023/passkey-2fa@0.3.0`
 
 ## Tests
 
@@ -93,4 +93,4 @@ _None._
 
 ---
 
-_Story closed: <pending>, brief link: docs/bets/WLT-1/brief.md_
+_Story closed: 2026-06-07, brief link: docs/bets/WLT-1/brief.md_
