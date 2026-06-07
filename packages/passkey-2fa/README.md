@@ -113,7 +113,36 @@ import {
 // each ceremony returns { ok:true } | { ok:false, reason:"cancelled"|"unsupported"|"error" }
 ```
 
+## Distributed rate limiting (optional)
+
+The default limiter is in-memory and **per-instance** (fine for one instance; not shared across serverless instances/regions). For multi-instance production, inject a distributed `RateLimiter` — e.g. Upstash Redis:
+
+```ts
+// app/lib/auth.ts
+import { Ratelimit } from "@upstash/ratelimit";
+import { Redis } from "@upstash/redis";
+import { createPasskeyAuthHandlers, type RateLimiter } from "@vc1023/passkey-2fa/routes";
+
+const redis = Redis.fromEnv(); // UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN
+const cache = new Map<string, Ratelimit>();
+
+const rateLimit: RateLimiter = async (key, limit, windowMs) => {
+  const id = `${limit}:${windowMs}`;
+  let rl = cache.get(id);
+  if (!rl) {
+    rl = new Ratelimit({ redis, limiter: Ratelimit.slidingWindow(limit, `${windowMs} ms`), prefix: "pk2fa" });
+    cache.set(id, rl);
+  }
+  const r = await rl.limit(key);
+  return { ok: r.success, retryAfterSeconds: Math.max(0, Math.ceil((r.reset - Date.now()) / 1000)) };
+};
+
+export const handlers = createPasskeyAuthHandlers({ rateLimit /*, onEvent */ });
+```
+
+`RateLimiter` is `(key, limit, windowMs) => RateLimitResult | Promise<RateLimitResult>` — the per-endpoint limit/window are passed in, so one implementation serves every route.
+
 ## Notes
 - Route handlers run on `runtime = "nodejs"` (the AAL2 token uses `node:crypto`). The middleware is Edge-safe.
-- Rate limiting is in-memory / per-instance — back it with Upstash/Firewall at scale.
+- The AAL2 session is **bound to the Supabase session id** (fail-closed): a stolen AAL2 cookie can't elevate a different session.
 - Server validation is enforced; you may also `signUpSchema.safeParse()` client-side for instant feedback.

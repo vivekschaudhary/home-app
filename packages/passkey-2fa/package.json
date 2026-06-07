@@ -1,6 +1,6 @@
 {
   "name": "@vc1023/passkey-2fa",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Drop-in password + passkey (WebAuthn) 2FA for Next.js App Router + Supabase.",
   "license": "MIT",
   "private": false,

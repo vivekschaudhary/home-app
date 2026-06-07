@@ -16,7 +16,14 @@ export default [
     // Node CLI scripts (e.g. the package's bin) — give them Node globals.
     files: ["**/bin/**/*.mjs", "**/scripts/**/*.mjs"],
     languageOptions: {
-      globals: { console: "readonly", process: "readonly", Buffer: "readonly" },
+      globals: {
+        console: "readonly",
+        process: "readonly",
+        Buffer: "readonly",
+        URL: "readonly",
+        fetch: "readonly",
+        TextEncoder: "readonly",
+      },
     },
   },
 ];

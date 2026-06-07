@@ -41,10 +41,13 @@ export async function getAal2UserId(): Promise<string | null> {
   const store = await cookies();
   const claims = verifyAal2Token(store.get(AAL2_COOKIE)?.value, mfaSecret());
   if (!claims || claims.sub !== user.id) return null;
-  if (claims.sid) {
-    const sid = await currentSessionId();
-    if (sid && claims.sid !== sid) return null;
-  }
+  // Session binding is REQUIRED (fail-closed): the AAL2 token must carry a `sid`
+  // and it must match the live Supabase session. A stolen AAL2 cookie therefore
+  // can't elevate a different session, and a token minted without a binding is
+  // rejected. Supabase access tokens always carry `session_id`, so this does not
+  // lock out legitimate sessions.
+  const sid = await currentSessionId();
+  if (!claims.sid || !sid || claims.sid !== sid) return null;
   return user.id;
 }
 

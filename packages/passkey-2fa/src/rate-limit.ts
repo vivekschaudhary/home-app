@@ -1,10 +1,24 @@
-// Lightweight in-memory sliding-window rate limiter for the sensitive auth
-// routes.
+// Rate limiting for the sensitive auth routes.
 //
-// SCOPE LIMIT (documented, not hidden): this is PER-INSTANCE. On serverless /
-// Fluid Compute it protects within a warm instance but is NOT distributed across
-// instances/regions. For production at scale, back it with Upstash Redis or a
-// platform firewall (the call sites are the integration points).
+// The limiter is PLUGGABLE: `createPasskeyAuthHandlers` accepts a `rateLimit`
+// (RateLimiter). The default is the in-memory sliding window below — fine for a
+// single instance, but PER-INSTANCE: on serverless / Fluid Compute it protects
+// within a warm instance, NOT across instances/regions. For production at scale,
+// inject a distributed limiter (e.g. Upstash Redis) — see the README. Because
+// RateLimiter may be async, all call sites await it.
+
+export interface RateLimitResult {
+  ok: boolean;
+  retryAfterSeconds: number;
+}
+
+/** A rate limiter. Receives the bucket key + the per-call-site limit/window so a
+ *  single implementation (memory, Redis, …) can serve every endpoint. */
+export type RateLimiter = (
+  key: string,
+  limit: number,
+  windowMs: number,
+) => RateLimitResult | Promise<RateLimitResult>;
 
 interface Bucket {
   count: number;
@@ -13,12 +27,8 @@ interface Bucket {
 
 const buckets = new Map<string, Bucket>();
 
-export interface RateLimitResult {
-  ok: boolean;
-  retryAfterSeconds: number;
-}
-
-export function rateLimit(key: string, limit: number, windowMs: number): RateLimitResult {
+/** Default per-instance in-memory sliding-window limiter. */
+export const inMemoryRateLimit: RateLimiter = (key, limit, windowMs) => {
   const now = Date.now();
   const b = buckets.get(key);
   if (!b || b.resetAt <= now) {
@@ -30,10 +40,11 @@ export function rateLimit(key: string, limit: number, windowMs: number): RateLim
   }
   b.count += 1;
   return { ok: true, retryAfterSeconds: 0 };
-}
+};
 
-/** Best-effort client IP from proxy headers (Vercel sets x-forwarded-for).
- *  Trust only behind a trusted proxy — the header is spoofable otherwise. */
+/** Best-effort client IP from proxy headers. SECURITY: `x-forwarded-for` is only
+ *  trustworthy behind a trusted proxy (e.g. Vercel sets it) — it is client-
+ *  spoofable otherwise, so don't rely on it for anything but coarse throttling. */
 export function clientIp(req: Request): string {
   const xff = req.headers.get("x-forwarded-for");
   return xff?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "unknown";

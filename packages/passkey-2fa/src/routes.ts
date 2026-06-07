@@ -12,7 +12,7 @@ import {
   verifyAuthentication,
   verifyRegistration,
 } from "./webauthn";
-import { clientIp, rateLimit, tooManyRequests } from "./rate-limit";
+import { clientIp, inMemoryRateLimit, tooManyRequests, type RateLimiter } from "./rate-limit";
 import type { OnAuthEvent } from "./events";
 
 export type { AuthEvent, OnAuthEvent } from "./events";
@@ -27,6 +27,10 @@ function json(data: unknown, status = 200): Response {
 export interface PasskeyAuthOptions {
   /** Hook for audit/analytics/funnel. Errors here are swallowed (best-effort). */
   onEvent?: OnAuthEvent;
+  /** Rate limiter for the credential + ceremony routes. Defaults to a
+   *  per-instance in-memory limiter; inject a distributed one (e.g. Upstash
+   *  Redis) for multi-instance production — see the README. */
+  rateLimit?: RateLimiter;
 }
 
 export interface PasskeyAuthHandlers {
@@ -40,6 +44,7 @@ export interface PasskeyAuthHandlers {
 }
 
 export function createPasskeyAuthHandlers(opts: PasskeyAuthOptions = {}): PasskeyAuthHandlers {
+  const limiter: RateLimiter = opts.rateLimit ?? inMemoryRateLimit;
   const emit: OnAuthEvent = async (e) => {
     try {
       await opts.onEvent?.(e);
@@ -50,7 +55,7 @@ export function createPasskeyAuthHandlers(opts: PasskeyAuthOptions = {}): Passke
 
   return {
     async signUp(req) {
-      const limit = rateLimit(`signup:${clientIp(req)}`, 5, 10 * 60 * 1000);
+      const limit = await limiter(`signup:${clientIp(req)}`, 5, 10 * 60 * 1000);
       if (!limit.ok) return tooManyRequests(limit.retryAfterSeconds);
 
       let body: unknown;
@@ -81,7 +86,7 @@ export function createPasskeyAuthHandlers(opts: PasskeyAuthOptions = {}): Passke
     },
 
     async signIn(req) {
-      const limit = rateLimit(`signin:${clientIp(req)}`, 10, 5 * 60 * 1000);
+      const limit = await limiter(`signin:${clientIp(req)}`, 10, 5 * 60 * 1000);
       if (!limit.ok) return tooManyRequests(limit.retryAfterSeconds);
 
       let body: unknown;
@@ -133,7 +138,7 @@ export function createPasskeyAuthHandlers(opts: PasskeyAuthOptions = {}): Passke
     async registerVerify(req) {
       const user = await getSessionUser();
       if (!user) return json({ ok: false, error: "server" }, 401);
-      const limit = rateLimit(`mfa-reg:${user.id}`, 10, 5 * 60 * 1000);
+      const limit = await limiter(`mfa-reg:${user.id}`, 10, 5 * 60 * 1000);
       if (!limit.ok) return tooManyRequests(limit.retryAfterSeconds);
 
       let response: RegistrationResponseJSON;
@@ -160,7 +165,7 @@ export function createPasskeyAuthHandlers(opts: PasskeyAuthOptions = {}): Passke
     async authenticateVerify(req) {
       const user = await getSessionUser();
       if (!user) return json({ ok: false, error: "server" }, 401);
-      const limit = rateLimit(`mfa-auth:${user.id}`, 10, 5 * 60 * 1000);
+      const limit = await limiter(`mfa-auth:${user.id}`, 10, 5 * 60 * 1000);
       if (!limit.ok) return tooManyRequests(limit.retryAfterSeconds);
 
       let response: AuthenticationResponseJSON;
