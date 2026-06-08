@@ -2,7 +2,7 @@
 id: WLT-9
 bet: WLT-2
 type: story
-status: ready
+status: in-review
 priority: P1
 created: 2026-06-08
 author: PM
@@ -71,6 +71,9 @@ _Auto-populated by `/build`._
 - [2026-06-08] [PM] First story = provider OAuth + initial backfill only; CSV import, connection-health, incremental/webhook sync deferred to separate stories — rationale: smallest slice proving real data end-to-end — area: scope — alternatives: include CSV/webhook now (rejected — independent journeys / polling acceptable for first proof) — reversibility: easy
 - [2026-06-08] [PM] Disconnect = soft-delete (`deleted_at`), not hard delete — rationale: audit-trail + reconnect without losing history — area: data — reversibility: medium
 - [2026-06-08] [PM→sync] **Story ID corrected WLT-7 → WLT-9 on sync** — WLT-7 is the shipped TOTP story; WLT-8 is parked (recovery). Co-work numbered sequentially without the repo's story history — area: tooling
+- [2026-06-08] [Engineer] **Vault bridge via `SECURITY DEFINER` `token_vault_*` wrappers** (migration 0003), service-role-only — rationale: PostgREST doesn't expose the `vault` schema to supabase-js, so `createSupabaseVault()` calls thin wrappers; guarded on the vault extension so the CI shim still applies the migration — area: security — reversibility: medium
+- [2026-06-08] [Engineer] **Per-environment Plaid secret** (`PLAID_SANDBOX_SECRET` / `PLAID_PRODUCTION_SECRET` selected by `PLAID_ENV`), not one generic `PLAID_SECRET` — rationale: Plaid issues a separate secret per env; matches how the keys were provisioned — area: config — reversibility: easy
+- [2026-06-08] [Engineer] **Cursor-after-commit, not a literal single DB transaction** for backfill — rationale: supabase-js/PostgREST can't span the ingest + cursor write in one txn; persisting the cursor only after a page's rows land makes a mid-sync failure re-ingest (dedup-safe) rather than drop rows — area: data-integrity — reversibility: medium
 
 ### Risks
 - [2026-06-08] [PM] Plaid coverage gaps (Fidelity, some credit unions) → some users hit an empty Link — likelihood: medium — impact: medium — mitigation: `connection_error` event surfaces it; CSV fallback is the next story — area: technical
