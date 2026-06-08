@@ -1,10 +1,10 @@
 # Project Status
 
-_Last updated: 2026-06-07 — WLT-2 bet architecture proposed (hardened after independent review)_
+_Last updated: 2026-06-08 — WLT-2 bet architecture approved; ready for `/create-story`_
 
 ## In flight
 
-**WLT-2 — Account aggregation + CSV fallback** — brief `approved`; **bet architecture `proposed`** (Plaid via ADR-002; pluggable-by-design), revised after a 2-reviewer independent audit that found 4 BLOCKER + 8 HIGH detail gaps (now closed in-doc) — **awaiting re-approval**, then `/create-story WLT-2`.
+**WLT-2 — Account aggregation + CSV fallback** — brief `approved`; **bet architecture `approved`** (HITL 2026-06-08; Plaid via ADR-002; pluggable-by-design; hardened after a 2-reviewer independent audit + Codex clean). **Next: `/create-story WLT-2`** — first slice: link one Plaid Sandbox institution → backfill → see normalized transactions.
 
 WLT-6 + **WLT-7 — authenticator-app (TOTP) backup factor — `shipped`** (2026-06-07). **WLT-8** (support-gated recovery, both-factors-lost) is **parked** by decision: revisit once WLT-7 is in real use and backup-adoption is measured — not auto-queued.
 
