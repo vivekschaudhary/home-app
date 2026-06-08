@@ -2,7 +2,7 @@
 id: WLT-9
 bet: WLT-2
 type: story
-status: in-review
+status: merged
 priority: P1
 created: 2026-06-08
 author: PM

@@ -1,10 +1,10 @@
 # Project Status
 
-_Last updated: 2026-06-08 — WLT-2 bet architecture approved; ready for `/create-story`_
+_Last updated: 2026-06-08 — WLT-9 merged (first WLT-2 aggregation story); WLT-2 in-build_
 
 ## In flight
 
-**WLT-2 — Account aggregation + CSV fallback** — brief `approved`; **bet architecture `approved`** (HITL 2026-06-08; Plaid via ADR-002; pluggable-by-design; hardened after a 2-reviewer independent audit + Codex clean). **Next: `/create-story WLT-2`** — first slice: link one Plaid Sandbox institution → backfill → see normalized transactions.
+**WLT-2 — Account aggregation + CSV fallback** — brief + architecture `approved`; **building**. **WLT-9 (connect first bank via Plaid OAuth + initial sync) `merged`** (2026-06-08, PR #18) — shipped the `@wealth/aggregation` **pluggable** pipeline (provider-neutral core + Plaid adapter + Supabase Vault token store + Inngest 90-day backfill + owner-SELECT-only RLS + consent/connected-accounts UI); cross-model Codex code + security review both **Approve**. **Next slices:** CSV import · connection-health + webhook/incremental refresh · 2nd provider (KR2).
 
 WLT-6 + **WLT-7 — authenticator-app (TOTP) backup factor — `shipped`** (2026-06-07). **WLT-8** (support-gated recovery, both-factors-lost) is **parked** by decision: revisit once WLT-7 is in real use and backup-adoption is measured — not auto-queued.
 
@@ -22,10 +22,11 @@ MVP-loop forecast ~2026-07-17 (low confidence, stub estimates).
 
 ## Awaiting human approval
 
-**WLT-2 bet architecture** (`docs/bets/WLT-2/architecture.md`) — `proposed`, **awaiting re-approval** after independent-review hardening. The WLT-2 brief is approved. The 3 remaining stubs (`WLT-3..WLT-5`) stay `proposed` by design (`portfolio_stub: true`) — they await promotion via `/create-brief`, not approval.
+_None._ The 3 remaining stubs (`WLT-3..WLT-5`) stay `proposed` by design (`portfolio_stub: true`) — they await promotion via `/create-brief`, not approval.
 
 ## Recently shipped
 
+- **WLT-9 — Connect first bank via Plaid OAuth + initial sync** — `merged` 2026-06-08 (PR #18); the first WLT-2 aggregation story and the moment the loop touches **real money**. Built the `@wealth/aggregation` pluggable pipeline (provider-neutral core → never imports Plaid; isolated Plaid adapter; Supabase Vault token store — 0 tokens in tables; Inngest 90-day backfill, cursor-after-commit; owner-SELECT-only RLS, service-role writes; consent → unwrapped Plaid Link → connected-accounts → disconnect). 40 tests (+ live-PG RLS), cross-model Codex code + security review both **Approve**. Prod deploy in flight; **production Plaid keys pending** (ships dark via `check-env` until set).
 - **WLT-7 — Authenticator-app (TOTP) backup factor** — `shipped` 2026-06-07 (PR #12). Optional TOTP second factor + sign-in fallback; closes the passkey-lockout DRI risk. Codex code + Security review clean (cross-model); 3 review rounds + an independent package audit (fixed credential-table RLS + signing-key hardening). Published as **`@vc1023/passkey-2fa@0.3.0`** (password + passkey + authenticator).
 - **`@vc1023/passkey-2fa` published to npm** — 0.1.1 → 0.2.0 → **0.3.0**; reusable password + passkey + authenticator(TOTP) 2FA for Next.js + Supabase, extracted from WLT-6.
 - **WLT-6 — Sign up with passkey MFA + sign in** — `shipped` 2026-06-06 to production (`home-app.kindtree.us`); PR #2; Codex review + Security review approved; full passkey E2E green.
