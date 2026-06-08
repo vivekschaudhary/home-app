@@ -10,7 +10,7 @@ key_metric:
   name: all-in cost per active user / month (infra + aggregation fees)
   baseline: n/a (pre-launch)
   target: "< $1.50 / MAU (infra-only < $0.40)"
-  source: Vercel + Supabase + Inngest + Plaid (aggregation) billing
+  source: Vercel + Supabase + Inngest + aggregation-provider billing
 measurement_window_months: 24
 check_in_cadence: quarterly
 ---
@@ -46,7 +46,7 @@ The measurable architectural targets this bet must satisfy. ≥1 per Well-Archit
 
 ## Decision
 
-Build a **TypeScript full-stack platform on Vercel**: a single Next.js (App Router) application serving both the intent-first front end (React + Turbopack + Tailwind) and a REST/OpenAPI backend (Route Handlers). The system of record is **Supabase** — Postgres + Storage + **Auth** + Vault — used as one coherent managed-data platform. **Supabase Auth** owns identity, sessions, and the **email+password first factor (AAL1)** on a SOC 2 Type II provider, which lets Postgres **row-level security key natively on `auth.uid()`** for the pooled B2C tenancy model. The **second factor is a passkey (WebAuthn)** enforced by a **thin custom layer** (`@simplewebauthn`) — Supabase's own passkey MFA is experimental and not first-class, so we own the WebAuthn ceremony, store credentials in a `WebAuthnCredential` table, and enforce **AAL2 server-side**; TOTP (Supabase-native) is the recovery/fallback factor. See **ADR-001**. Postgres fits the foundational data model's relational entities, UUID v7 identity, JSONB workflow/block configs, append-only audit, and encryption-at-rest; aggregation OAuth tokens are held in **Supabase Vault** (envelope-encrypted, never plaintext). Long-running and scheduled work (aggregation sync, anomaly scans) runs in **Inngest** durable functions, off the request path. Real financial data is pulled **read-only from Plaid** (US institutions; Accounts / Balance / Transactions — see **ADR-002**), with **CSV import** as the coverage-gap fallback. Observability is **Sentry** (matches the configured connector); CI/CD is **Vercel-native with GitHub Actions** gates. Single deploy target: **web (URL)**.
+Build a **TypeScript full-stack platform on Vercel**: a single Next.js (App Router) application serving both the intent-first front end (React + Turbopack + Tailwind) and a REST/OpenAPI backend (Route Handlers). The system of record is **Supabase** — Postgres + Storage + **Auth** + Vault — used as one coherent managed-data platform. **Supabase Auth** owns identity, sessions, and the **email+password first factor (AAL1)** on a SOC 2 Type II provider, which lets Postgres **row-level security key natively on `auth.uid()`** for the pooled B2C tenancy model. The **second factor is a passkey (WebAuthn)** enforced by a **thin custom layer** (`@simplewebauthn`) — Supabase's own passkey MFA is experimental and not first-class, so we own the WebAuthn ceremony, store credentials in a `WebAuthnCredential` table, and enforce **AAL2 server-side**; TOTP (Supabase-native) is the recovery/fallback factor. See **ADR-001**. Postgres fits the foundational data model's relational entities, UUID v7 identity, JSONB workflow/block configs, append-only audit, and encryption-at-rest; aggregation OAuth tokens are held in **Supabase Vault** (envelope-encrypted, never plaintext). Long-running and scheduled work (aggregation sync, anomaly scans) runs in **Inngest** durable functions, off the request path. Observability is **Sentry** (matches the configured connector); CI/CD is **Vercel-native with GitHub Actions** gates. Single deploy target: **web (URL)**.
 
 ## Foundational Data Model
 
@@ -219,7 +219,6 @@ Captured via the **elicitation-with-options** pattern in `/setup-foundation-arch
 | Database                  | Supabase Postgres (cites Foundational Data Model)                                                                      | hard (low lock-in: standard Postgres) |
 | Cache                     | Upstash Redis                                                                                                          | medium                                |
 | Object storage            | Supabase Storage                                                                                                       | medium                                |
-| Account aggregation       | **Plaid** (read-only OAuth; US institutions; Accounts / Balance / Transactions) — see ADR-002; CSV import for coverage gaps | medium (adapter-isolated)        |
 | Contracts format          | REST + OpenAPI                                                                                                         | medium                                |
 | Auth model                | Supabase Auth (email+password AAL1) + **custom WebAuthn passkey 2FA** (`@simplewebauthn`, AAL2 server-side) + TOTP fallback; RLS via `auth.uid()` — see ADR-001 | hard (GoTrue + owned WebAuthn layer)  |
 | Secrets management        | Supabase Vault (aggregation tokens) + Vercel env vars (app config)                                                     | hard                                  |
@@ -440,21 +439,6 @@ _(Phase B — completed 2026-06-05 after HITL approval.)_
 
 **Cited signal:** Supabase MFA docs (https://supabase.com/docs/guides/auth/auth-mfa — TOTP + Phone only); Supabase MFA features page; Supabase WebAuthn factors (experimental). Verified via WebFetch + WebSearch on 2026-06-05. Foundational fitness functions unchanged (Security FF still "MFA on 100% of accounts").
 
-### ADR-002 — Account-aggregation provider selected: Plaid (2026-06-07)
-
-**Triggered by:** Bet **WLT-2** (`/create-bet-architecture WLT-2`) hit the step-7 deviation gate. The v1 architecture anticipated an aggregation provider throughout (Vault holds its tokens, Inngest runs its sync, the `AccountConnection`/`FinancialAccount`/`Transaction` entities model its data, and the cost FF counts its fees) but **never selected a specific vendor**. The provider the entire product's data flows through is a foundational-scope decision, not a bet-level pick — so the bet architecture halted and routed it here.
-
-**What changed:**
-- **Stack table** gains an **"Account aggregation"** row: **Plaid** (read-only OAuth; US institutions; Accounts / Balance / Transactions APIs), reversibility **medium** (adapter-isolated). The **Decision** paragraph + the `key_metric` cost source now name Plaid.
-- Phase-1 scope locked: **read-only**, **US-only**, **depository + credit** accounts; **CSV import** is the coverage-gap fallback (Plaid excludes Fidelity + some credit unions). PSD2/open-banking stays deferred (R4).
-- No new fitness functions: the cost FF already reads "incl. aggregation," and the reliability FF already caveats "third-party aggregation dependency."
-
-**Why:** Plaid has the **widest US institution coverage** (12k–16k+), the strongest **developer experience + docs**, **OAuth/zero-knowledge** linking (no stored bank credentials — satisfies product L57), and is the **reference aggregator** comparable products build on. Options weighed against the fitness functions: (A) **Plaid — chosen** — best coverage + DX, accepts variable per-connection fees; (B) **MX** — strong enrichment but smaller US coverage + heavier enterprise onboarding; (C) **Teller** — developer-friendly + cheaper but narrower coverage; (D) **Finicity** (Mastercard) — solid but enterprise-sales-oriented, weaker self-serve DX. Decisive FFs: **coverage** (data quality is the comparable-product long pole) + **DX** (solo-team velocity). Cost is a managed margin risk, not a chooser. User direction 2026-06-07.
-
-**Reversibility:** medium — Plaid is wrapped behind an **aggregation adapter** (interface defined in the WLT-2 bet architecture); accounts/transactions persist in our Postgres in a **provider-neutral schema**, so a second provider (KR2) or a replacement is an additive adapter, not a re-platform. The lock-in is the user **re-link** cost on a switch, not the data.
-
-**Cited signal:** Plaid coverage 12k–16k+, excludes Fidelity + some credit unions (research.md §4 / L41); Plaid→JPMorgan paid-access precedent → variable per-user cost (research.md L42; Bloomberg Law 2025); $58M data-practices settlement (research.md L43). WLT-2 brief deferred provider selection to this gate.
-
 ## Check-in log
 
 _Populated automatically by `/measure` cron._
@@ -486,12 +470,6 @@ _Populated automatically by `/measure` cron._
   - **Area:** infrastructure / operations
   - **Alternatives considered:** Datadog+Terraform (rejected — connector drift + cost at low scale); Pulumi IaC (deferred — infra surface too small now).
   - **Reversibility:** medium.
-
-- [2026-06-07] [Enterprise Architect] **Account-aggregation provider = Plaid (ADR-002)** _(fills the always-anticipated aggregation-provider slot; triggered by WLT-2's deviation gate)_
-  - **Rationale:** widest US institution coverage (12k–16k+) + strongest DX/docs + OAuth/zero-knowledge; coverage is decisive since data quality is the comparable-product long pole. Read-only / US-only / depository+credit for Phase 1; CSV import covers Plaid's gaps (Fidelity, some credit unions).
-  - **Area:** data / integrations
-  - **Alternatives considered:** MX (rejected — smaller US coverage, heavier enterprise onboarding); Teller (rejected — narrower coverage despite better price/DX); Finicity (rejected — enterprise-sales-oriented, weak self-serve DX).
-  - **Reversibility:** medium — adapter-isolated behind a provider-neutral transaction schema; 2nd provider (KR2) is additive. Variable per-connection fees (Plaid→JPMorgan) are a tracked margin risk, not a chooser.
 
 - [2026-06-05] [Enterprise Architect] **Confluence/Jira mirroring skipped (step 16)**
   - **Rationale:** `connectors.docs: confluence` is set but no Confluence/Jira MCP is connected on this host (same posture as the product bet's PM DRI). Logged per "no silent skips."
