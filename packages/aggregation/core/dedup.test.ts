@@ -1,0 +1,49 @@
+import { describe, expect, it } from "vitest";
+import { contentHash, dedupKey } from "./dedup";
+import type { NormalizedTransaction } from "./types";
+
+const base: NormalizedTransaction = {
+  providerTransactionId: "txn_1",
+  providerAccountId: "acc_1",
+  amount: "12.34",
+  direction: "debit",
+  currency: "USD",
+  description: "Coffee",
+  merchant: "Cafe",
+  category: "Food",
+  occurredOn: "2026-06-01",
+  pending: false,
+  source: "plaid",
+};
+
+describe("dedupKey", () => {
+  it("is source:account:providerTxnId for provider rows", () => {
+    expect(dedupKey(base)).toBe("plaid:acc_1:txn_1");
+  });
+
+  it("is STABLE across content revisions (same logical txn)", () => {
+    // amount + description changed (a `modified` revision) — identity must hold.
+    expect(dedupKey({ ...base, amount: "99.99", description: "changed" })).toBe(dedupKey(base));
+  });
+
+  it("synthesizes a deterministic content-based key when there is no provider id (CSV)", () => {
+    const csv = { ...base, providerTransactionId: null, source: "csv" };
+    const k = dedupKey(csv);
+    expect(k.startsWith("csv:acc_1:")).toBe(true);
+    expect(dedupKey({ ...csv })).toBe(k); // deterministic
+    expect(dedupKey({ ...csv, amount: "0.01" })).not.toBe(k); // amount is part of identity for CSV
+  });
+});
+
+describe("contentHash", () => {
+  it("is identical for an unchanged replay (⇒ ingest no-op)", () => {
+    expect(contentHash({ ...base })).toBe(contentHash(base));
+  });
+
+  it("changes when any mutable field changes (⇒ a real revision row)", () => {
+    expect(contentHash({ ...base, amount: "99.99" })).not.toBe(contentHash(base));
+    expect(contentHash({ ...base, pending: true })).not.toBe(contentHash(base));
+    expect(contentHash({ ...base, description: "x" })).not.toBe(contentHash(base));
+    expect(contentHash({ ...base, merchant: null })).not.toBe(contentHash(base));
+  });
+});

@@ -68,6 +68,31 @@ if (missing.length) errors.push(`Missing required env: ${missing.join(", ")}`);
   }
 }
 
+// Plaid (account aggregation, WLT-2). Ships dark: if Plaid is unconfigured, the
+// feature is simply inactive — warn, don't block. But a PARTIAL config (e.g.
+// PLAID_ENV=production with only the sandbox secret) silently breaks linking, so
+// once any Plaid var is set, validate the whole group strictly.
+{
+  const plaidEnv = process.env.PLAID_ENV || "";
+  const anyPlaid =
+    isSet("PLAID_CLIENT_ID") ||
+    isSet("PLAID_SANDBOX_SECRET") ||
+    isSet("PLAID_PRODUCTION_SECRET") ||
+    plaidEnv.length > 0;
+  if (!anyPlaid) {
+    console.warn(
+      "⚠ Env preflight: Plaid not configured — account aggregation (WLT-2) will be inactive in production.",
+    );
+  } else {
+    if (!isSet("PLAID_CLIENT_ID")) errors.push("Missing PLAID_CLIENT_ID (Plaid partially configured)");
+    if (!["sandbox", "production"].includes(plaidEnv)) {
+      errors.push(`PLAID_ENV must be "sandbox" or "production" (got "${plaidEnv}")`);
+    }
+    const secretKey = plaidEnv === "production" ? "PLAID_PRODUCTION_SECRET" : "PLAID_SANDBOX_SECRET";
+    if (!isSet(secretKey)) errors.push(`Missing ${secretKey} (required for PLAID_ENV=${plaidEnv})`);
+  }
+}
+
 if (errors.length) {
   console.error(`\n✗ Env preflight FAILED for VERCEL_ENV=${target}:`);
   for (const e of errors) console.error(`  - ${e}`);

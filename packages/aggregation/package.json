@@ -2,6 +2,16 @@
   "name": "@wealth/aggregation",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "main": "./index.ts",
-  "types": "./index.ts"
+  "types": "./index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./plaid": "./plaid/index.ts",
+    "./vault": "./vault/supabase-vault.ts"
+  },
+  "dependencies": {
+    "@vc1023/passkey-2fa": "workspace:*",
+    "plaid": "^36.0.0"
+  }
 }

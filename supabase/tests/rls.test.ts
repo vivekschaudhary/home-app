@@ -61,3 +61,82 @@ suite("RLS default-deny cross-tenant", () => {
     }
   });
 });
+
+// Financial-table posture (WLT-2 + the passkey audit): owner-SELECT only; ALL
+// writes via the service role. An authenticated user must NEVER write a financial
+// row directly — RLS denies the insert before any FK/constraint check.
+suite("financial-table RLS (WLT-2): service-role writes only", () => {
+  let client: Client;
+
+  beforeAll(async () => {
+    client = new Client({ connectionString: DB_URL });
+    await client.connect();
+  });
+  afterAll(async () => {
+    await client?.end();
+  });
+
+  async function asUser(uid: string, sql: string, params: unknown[] = []) {
+    await client.query("select set_config('request.jwt.claims', $1, true)", [
+      JSON.stringify({ sub: uid, role: "authenticated" }),
+    ]);
+    await client.query("set local role authenticated");
+    const res = await client.query(sql, params);
+    await client.query("reset role"); // skipped on throw — the outer rollback resets
+    return res;
+  }
+
+  const writes: Array<{ table: string; sql: string }> = [
+    {
+      table: "account_connections",
+      sql: "insert into account_connections (user_id, provider, provider_connection_id, vault_token_ref) values ($1,'plaid','item_x',gen_random_uuid())",
+    },
+    {
+      table: "financial_accounts",
+      sql: "insert into financial_accounts (user_id, name, kind) values ($1,'Checking','depository')",
+    },
+    {
+      table: "transactions",
+      sql: "insert into transactions (user_id, account_id, source, dedup_key, content_hash, amount, direction, description, occurred_on) values ($1, gen_random_uuid(), 'plaid','dk','ch','1.00','debit','x','2026-06-01')",
+    },
+  ];
+
+  for (const { table, sql } of writes) {
+    it(`an authenticated user cannot INSERT into ${table} (RLS denies)`, async () => {
+      await client.query("begin");
+      try {
+        await expect(asUser(USER_A, sql, [USER_A])).rejects.toThrow(/row-level security/i);
+      } finally {
+        await client.query("rollback");
+      }
+    });
+  }
+
+  it("owner SELECTs its rows; another tenant sees none; soft-deleted rows are hidden", async () => {
+    await client.query("begin");
+    try {
+      // Seed as the table owner (service role). auth.users needs only `id`.
+      await client.query("insert into auth.users (id) values ($1),($2) on conflict do nothing", [
+        USER_A,
+        USER_B,
+      ]);
+      const ins = await client.query(
+        "insert into account_connections (user_id, provider, provider_connection_id, vault_token_ref) values ($1,'plaid','item_owner',gen_random_uuid()) returning id",
+        [USER_A],
+      );
+      const id = ins.rows[0].id;
+
+      const owner = await asUser(USER_A, "select count(*)::int as n from account_connections where id=$1", [id]);
+      expect(owner.rows[0].n).toBe(1); // owner reads its own row
+
+      const other = await asUser(USER_B, "select count(*)::int as n from account_connections where id=$1", [id]);
+      expect(other.rows[0].n).toBe(0); // cross-tenant denied
+
+      await client.query("update account_connections set deleted_at = now() where id=$1", [id]);
+      const afterDelete = await asUser(USER_A, "select count(*)::int as n from account_connections where id=$1", [id]);
+      expect(afterDelete.rows[0].n).toBe(0); // soft-deleted rows filtered by the policy
+    } finally {
+      await client.query("rollback");
+    }
+  });
+});

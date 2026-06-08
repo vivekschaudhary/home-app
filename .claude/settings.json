@@ -1,0 +1,22 @@
+{
+  "permissions": {
+     "defaultMode": "plan",
+    "allow": [
+      "Bash(pnpm build *)",
+      "Bash(python3 -c ' *)",
+      "Bash(gh pr create --base main --head feat/WLT-6-passkey-mfa --title 'feat\\(WLT-6\\): Sign up with passkey MFA + sign in' --body ' *)",
+      "Bash(gh pr *)",
+      "Bash(git add *)",
+      "Bash(git commit -q -m ' *)",
+      "Bash(git push *)",
+      "Bash(pnpm e2e *)",
+      "Bash(gh run *)",
+      "Bash(E2E_PASSKEY=1 pnpm e2e)",
+      "Bash(cd \"/Volumes/Vivek mac/apps/home-app\" *)",
+      "Read(//private/tmp/**)"
+    ],
+    "additionalDirectories": [
+      "/Users/vivekchaudhary/apps/home-app/packages/ui"
+    ]
+  }
+}

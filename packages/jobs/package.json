@@ -5,6 +5,10 @@
   "main": "./index.ts",
   "types": "./index.ts",
   "dependencies": {
+    "@vc1023/passkey-2fa": "workspace:*",
+    "@wealth/aggregation": "workspace:*",
+    "@wealth/core": "workspace:*",
+    "@wealth/db": "workspace:*",
     "inngest": "^3.22.12"
   }
 }

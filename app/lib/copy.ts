@@ -1,6 +1,7 @@
-// Verbatim UI copy from docs/bets/WLT-1/stories/WLT-6/copy.md.
-// PM refusal rule: UX Writer copy is used verbatim, never paraphrased (AC6).
-// If a string changes, change it in copy.md first, then mirror here.
+// Verbatim UI copy. PM refusal rule: UX Writer copy is used verbatim, never
+// paraphrased — change it in copy.md first, then mirror here. Sources:
+//   - auth (signup/mfa/totp/errors/a11y): docs/bets/WLT-1/stories/WLT-6 + WLT-7
+//   - accounts/consent/connect/disconnect: docs/bets/WLT-2/stories/WLT-9/copy.md
 
 export const COPY = {
   signup: {
@@ -104,6 +105,50 @@ export const COPY = {
     totpInvalidCode: "That code isn't right. Check your authenticator app and try again.",
     totpExpiredCode: "That code expired. Enter the current one from your app.",
     totpAlreadyEnrolled: "You already have an authenticator app set up.",
+  },
+  // Verbatim from docs/bets/WLT-2/stories/WLT-9/copy.md (account aggregation).
+  accounts: {
+    title: "Accounts",
+    emptyTitle: "No accounts connected yet",
+    emptyBody: "Connect a bank to see your real transactions and let the platform work for you.",
+    emptyCta: "Connect your first account",
+    addAnother: "Add another account",
+    syncing: "Syncing your transactions…",
+    connectedStatus: "Connected",
+    syncingStatus: "Syncing",
+    needsReauthStatus: "Needs sign-in", // connection-health states surface fully in a later story
+    errorStatus: "Error",
+    rowLastSynced: "Updated {time}", // {time} = relative time (e.g. "just now", "2m ago")
+    disconnect: "Disconnect",
+  },
+  consent: {
+    title: "Connect your bank",
+    body: "We use Plaid to securely connect your bank — we never see or store your bank login.",
+    accessHeading: "What we'll access",
+    accessItem1: "Your account names and balances",
+    accessItem2: "Your transactions from the last 90 days",
+    whyHeading: "Why",
+    whyBody: "To show your real money picture and power your workflows and insights.",
+    retentionHeading: "How long",
+    retentionBody: "Until you disconnect. You can remove an account anytime, and we'll stop updating it.",
+    cta: "Connect account",
+    notNow: "Not now",
+  },
+  connect: {
+    preparing: "Opening your bank…",
+    success: "Account connected — importing your last 90 days of transactions.",
+  },
+  disconnectConfirm: {
+    title: "Disconnect this account?",
+    body: "We'll stop updating it and keep your existing history. You can reconnect anytime.",
+    cta: "Disconnect",
+    cancel: "Cancel",
+  },
+  aggregationErrors: {
+    cancelled: "No account connected — try again when you're ready.",
+    institutionUnavailable: "Your bank is temporarily unavailable — try again in a few minutes.",
+    network: "Connection lost — check your internet and try again.",
+    server: "Something went wrong on our side — your information is safe. Try again in a minute.",
   },
   a11y: {
     passwordShow: "Show password",

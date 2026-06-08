@@ -21,3 +21,9 @@ $$;
 
 grant usage on schema auth to authenticated;
 grant execute on function auth.uid() to authenticated;
+
+-- Minimal `auth.users` so migrations that FK to it (0002 webauthn, 0003
+-- aggregation) can apply against the shim. Real Supabase has the full table;
+-- the RLS tests only need the FK target to exist (RLS denies a forbidden write
+-- before the FK is ever checked, so no rows are required here).
+create table if not exists auth.users (id uuid primary key);

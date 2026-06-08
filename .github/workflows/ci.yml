@@ -56,10 +56,12 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Provision RLS test DB (Supabase auth shim + migration 0001)
+      - name: Provision RLS test DB (Supabase auth shim + migrations)
         run: |
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/ci-bootstrap.sql
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/0001_init.sql
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/0002_auth_webauthn.sql
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/0003_aggregation.sql
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
             -c "grant select, insert, update, delete on all tables in schema public to authenticated;"
 
@@ -86,6 +88,11 @@ jobs:
             "/sign-in/page",
             "/sign-up/page",
             "/unsupported/page",
+            "/api/aggregation/link/start/route",
+            "/api/aggregation/link/complete/route",
+            "/api/aggregation/connections/route",
+            "/api/aggregation/connections/[id]/disconnect/route",
+            "/settings/accounts/page",
           ]
           missing = [k for k in need if k not in m]
           if missing:
