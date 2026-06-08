@@ -1,4 +1,5 @@
-// @wealth/aggregation — provider adapters (Plaid etc.) + Vault token access.
-// OAuth tokens are read/written via Supabase Vault, never stored in plaintext.
-// Multi-provider + CSV fallback per the product bet. See architecture.md → R2.
-export {};
+// @wealth/aggregation — provider-neutral account aggregation (WLT-2).
+// Pluggable seams: AggregationProvider (Plaid adapter at ./plaid), TokenVault
+// (Supabase Vault default at ./vault), ProviderRegistry, ingestTransactions.
+// CSV/email import + a 2nd provider plug into the same seams — additive, no rewrite.
+export * from "./core";
