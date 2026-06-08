@@ -61,3 +61,54 @@ suite("RLS default-deny cross-tenant", () => {
     }
   });
 });
+
+// Financial-table posture (WLT-2 + the passkey audit): owner-SELECT only; ALL
+// writes via the service role. An authenticated user must NEVER write a financial
+// row directly — RLS denies the insert before any FK/constraint check.
+suite("financial-table RLS (WLT-2): service-role writes only", () => {
+  let client: Client;
+
+  beforeAll(async () => {
+    client = new Client({ connectionString: DB_URL });
+    await client.connect();
+  });
+  afterAll(async () => {
+    await client?.end();
+  });
+
+  async function asUser(uid: string, sql: string, params: unknown[] = []) {
+    await client.query("select set_config('request.jwt.claims', $1, true)", [
+      JSON.stringify({ sub: uid, role: "authenticated" }),
+    ]);
+    await client.query("set local role authenticated");
+    const res = await client.query(sql, params);
+    await client.query("reset role"); // skipped on throw — the outer rollback resets
+    return res;
+  }
+
+  const writes: Array<{ table: string; sql: string }> = [
+    {
+      table: "account_connections",
+      sql: "insert into account_connections (user_id, provider, provider_connection_id, vault_token_ref) values ($1,'plaid','item_x',gen_random_uuid())",
+    },
+    {
+      table: "financial_accounts",
+      sql: "insert into financial_accounts (user_id, name, kind) values ($1,'Checking','depository')",
+    },
+    {
+      table: "transactions",
+      sql: "insert into transactions (user_id, account_id, source, dedup_key, content_hash, amount, direction, description, occurred_on) values ($1, gen_random_uuid(), 'plaid','dk','ch','1.00','debit','x','2026-06-01')",
+    },
+  ];
+
+  for (const { table, sql } of writes) {
+    it(`an authenticated user cannot INSERT into ${table} (RLS denies)`, async () => {
+      await client.query("begin");
+      try {
+        await expect(asUser(USER_A, sql, [USER_A])).rejects.toThrow(/row-level security/i);
+      } finally {
+        await client.query("rollback");
+      }
+    });
+  }
+});
