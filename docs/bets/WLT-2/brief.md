@@ -109,7 +109,7 @@ _Decomposed one at a time via `/create-story WLT-2` after this brief + the bet a
 ### Decisions
 - [2026-06-07] [PM] **MVP = 1 provider + CSV, not 2** — rationale: the loop needs exactly one real connection + CSV; KR2's "2 providers" is an end-of-Q2 target, not an MVP gate; proving one provider + the ingest/Vault/sync pipeline de-risks the 2nd (an additive adapter) — area: scope — alternatives: 2 providers now (rejected — doubles integration + cost surface before the pipeline is proven) — reversibility: easy
 - [2026-06-07] [PM] **Read-only, US-only, depository+credit only for MVP** — rationale: the in-scope workflows are cash-flow; investments / payment-initiation / UK add surface + regulatory load without serving the first loop — area: scope — alternatives: include investments/UK now (rejected) — reversibility: medium
-- [2026-06-07] [PM] **architecture_required: true** — provider selection (ADR), token-vault design, ingest schema (append/CDC + dedup), and connection-health are load-bearing → `/create-bet-architecture WLT-2` next — area: architecture — reversibility: medium
+- [2026-06-07] [PM] **architecture_required: true** — provider selection (ADR), token-vault design, ingest schema (append/CDC + dedup), and connection-health are load-bearing → `/create-bet-architecture WLT-2` **ran 2026-06-07 (see `architecture.md`, `architecture_status: proposed` — awaiting re-approval after independent-review hardening)** — area: architecture — reversibility: medium
 - [2026-06-07] [PM] Jira mirror **skipped** — no Jira MCP on host (consistent with WLT-1) — area: tooling — reversibility: easy
 
 ### Risks
