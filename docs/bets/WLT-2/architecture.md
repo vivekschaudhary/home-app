@@ -1,8 +1,9 @@
 ---
 id: WLT-2-ARCH
 bet: WLT-2
-status: approved
+status: proposed
 created: 2026-06-07
+revised: 2026-06-07  # hardened after independent review (see "Hardening from independent review")
 authors: [Architect, Enterprise/Solution Architect]
 area_tags: [backend, payments, data, security]
 ---
@@ -35,18 +36,18 @@ Implement account aggregation as a **provider-neutral ingest pipeline behind thr
 - `scripts/check-env.mjs` + `.env.example` — Plaid env group.
 
 **The pluggable seams (provider-neutral interfaces; money is decimal-as-string → `numeric`, never float):**
-- `AggregationProvider`: `id` · `createLinkSession({userId,redirectUri})` · `completeLink({publicToken,userId})`→`{providerConnectionId, accessSecret, institution}` · `fetchAccounts({accessSecret})` · `fetchTransactions({accessSecret,cursor})`→`{transactions, nextCursor, hasMore}` · `getConnectionStatus` · `removeConnection`. **The provider never touches the vault or DB** — the caller reads the secret from `TokenVault` and passes it in (pure protocol translator; trivial to fake).
+- `AggregationProvider`: `id` · `createLinkSession({userId,redirectUri})` · `completeLink({publicToken,userId})`→`{providerConnectionId, accessSecret, institution}` · `fetchAccounts({accessSecret})` · `fetchTransactions({accessSecret,cursor})`→`{added, modified, removed, nextCursor, hasMore}` (delta-sync shape — added/modified/removed channels for correct CDC) · `getConnectionStatus` · `removeConnection`. *(Interface note: this is a delta-sync abstraction; a non-delta provider's adapter synthesizes the diff internally — see the pluggability caveat in Consequences.)* **The provider never touches the vault or DB** — the caller reads the secret from `TokenVault` and passes it in (pure protocol translator; trivial to fake).
 - `TokenVault`: `put({userId,connectionId,secret})`→`{ref}` · `get({ref})` · `delete({ref})`. Default uses Supabase Vault RPCs under the service role.
 - `ImportSource`: `parse({userId,financialAccountId,raw,mapping})`→`NormalizedTransaction[]`. `CsvImportSource` is a pure parser (synthesizes a stable id from a content hash). Email-import later = one new source file.
 - `ProviderRegistry`: `get(id)/register/ids`. App wires `createProviderRegistry([createPlaidProvider()])`; the persisted `account_connections.provider` routes existing connections. **2nd provider = an additive registration.**
 - `createAggregationHandlers({ registry, defaultProviderId, vault, sources, onEvent?, rateLimit? })` → `{ linkStart, linkComplete, csvImport, connectionsList, connectionHealth, disconnect, plaidWebhook }`. Handlers do request-tier work only (validate, vault put/get, `inngest.send`); the heavy fetch/ingest runs in Inngest. `onEvent`/`rateLimit` injected with defaults + a best-effort emit wrapper — **identical shape to the passkey factory**.
 
 ### Data model changes
-New migration `supabase/migrations/0003_aggregation.sql` (expand-only; no alters to 0001/0002). Conventions inherited: UUID PK, `timestamptz` + `set_updated_at()` trigger, soft-delete on user entities, **append/CDC** for transactions. **RLS = owner-SELECT only; ALL writes service-role** (financial-table posture). `0003` also performs one housekeeping rename — **`auth_funnel_events` → `funnel_events`** (`alter table … rename to`, carries existing rows) — promoting it to the project-wide funnel store; `@wealth/db/emit` is updated to match.
+New migration `supabase/migrations/0003_aggregation.sql` (expand-only; no alters to 0001/0002). Conventions inherited: UUID PK, `timestamptz` + `set_updated_at()` trigger, soft-delete on user entities, **append/CDC** for transactions. **RLS = owner-SELECT only; ALL writes service-role** (financial-table posture). **Funnel-table rename (`auth_funnel_events` → `funnel_events`)** is a **standalone migration, NOT bundled into the financial `0003`** (it's orthogonal + cross-bet). It must rename the table **and its index + RLS policy** (a Postgres table rename leaves those untouched) **and** update the hardcoded literal in `packages/db/emit.ts` (`.from("auth_funnel_events")`) in the same deploy — otherwise the best-effort `emitFunnel` swallows the error and auth-funnel writes silently vanish. Pre-launch with negligible data, so a same-deploy atomic rename is acceptable; a test asserts writes land post-rename.
 
 - **`account_connections`** — `user_id`, `provider`, opaque `provider_connection_id`, **`vault_token_ref`** (opaque handle; never the token), `institution_{id,name}`, `health_status` (active|needs_reauth|error), `sync_cursor`, `last_synced_at`, soft-delete. `unique(provider, provider_connection_id)`.
-- **`financial_accounts`** — `connection_id` (nullable → manual/CSV), opaque `provider_account_id`, `name`, `kind` (depository|credit), `currency`, `balance_current/available numeric(20,4)`, `mask`. `unique(connection_id, provider_account_id)`.
-- **`transactions`** — `account_id`, `source` (plaid|csv|email), opaque `provider_transaction_id`, **`dedup_key` with `unique(user_id, dedup_key)`** (idempotency), `amount numeric(20,4)` + `direction`, `description/merchant/category`, `occurred_at`, `pending`, append/CDC via `superseded_by`. Dedup: provider rows `source:account:providerTxnId`; CSV `csv:accountId:sha256(date|amount|desc)`.
+- **`financial_accounts`** — **`user_id not null`** (denormalized for direct RLS — never a nullable-FK hop), `connection_id` (nullable → manual/CSV), opaque `provider_account_id`, `name`, `kind` (depository|credit), `currency`, `balance_current/available numeric(20,4)`, **`balance_updated_at`** (balance is an independent point-in-time snapshot, not derived from transactions), `mask`. `unique(connection_id, provider_account_id)`. FK to `auth.users` is **`on delete restrict`/`set null` + anonymize** (NOT cascade — 7-year financial retention).
+- **`transactions`** — `user_id`, `account_id`, `source` (plaid|csv|email), opaque `provider_transaction_id`, `pending_transaction_id` (reconcile pending→posted), `amount numeric(20,4)` + `direction`, `currency` (per-txn), `description/merchant/category`, **`occurred_on date`** (Plaid posted date, stored as `date` to avoid TZ day-shift) + optional `occurred_at timestamptz`, `pending`, `removed_at` (tombstone for Plaid `removed`), append/CDC via `superseded_by`. **Idempotency + CDC reconciled:** dedup `(user_id, dedup_key, content_hash)` unique — `dedup_key` = the logical txn (`source:account:providerTxnId`; CSV `csv:accountId:sha256(date|amount|desc)`), `content_hash` = a hash of the mutable fields. Same content re-emitted ⇒ no-op (idempotent); a `modified` event ⇒ new revision row + prior row's `superseded_by` set; `removed` ⇒ `removed_at` tombstone. The active-read view filters `superseded_by is null and removed_at is null`.
 
 ### API / contract changes (all additive)
 Thin routes under `app/api/aggregation/**` → factory handlers: `link/start`, `link/complete`, `import/csv`, `connections` (GET), `connections/health` (GET), `connections/disconnect`, `webhooks/plaid` (verifies the Plaid signature; no user session). `onEvent`→`emitAudit`/`emitFunnel` via new `@wealth/core` constants — `AGGREGATION_FUNNEL.{account_linked, first_transactions_visible}` lights up the bet's `key_metric`. **The funnel table is renamed `auth_funnel_events` → `funnel_events` in `0003`** — it is the project-wide funnel store now, not auth-specific; the rename carries existing rows, and `@wealth/db/emit` (`emitFunnel`) + the future WLT-5 reader point at the new name. (Decided 2026-06-07.)
@@ -92,10 +93,34 @@ Thin routes under `app/api/aggregation/**` → factory handlers: `link/start`, `
 
 **Reversibility:** medium — provider, vault, and source are all swap-points; the retained lock-in is the user re-link cost, not the data.
 
+## Hardening from independent review (2026-06-07)
+
+Two independent reviews (architecture-soundness + security/data) surfaced these — **all are build-gating** and must be implemented + verified before the first aggregation story merges. They do not change the design's shape (the seams + RLS posture + Inngest model were validated); they close correctness/security details the sketch omitted.
+
+**Correctness (sync + ingest):**
+- **Cursor + ingest are ONE transaction.** Persist `account_connections.sync_cursor` in the **same DB transaction** as the ingested rows (both service-role Postgres writes). Advancing the cursor before a durable ingest commit silently drops transactions (invisible financial data loss). If Inngest step boundaries split them, advance the cursor only after a verified read-back.
+- **Plaid `removed` + pending→posted** are handled per the data model (`removed_at` tombstone; `pending_transaction_id` reconciliation) — exercised by a **second sync** in the E2E, not just the first backfill.
+- **Multi-account-per-item:** cursor is per-item; transactions map to `financial_accounts` via `provider_account_id`; partial account failure doesn't stall the item; vanished accounts soft-delete.
+- **Re-auth (update-mode):** `createLinkSession` accepts an existing `connectionId` → Plaid update-mode link token; `completeLink` **reattaches** to the existing connection (no duplicate connection/accounts) on `ITEM_LOGIN_REQUIRED`.
+
+**Security (all BLOCKER/HIGH from the security review):**
+- **Ownership re-derivation on every service-role write.** RLS is bypassed on writes, so each handler (csvImport, disconnect, connectionHealth, …) MUST re-derive `auth.uid()` (via `createServerSupabase`) and assert the client-supplied `financialAccountId`/`connectionId` belongs to the caller **before** enqueuing. Prevents cross-tenant CSV import + disconnect.
+- **Webhook trust boundary:** verify the Plaid `Plaid-Verification` JWT against Plaid's JWKs (`/webhook_verification_key/get`, cached + rotated), assert the body SHA-256 matches, enforce a short replay window, then resolve the connection by `item_id` and act only on the owning connection. Idempotent on redelivery. Reject (not 500) on any failure. Read the raw body before JSON parsing.
+- **Token never leaks:** `vault.get` runs **inside** the provider-call Inngest step (never its own memoized step, never returned from a step, never in event data/logs). Sanitize Plaid SDK errors before throw; add a token-shaped-value redaction filter on Sentry + logs. Audit-log every `vault.{get,put,delete}` to `audit_events` (who/ref/when). Disconnect ordering: **revoke at Plaid → `vault.delete` → soft-delete connection**, idempotent with partial-failure reconciliation.
+- **GDPR erasure (foundation-mandated):** transaction PII (`description`, `merchant`, `institution_name`, `mask`) is encrypted with a **per-user data key held in Vault**; erasure = revoke Plaid item + destroy the user's key (**crypto-shred**) + anonymize, while **retaining** numeric `amount`/`occurred_on`/audit history (7-year retention). Add an erasure handler + a consent-record audit event at link-complete (scope + `link_session_id`).
+
+**Cost / abuse:**
+- **`rateLimit` is non-optional** with concrete per-user ceilings (links/hr, refreshes/hr, CSV size + count/day) on Upstash; **debounce/coalesce** webhook- and cron-triggered Plaid syncs per connection; a per-connection daily call ceiling. The cost model names actual call counts per sync.
+- **CSV hardening:** max upload size + row cap, stream-parse, MIME check, **formula-injection** escaping on leading `= + - @`, per-row error report (quarantine bad rows, don't partial-fail).
+
+**Observability:** sync failures are first-class — Sentry capture on exhausted Inngest retries + webhook-verify failures; alert on `health_status='error'` rate. Don't route failure signal solely through the swallowed best-effort `onEvent`.
+
+**Indexes:** `transactions(account_id, occurred_on desc)` + partial index on active rows (`where superseded_by is null and removed_at is null`) for the p95<200ms cash-flow read.
+
 ## Test strategy
 
 - **Unit:** CSV parser (mapping, date/amount/sign, malformed rows, id stability); dedup-key determinism; Plaid→Normalized mapping (fixtures, no network); `ingestTransactions` idempotency (fake `ServiceWriter`); **adapter-contract via a `FakeProvider`** (drives the factory + backfill, proves the seam without Plaid).
-- **Integration / API:** financial-table RLS (extend `supabase/tests/rls.test.ts`) — owner reads own, cross-tenant denied, **user cannot insert/update/delete** (asserts no write policy exists); ingest idempotency against the real `unique(user_id, dedup_key)`.
+- **Integration / API:** financial-table RLS (extend `supabase/tests/rls.test.ts`) — owner reads own, cross-tenant denied, **user cannot insert/update/delete** (asserts no write policy exists), **incl. CSV null-connection `financial_accounts`** (the no-`user_id` BLOCKER); ingest idempotency + **a second sync exercising `modified`/`removed`/pending→posted** (the CDC path); cross-tenant CSV-import + disconnect denial (ownership re-derivation).
 - **Component (frontend):** the link entry + CSV upload/mapping + connection-health states (story-level).
 - **E2E** (written by Codex): Plaid **Sandbox** link (`ins_109508`) → backfill → normalized transactions visible under the user's session; CSV import + re-import (no duplicates).
 - **Other:** **mandatory Security Review** at build (token handling, RLS, webhook signature verification, consent/revocation/deletion — $58M-precedent risk).
@@ -126,8 +151,8 @@ Thin routes under `app/api/aggregation/**` → factory handlers: `link/start`, `
 - [2026-06-07] [PM] **Variable Plaid per-connection cost** — likelihood: med-high — impact: high — mitigation: model fees first-order; prune dead links via health; revisit at scale — area: financial.
 
 ### Issues
-- _none_
+- [2026-06-07] [Architect] **Independent review (2 reviewers) found 4 BLOCKER + 8 HIGH gaps** in the data-model/sync/security details (financial_accounts `user_id`/RLS, dedup-vs-CDC contradiction, cursor/ingest atomicity, GDPR erasure, Plaid removed/pending, webhook trust boundary, CSV ownership, outbound rate-limiting, token-leak surfaces, funnel-rename safety). Design shape validated; details closed in the data model + "Hardening from independent review" section. — severity: high — owner: Architect — status: resolved-in-doc (build must implement + the Security Review must verify) — area: architecture/security
 
 ---
 
-_Approved by: Vivek on 2026-06-07_
+_Approved by: <pending re-approval after independent-review hardening, 2026-06-07>_
