@@ -16,7 +16,7 @@ create table if not exists account_connections (
   institution_id          text,
   institution_name        text,
   health_status           text        not null default 'active'
-                            check (health_status in ('active','needs_reauth','error')),
+                            check (health_status in ('active','needs_reauth','error','disconnected')),
   sync_cursor             text,                                       -- provider tx cursor (Plaid /sync)
   last_synced_at          timestamptz,
   created_at              timestamptz not null default now(),

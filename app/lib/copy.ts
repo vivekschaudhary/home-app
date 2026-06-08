@@ -1,6 +1,7 @@
-// Verbatim UI copy from docs/bets/WLT-1/stories/WLT-6/copy.md.
-// PM refusal rule: UX Writer copy is used verbatim, never paraphrased (AC6).
-// If a string changes, change it in copy.md first, then mirror here.
+// Verbatim UI copy. PM refusal rule: UX Writer copy is used verbatim, never
+// paraphrased — change it in copy.md first, then mirror here. Sources:
+//   - auth (signup/mfa/totp/errors/a11y): docs/bets/WLT-1/stories/WLT-6 + WLT-7
+//   - accounts/consent/connect/disconnect: docs/bets/WLT-2/stories/WLT-9/copy.md
 
 export const COPY = {
   signup: {
@@ -115,6 +116,7 @@ export const COPY = {
     syncing: "Syncing your transactions…",
     connectedStatus: "Connected",
     syncingStatus: "Syncing",
+    rowLastSynced: "Updated {time}", // {time} = relative time (e.g. "just now", "2m ago")
     disconnect: "Disconnect",
   },
   consent: {

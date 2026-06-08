@@ -156,7 +156,7 @@ export function createAggregationHandlers(opts: AggregationHandlerOptions): Aggr
       await vault.delete({ ref: c.vault_token_ref }).catch(() => {});
 
       const now = new Date().toISOString();
-      await svc.from("account_connections").update({ deleted_at: now, health_status: "error" }).eq("id", connectionId).eq("user_id", userId);
+      await svc.from("account_connections").update({ deleted_at: now, health_status: "disconnected" }).eq("id", connectionId).eq("user_id", userId);
       await svc.from("financial_accounts").update({ deleted_at: now }).eq("connection_id", connectionId).eq("user_id", userId);
       // Soft-delete this connection's transactions (audit trail preserved).
       const { data: accts } = await svc.from("financial_accounts").select("id").eq("connection_id", connectionId).eq("user_id", userId);

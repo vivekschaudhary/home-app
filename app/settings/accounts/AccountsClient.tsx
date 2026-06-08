@@ -27,6 +27,16 @@ function errorCopy(e: AggError): string {
   }
 }
 
+function relativeTime(iso: string): string {
+  const seconds = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (seconds < 60) return "just now";
+  const m = Math.floor(seconds / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
 type DisplayStatus = "connected" | "syncing" | "needs_reauth" | "error";
 
 function statusFor(conn: ConnectionView): { status: DisplayStatus; label: string } {
@@ -158,6 +168,11 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
                     balance={a.balanceCurrent}
                     status={status}
                     statusLabel={label}
+                    lastSyncedLabel={
+                      conn.lastSyncedAt
+                        ? COPY.accounts.rowLastSynced.replace("{time}", relativeTime(conn.lastSyncedAt))
+                        : null
+                    }
                     ariaLabel={`${conn.institutionName ?? a.name} ${a.kind}${a.mask ? ` ending in ${a.mask}` : ""} — ${label}${a.balanceCurrent ? `, balance ${a.balanceCurrent}` : ""}`}
                     action={
                       <button

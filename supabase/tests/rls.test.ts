@@ -111,4 +111,32 @@ suite("financial-table RLS (WLT-2): service-role writes only", () => {
       }
     });
   }
+
+  it("owner SELECTs its rows; another tenant sees none; soft-deleted rows are hidden", async () => {
+    await client.query("begin");
+    try {
+      // Seed as the table owner (service role). auth.users needs only `id`.
+      await client.query("insert into auth.users (id) values ($1),($2) on conflict do nothing", [
+        USER_A,
+        USER_B,
+      ]);
+      const ins = await client.query(
+        "insert into account_connections (user_id, provider, provider_connection_id, vault_token_ref) values ($1,'plaid','item_owner',gen_random_uuid()) returning id",
+        [USER_A],
+      );
+      const id = ins.rows[0].id;
+
+      const owner = await asUser(USER_A, "select count(*)::int as n from account_connections where id=$1", [id]);
+      expect(owner.rows[0].n).toBe(1); // owner reads its own row
+
+      const other = await asUser(USER_B, "select count(*)::int as n from account_connections where id=$1", [id]);
+      expect(other.rows[0].n).toBe(0); // cross-tenant denied
+
+      await client.query("update account_connections set deleted_at = now() where id=$1", [id]);
+      const afterDelete = await asUser(USER_A, "select count(*)::int as n from account_connections where id=$1", [id]);
+      expect(afterDelete.rows[0].n).toBe(0); // soft-deleted rows filtered by the policy
+    } finally {
+      await client.query("rollback");
+    }
+  });
 });

@@ -88,6 +88,11 @@ jobs:
             "/sign-in/page",
             "/sign-up/page",
             "/unsupported/page",
+            "/api/aggregation/link/start/route",
+            "/api/aggregation/link/complete/route",
+            "/api/aggregation/connections/route",
+            "/api/aggregation/connections/[id]/disconnect/route",
+            "/settings/accounts/page",
           ]
           missing = [k for k in need if k not in m]
           if missing:
