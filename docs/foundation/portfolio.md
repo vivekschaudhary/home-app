@@ -85,6 +85,7 @@ _Populated as each stub gets promoted to a full brief via `/create-brief <bet-id
 | Bet ID | Promoted on | Status after promotion |
 |--------|-------------|------------------------|
 | WLT-1 | 2026-06-05 | approved (HITL 2026-06-05) |
+| WLT-2 | 2026-06-07 | approved (HITL 2026-06-07) |
 
 ## DRI Log
 
