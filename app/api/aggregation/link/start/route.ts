@@ -1,4 +1,5 @@
-import { getAal2UserId } from "@vc1023/passkey-2fa";
+import { getAal2UserId, tooManyRequests } from "@vc1023/passkey-2fa";
+import { RateLimitError } from "@wealth/aggregation";
 import { handlers } from "@/app/lib/aggregation";
 
 // Create a provider link session (Plaid link_token). AAL2-gated — connecting a
@@ -11,7 +12,8 @@ export async function POST() {
   try {
     const session = await handlers.linkStart({ userId });
     return Response.json(session);
-  } catch {
+  } catch (e) {
+    if (e instanceof RateLimitError) return tooManyRequests(e.retryAfterSeconds);
     return Response.json({ error: "link_start_failed" }, { status: 502 });
   }
 }

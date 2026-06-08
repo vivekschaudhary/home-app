@@ -1,4 +1,5 @@
-import { getAal2UserId } from "@vc1023/passkey-2fa";
+import { getAal2UserId, tooManyRequests } from "@vc1023/passkey-2fa";
+import { RateLimitError } from "@wealth/aggregation";
 import { handlers } from "@/app/lib/aggregation";
 
 // Disconnect: revoke provider-side, destroy the vaulted token, soft-delete the
@@ -12,7 +13,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   try {
     await handlers.disconnect({ userId, connectionId: id });
     return Response.json({ ok: true });
-  } catch {
+  } catch (e) {
+    if (e instanceof RateLimitError) return tooManyRequests(e.retryAfterSeconds);
     return Response.json({ error: "disconnect_failed" }, { status: 400 });
   }
 }

@@ -1,4 +1,5 @@
-import { getAal2UserId } from "@vc1023/passkey-2fa";
+import { getAal2UserId, tooManyRequests } from "@vc1023/passkey-2fa";
+import { RateLimitError } from "@wealth/aggregation";
 import { handlers } from "@/app/lib/aggregation";
 
 // Exchange the client public artifact for the durable grant, vault it, persist
@@ -22,7 +23,8 @@ export async function POST(req: Request) {
   try {
     const result = await handlers.linkComplete({ userId, publicToken: body.publicToken });
     return Response.json(result);
-  } catch {
+  } catch (e) {
+    if (e instanceof RateLimitError) return tooManyRequests(e.retryAfterSeconds);
     return Response.json({ error: "link_complete_failed" }, { status: 502 });
   }
 }

@@ -4,10 +4,23 @@
 // enqueue the heavy backfill (injected — core never imports @wealth/jobs). The
 // 90-day fetch/ingest runs in Inngest, off the request path.
 
-import { createServiceSupabase } from "@vc1023/passkey-2fa";
+import {
+  createServerSupabase,
+  createServiceSupabase,
+  inMemoryRateLimit,
+  type RateLimiter,
+} from "@vc1023/passkey-2fa";
 import type { OnAggregationEvent } from "./events";
 import type { ProviderRegistry } from "./registry";
 import type { TokenVault } from "./vault";
+
+/** Thrown when a per-user rate limit trips; routes map it to HTTP 429. */
+export class RateLimitError extends Error {
+  constructor(public readonly retryAfterSeconds: number) {
+    super("rate_limited");
+    this.name = "RateLimitError";
+  }
+}
 
 export interface AccountView {
   id: string;
@@ -42,6 +55,19 @@ export interface AggregationHandlerOptions {
   /** Enqueue the durable backfill (app wires this to `inngest.send`). */
   enqueueBackfill: (input: { connectionId: string; userId: string }) => Promise<void>;
   onEvent?: OnAggregationEvent;
+  /** Pluggable limiter (defaults to the in-memory one). Same seam as the passkey
+   *  factory — inject a distributed limiter (Upstash) for multi-instance prod. */
+  rateLimit?: RateLimiter;
+}
+
+// Coarse per-user throttle on the provider-facing flows (link/disconnect) — caps
+// abuse/amplification against the upstream provider. Per-user (AAL2-gated, so the
+// user is known); inject a distributed limiter for cross-instance enforcement.
+const RL_LIMIT = 10;
+const RL_WINDOW_MS = 5 * 60 * 1000;
+async function throttle(limiter: RateLimiter, action: string, userId: string): Promise<void> {
+  const res = await limiter(`agg:${action}:${userId}`, RL_LIMIT, RL_WINDOW_MS);
+  if (!res.ok) throw new RateLimitError(res.retryAfterSeconds);
 }
 
 async function emit(onEvent: OnAggregationEvent | undefined, event: Parameters<OnAggregationEvent>[0]): Promise<void> {
@@ -55,15 +81,18 @@ async function emit(onEvent: OnAggregationEvent | undefined, event: Parameters<O
 
 export function createAggregationHandlers(opts: AggregationHandlerOptions): AggregationHandlers {
   const { registry, defaultProviderId, vault, enqueueBackfill, onEvent } = opts;
+  const limiter = opts.rateLimit ?? inMemoryRateLimit;
 
   return {
     async linkStart({ userId, redirectUri }) {
+      await throttle(limiter, "link_start", userId);
       const provider = registry.get(defaultProviderId);
       const session = await provider.createLinkSession({ userId, redirectUri });
       return { clientToken: session.clientToken, expiresAt: session.expiresAt };
     },
 
     async linkComplete({ userId, publicToken }) {
+      await throttle(limiter, "link_complete", userId);
       const provider = registry.get(defaultProviderId);
       const completion = await provider.completeLink({ publicToken, userId });
       // Token to Vault FIRST — only the opaque ref is ever persisted.
@@ -93,7 +122,10 @@ export function createAggregationHandlers(opts: AggregationHandlerOptions): Aggr
     },
 
     async connectionsList({ userId }) {
-      const svc = createServiceSupabase(); // service read, explicitly scoped to user_id
+      // RLS-bound read: the owner-SELECT policy enforces tenant isolation by
+      // default (defense-in-depth vs a service-role read with a manual filter).
+      // The explicit user_id filter stays as belt-and-suspenders.
+      const svc = await createServerSupabase();
       const [{ data: conns }, { data: accts }] = await Promise.all([
         svc
           .from("account_connections")
@@ -134,6 +166,7 @@ export function createAggregationHandlers(opts: AggregationHandlerOptions): Aggr
     },
 
     async disconnect({ userId, connectionId }) {
+      await throttle(limiter, "disconnect", userId);
       const svc = createServiceSupabase();
       // Ownership re-derivation: the row must belong to this user before any write.
       const { data: conn } = await svc
