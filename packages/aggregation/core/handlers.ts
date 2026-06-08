@@ -116,7 +116,16 @@ export function createAggregationHandlers(opts: AggregationHandlerOptions): Aggr
         throw new Error(`[aggregation] linkComplete failed: ${error?.message ?? "no connection id"}`);
       }
       const connectionId = (data as { id: string }).id;
-      await enqueueBackfill({ connectionId, userId });
+      // The backfill is the whole point — if it can't be enqueued (e.g. Inngest
+      // misconfigured), roll the link back atomically rather than leaving an
+      // orphaned, never-syncing connection (+ its vaulted token) behind.
+      try {
+        await enqueueBackfill({ connectionId, userId });
+      } catch (e) {
+        await svc.from("account_connections").delete().eq("id", connectionId).eq("user_id", userId);
+        await vault.delete({ ref }).catch(() => {});
+        throw new Error(`[aggregation] backfill enqueue failed (rolled back): ${(e as Error).message}`);
+      }
       await emit(onEvent, { type: "connection_linked", userId, provider: provider.id });
       return { connectionId };
     },
