@@ -1,7 +1,7 @@
 ---
 id: WLT-2-ARCH
 bet: WLT-2
-status: proposed
+status: approved
 created: 2026-06-07
 authors: [Architect, Enterprise/Solution Architect]
 area_tags: [backend, payments, data, security]
@@ -42,14 +42,14 @@ Implement account aggregation as a **provider-neutral ingest pipeline behind thr
 - `createAggregationHandlers({ registry, defaultProviderId, vault, sources, onEvent?, rateLimit? })` → `{ linkStart, linkComplete, csvImport, connectionsList, connectionHealth, disconnect, plaidWebhook }`. Handlers do request-tier work only (validate, vault put/get, `inngest.send`); the heavy fetch/ingest runs in Inngest. `onEvent`/`rateLimit` injected with defaults + a best-effort emit wrapper — **identical shape to the passkey factory**.
 
 ### Data model changes
-New migration `supabase/migrations/0003_aggregation.sql` (expand-only; no alters to 0001/0002). Conventions inherited: UUID PK, `timestamptz` + `set_updated_at()` trigger, soft-delete on user entities, **append/CDC** for transactions. **RLS = owner-SELECT only; ALL writes service-role** (financial-table posture).
+New migration `supabase/migrations/0003_aggregation.sql` (expand-only; no alters to 0001/0002). Conventions inherited: UUID PK, `timestamptz` + `set_updated_at()` trigger, soft-delete on user entities, **append/CDC** for transactions. **RLS = owner-SELECT only; ALL writes service-role** (financial-table posture). `0003` also performs one housekeeping rename — **`auth_funnel_events` → `funnel_events`** (`alter table … rename to`, carries existing rows) — promoting it to the project-wide funnel store; `@wealth/db/emit` is updated to match.
 
 - **`account_connections`** — `user_id`, `provider`, opaque `provider_connection_id`, **`vault_token_ref`** (opaque handle; never the token), `institution_{id,name}`, `health_status` (active|needs_reauth|error), `sync_cursor`, `last_synced_at`, soft-delete. `unique(provider, provider_connection_id)`.
 - **`financial_accounts`** — `connection_id` (nullable → manual/CSV), opaque `provider_account_id`, `name`, `kind` (depository|credit), `currency`, `balance_current/available numeric(20,4)`, `mask`. `unique(connection_id, provider_account_id)`.
 - **`transactions`** — `account_id`, `source` (plaid|csv|email), opaque `provider_transaction_id`, **`dedup_key` with `unique(user_id, dedup_key)`** (idempotency), `amount numeric(20,4)` + `direction`, `description/merchant/category`, `occurred_at`, `pending`, append/CDC via `superseded_by`. Dedup: provider rows `source:account:providerTxnId`; CSV `csv:accountId:sha256(date|amount|desc)`.
 
 ### API / contract changes (all additive)
-Thin routes under `app/api/aggregation/**` → factory handlers: `link/start`, `link/complete`, `import/csv`, `connections` (GET), `connections/health` (GET), `connections/disconnect`, `webhooks/plaid` (verifies the Plaid signature; no user session). `onEvent`→`emitAudit`/`emitFunnel` via new `@wealth/core` constants — `AGGREGATION_FUNNEL.{account_linked, first_transactions_visible}` lights up the bet's `key_metric`. *(Open item, EA: the funnel table is `auth_funnel_events`; reuse, or rename to `funnel_events` in 0003 as an expand-only addition — see Open questions.)*
+Thin routes under `app/api/aggregation/**` → factory handlers: `link/start`, `link/complete`, `import/csv`, `connections` (GET), `connections/health` (GET), `connections/disconnect`, `webhooks/plaid` (verifies the Plaid signature; no user session). `onEvent`→`emitAudit`/`emitFunnel` via new `@wealth/core` constants — `AGGREGATION_FUNNEL.{account_linked, first_transactions_visible}` lights up the bet's `key_metric`. **The funnel table is renamed `auth_funnel_events` → `funnel_events` in `0003`** — it is the project-wide funnel store now, not auth-specific; the rename carries existing rows, and `@wealth/db/emit` (`emitFunnel`) + the future WLT-5 reader point at the new name. (Decided 2026-06-07.)
 
 ### Dependencies
 - **`plaid`** (official SDK) — declared only by the `plaid` adapter sub-package, never by core/app request tier. Justified: ADR-002's selected provider.
@@ -109,7 +109,6 @@ Thin routes under `app/api/aggregation/**` → factory handlers: `link/start`, `
 
 ## Open questions for Engineer
 
-- **Funnel table naming** — reuse `auth_funnel_events` for aggregation funnel events, or add `funnel_events` in 0003 (expand-only) and point the emitter at it? Escalate; don't silently overload the auth-named table.
 - **Supabase Vault API shape** — if `createSupabaseVault()` against the live Vault RPCs disappoints (rotation, view access), escalate before falling back to a `pgsodium`-column impl (same `TokenVault` interface).
 - Do **not** widen Phase-1 scope (investments/holdings, payment initiation, UK) without a brief change.
 
@@ -119,6 +118,7 @@ Thin routes under `app/api/aggregation/**` → factory handlers: `link/start`, `
 - [2026-06-07] [Architect] **Provider-neutral core + isolated Plaid adapter + `TokenVault` + `ImportSource`, all injected via a factory** — rationale: satisfies the standing pluggability directive + ADR-002 reversibility; mirrors the passkey factory precedent; makes 2nd provider/email/Vault-swap additive — area: architecture — alternatives: Plaid-direct, request-path sync, encrypted-column token, one-off CSV (all rejected, see table) — reversibility: medium.
 - [2026-06-07] [Enterprise Architect] **Financial tables = owner-SELECT only, all writes service-role** (no insert/update/delete-own) — rationale: applies the passkey-audit RLS lesson to the sensitive aggregation tables; users never write financial rows directly — area: security — reversibility: medium.
 - [2026-06-07] [Architect] **All sync in Inngest, off the request path; handlers only enqueue** — rationale: backfill exceeds Vercel function limits; durability/retries meet the freshness + reliability FFs — area: infrastructure — reversibility: medium.
+- [2026-06-07] [Enterprise Architect] **Rename `auth_funnel_events` → `funnel_events` in 0003** — rationale: the table is the project-wide funnel/instrumentation store (auth + aggregation + future flows), not auth-specific; renamed pre-launch while cheap (no data/dashboards depend on the name yet) — area: data — alternatives: keep `auth_funnel_events` (rejected — name becomes misleading) — reversibility: easy (rename carries rows).
 
 ### Risks
 - [2026-06-07] [Enterprise Architect] **First real Supabase Vault implementation** — likelihood: medium — impact: high — mitigation: isolate behind `TokenVault`, spike it first, KMS/`pgsodium` swap-in if RPCs disappoint — area: security/integration.
@@ -130,4 +130,4 @@ Thin routes under `app/api/aggregation/**` → factory handlers: `link/start`, `
 
 ---
 
-_Approved by: <pending> on <pending>_
+_Approved by: Vivek on 2026-06-07_
