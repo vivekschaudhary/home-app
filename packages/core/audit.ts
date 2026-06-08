@@ -9,6 +9,9 @@ export const AUDIT_ACTIONS = {
   SIGNIN_FAILURE: "auth.signin.failure",
   MFA_CHALLENGE_FAILURE: "auth.mfa.challenge.failure",
   SIGNOUT: "auth.signout",
+  // Aggregation (WLT-2)
+  AGGREGATION_CONNECT: "aggregation.connect",
+  AGGREGATION_DISCONNECT: "aggregation.disconnect",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

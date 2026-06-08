@@ -8,3 +8,4 @@ export * from "./events";
 export * from "./dedup";
 export * from "./registry";
 export * from "./ingest";
+export * from "./handlers";
