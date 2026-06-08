@@ -16,7 +16,7 @@ synced_from: gdrive (co-work /create-story 2026-06-08) — renumbered from WLT-7
 
 # WLT-9 — Connect first bank account via Plaid OAuth + initial sync
 
-> **Synced from GDrive (co-work).** Created there as "WLT-7" — **renumbered to WLT-9** because WLT-6/WLT-7 are shipped and WLT-8 is parked (recovery). Authored without the approved bet architecture loaded; see the **⚠️ Architecture reconciliation** note in Tech notes + the DRI Issue — `docs/bets/WLT-2/architecture.md` is authoritative for the build.
+> Originated in co-work as "WLT-7"; **renumbered to WLT-9** on sync (WLT-6/7 shipped, WLT-8 parked). Tech notes + the schema-specific ACs are **reconciled to the approved architecture** (`docs/bets/WLT-2/architecture.md`).
 
 ## Description
 
@@ -47,10 +47,15 @@ A signed-in user (WLT-1 complete) opens a consent screen, accepts data-use terms
 
 ## Tech notes
 
-> ⚠️ **Architecture reconciliation (BLOCKING for /build).** This story was authored in co-work **without the approved bet architecture** and its original tech notes were **Plaid-direct** — `PlaidItem` table, `/api/plaid/*` routes, direct `vault.encrypt()`, types in `/packages/core`. That is the exact alternative the approved architecture **rejected** (it violates the pluggability directive). **`docs/bets/WLT-2/architecture.md` is authoritative.** Build per the architecture, not the original notes:
-> - **Schema:** `account_connections` / `financial_accounts` / `transactions` (provider-neutral; opaque `provider_connection_id` + `vault_token_ref`) — **not** `PlaidItem`/`Account`. Hardened dedup = `(user_id, dedup_key, content_hash)` + `superseded_by` (handles Plaid `modified`/`removed`/pending) — **not** `(account_id, date, amount, description)`.
-> - **Package/boundaries:** the `@wealth/aggregation` package — `AggregationProvider` + `createPlaidProvider()` (isolated `plaid` SDK), `TokenVault` (`createSupabaseVault`), `createAggregationHandlers(...)`; routes under **`app/api/aggregation/**`** (not `/api/plaid/*`); Inngest in **`packages/jobs/aggregation/`**.
-> - **Cursor + ingest in one transaction** (no silent transaction loss); webhook trust-boundary + ownership re-derivation on every service-role write; token never leaks into Inngest step output/Sentry — all per the architecture's "Hardening from independent review".
+Build per the approved architecture (`docs/bets/WLT-2/architecture.md`) — the provider-neutral, pluggable design:
+
+- **Package:** implement in `@wealth/aggregation` (currently an empty stub). `core/` holds the seams (`AggregationProvider`, `TokenVault`, `createAggregationHandlers`, `ingestTransactions`, `dedup`); `plaid/createPlaidProvider()` is the isolated adapter (only the `plaid` SDK lives there — core never imports it); `vault/createSupabaseVault()` is the default `TokenVault`. App wires it in `app/lib/aggregation.ts` (mirrors `app/lib/auth.ts`): `createAggregationHandlers({ registry: createProviderRegistry([createPlaidProvider()]), defaultProviderId: "plaid", vault: createSupabaseVault(), sources: {}, onEvent })`.
+- **Routes:** thin `runtime="nodejs"` delegations under `app/api/aggregation/**` → `handlers.{linkStart, linkComplete, connectionsList, disconnect}`. Handlers do request-tier work only (validate, **re-derive `auth.uid()` ownership**, vault put/get, `inngest.send`); the 90-day backfill runs in Inngest, off the request path.
+- **Schema (migration `0003_aggregation.sql`):** `account_connections` (provider, opaque `provider_connection_id`, `vault_token_ref`, `health_status`, `sync_cursor`, soft-delete) · `financial_accounts` (`user_id not null`, `connection_id`, `provider_account_id`, kind, `numeric(20,4)` balances, `balance_updated_at`, mask) · `transactions` (`user_id`, `account_id`, `source`, `provider_transaction_id`, **`unique(user_id, dedup_key, content_hash)`** + `superseded_by` for CDC — handles Plaid `modified`/`removed`/pending). **RLS owner-SELECT only; ALL writes service-role.**
+- **Vault is the highest-risk piece** (first real Supabase Vault use) — spike `createSupabaseVault()` first. Only `vault_token_ref` lands in a table; `vault.get` runs **inside** the provider-call Inngest step (never memoized/returned/logged); SDK errors sanitized before throw.
+- **Sync:** Inngest `aggregation/connection.linked` → backfill: `fetchAccounts` → upsert `financial_accounts`; page `fetchTransactions(cursor=null)` → `ingestTransactions` → persist `sync_cursor` **in the same DB transaction** (no silent transaction loss). Idempotent via the dedup key. `account_linked` / `sync_completed` funnel events via `onEvent`→`emitFunnel` (into `auth_funnel_events`).
+- **Disconnect:** revoke at Plaid (`removeConnection`) → `vault.delete(ref)` → soft-delete the connection + queue transaction soft-delete; ownership re-derived before the service-role write.
+- **Env:** `PLAID_CLIENT_ID` / `PLAID_SECRET` / `PLAID_ENV=sandbox` / `PLAID_WEBHOOK_URL` added to `check-env` (fail-loud in prod). **Plaid Sandbox** for dev + E2E; **Supabase Vault must be enabled** on the project (ops prereq).
 
 ## PRs
 
@@ -71,8 +76,8 @@ _Auto-populated by `/build`._
 - [2026-06-08] [PM] Plaid coverage gaps (Fidelity, some credit unions) → some users hit an empty Link — likelihood: medium — impact: medium — mitigation: `connection_error` event surfaces it; CSV fallback is the next story — area: technical
 
 ### Issues
-- [2026-06-08] [Architect→sync] **Tech notes diverge from the approved architecture (BLOCKING for build).** Co-work authored Plaid-direct (PlaidItem / `/api/plaid/` / direct `vault.encrypt` / naive dedup) — contradicts the approved provider-neutral `@wealth/aggregation` pluggable design + the user's pluggability directive. **Resolve:** build per `architecture.md` (see the Tech-notes reconciliation block); a few schema-specific ACs (AC2/AC4/AC7) are reworded here to match. — severity: high — owner: Architect/Engineer — status: open (reconcile before `/build`)
-- [2026-06-08] [Designer/UX] **`design.md` + `copy.md` missing** — the co-work run produced only `story.md`; this is a UI-heavy story (consent screen, connected-accounts list, error/empty states) — they must exist before `/build`. — severity: medium — owner: Designer/UX Writer — status: open
+- [2026-06-08] [Architect→sync] Tech notes originally authored Plaid-direct in co-work — **reconciled to the approved provider-neutral `@wealth/aggregation` architecture** (Tech notes + AC2/AC4/AC7 reworded) — severity: high — owner: Architect — status: **resolved** (2026-06-08)
+- [2026-06-08] [Designer/UX] `design.md` + `copy.md` were missing from the co-work sync — **created 2026-06-08** (Designer + UX Writer) — severity: medium — owner: Designer/UX Writer — status: **resolved**
 
 ---
 
