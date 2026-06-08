@@ -8,6 +8,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 - **Identity & MFA onboarding (WLT-1, story WLT-6):** create an account with email + password and a **mandatory passkey** enrolled in the same flow; sign in with a passkey challenge. Sessions persist across reloads; the second factor is enforced server-side. Unsupported browsers get an honest block. _(Supabase Auth + a custom WebAuthn 2FA layer — architecture ADR-001.)_
+- **Connect your bank (WLT-2, story WLT-9):** link a bank account through Plaid from an explicit consent screen, then see your real transactions imported (last 90 days) within seconds; view connected accounts with balances and sync status, and disconnect anytime (history kept, updates stop). Bank credentials are never seen or stored; access tokens live encrypted in Supabase Vault, never in app tables. _(Provider-neutral `@wealth/aggregation` pipeline — Plaid via ADR-002, swappable by design.)_
 
 ### Changed
 -

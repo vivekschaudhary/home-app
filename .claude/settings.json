@@ -1,6 +1,5 @@
 {
   "permissions": {
-     "defaultMode": "plan",
     "allow": [
       "Bash(pnpm build *)",
       "Bash(python3 -c ' *)",
@@ -13,8 +12,11 @@
       "Bash(gh run *)",
       "Bash(E2E_PASSKEY=1 pnpm e2e)",
       "Bash(cd \"/Volumes/Vivek mac/apps/home-app\" *)",
-      "Read(//private/tmp/**)"
+      "Read(//private/tmp/**)",
+      "Bash(gh api *)",
+      "Bash(vercel env *)"
     ],
+    "defaultMode": "plan",
     "additionalDirectories": [
       "/Users/vivekchaudhary/apps/home-app/packages/ui"
     ]
