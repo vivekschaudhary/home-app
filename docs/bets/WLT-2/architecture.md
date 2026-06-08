@@ -16,7 +16,7 @@ Implement account aggregation as a **provider-neutral ingest pipeline behind thr
 
 ## Context
 
-- **Brief + ADR-002:** Plaid selected (read-only OAuth, US institutions, Accounts/Balance/Transactions); CSV is the coverage-gap fallback; email-import is a deferred fast-follow that must plug into the same seam. Read-only / US-only / depository+credit for Phase 1; PSD2 deferred. `key_metric` = real-data activation ≥70%.
+- **Brief + ADR-002** *(the foundation amendment lands in **PR #15** — merge before/with this bet PR)*: Plaid selected (read-only OAuth, US institutions, Accounts/Balance/Transactions); CSV is the coverage-gap fallback; email-import is a deferred fast-follow that must plug into the same seam. Read-only / US-only / depository+credit for Phase 1; PSD2 deferred. `key_metric` = real-data activation ≥70%.
 - **Stack (foundation):** Supabase (Postgres + **Vault**) + Inngest (durable jobs) + Upstash + Vercel are all in the stack. **Supabase Vault is designed but never implemented yet** — WLT-2 is its first real use.
 - **Scaffold:** `@wealth/aggregation` exists as an empty stub (its intended home). `@wealth/jobs` exports `inngest` + `functions=[]`; `app/api/inngest/route.ts` serves them. Data access is via `createServerSupabase()` (RLS) / `createServiceSupabase()` (service-role) from `@vc1023/passkey-2fa`; `@wealth/db/emit` shows the best-effort service-role write pattern. Migrations `0001_init` (patterns) + `0002_auth_webauthn`; next is `0003`. **No aggregation tables exist yet.**
 - **Security lesson (passkey audit):** financial tables must be **owner-SELECT only; ALL writes via the service role** (no insert/update/delete-own policies) — a user must never write a financial row directly.
