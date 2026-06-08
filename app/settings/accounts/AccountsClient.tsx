@@ -40,8 +40,9 @@ function relativeTime(iso: string): string {
 type DisplayStatus = "connected" | "syncing" | "needs_reauth" | "error";
 
 function statusFor(conn: ConnectionView): { status: DisplayStatus; label: string } {
-  if (conn.healthStatus === "needs_reauth") return { status: "needs_reauth", label: "Needs sign-in" };
-  if (conn.healthStatus === "error") return { status: "error", label: "Error" };
+  if (conn.healthStatus === "needs_reauth")
+    return { status: "needs_reauth", label: COPY.accounts.needsReauthStatus };
+  if (conn.healthStatus === "error") return { status: "error", label: COPY.accounts.errorStatus };
   if (!conn.lastSyncedAt) return { status: "syncing", label: COPY.accounts.syncingStatus };
   return { status: "connected", label: COPY.accounts.connectedStatus };
 }

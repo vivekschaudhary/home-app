@@ -36,6 +36,8 @@ Calm, trustworthy, plain. This is the highest-trust moment in the product — th
 | `accounts.syncing` | Syncing your transactions… | On the account card during backfill |
 | `accounts.row.connectedStatus` | Connected | Status chip |
 | `accounts.row.syncingStatus` | Syncing | Status chip |
+| `accounts.row.needsReauthStatus` | Needs sign-in | Status chip (connection-health states land in a later story) |
+| `accounts.row.errorStatus` | Error | Status chip |
 | `accounts.row.lastSynced` | Updated {time} | e.g. "Updated just now" / "Updated 2m ago" |
 | `accounts.row.disconnect` | Disconnect | |
 | `accounts.addAnother` | Add another account | Visible once ≥1 connected |

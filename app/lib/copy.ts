@@ -116,6 +116,8 @@ export const COPY = {
     syncing: "Syncing your transactions…",
     connectedStatus: "Connected",
     syncingStatus: "Syncing",
+    needsReauthStatus: "Needs sign-in", // connection-health states surface fully in a later story
+    errorStatus: "Error",
     rowLastSynced: "Updated {time}", // {time} = relative time (e.g. "just now", "2m ago")
     disconnect: "Disconnect",
   },
