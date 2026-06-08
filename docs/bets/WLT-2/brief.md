@@ -51,7 +51,9 @@ Today the platform has nothing real to act on. A user can sign up and pass MFA (
 
 ## User
 
-The **Consumer persona (~80%, primary)** — someone who connects their accounts and wants the platform to watch and act on their behalf, not someone who wants to build or reconcile data by hand. Job-to-be-done: "get my real money picture into this thing, once, without it breaking."
+The **Consumer persona (~80%, primary)** — the Mint-refugee / financially-anxious consumer who connects their accounts and wants the platform to watch and act on their behalf, not someone who wants to build or reconcile data by hand. Job-to-be-done: "connect my bank without handing over credentials — or upload a file if it doesn't work — and see my actual transactions, once, without it breaking."
+
+**Secondary (~20%):** a **privacy-conscious user who prefers CSV/file import as a *primary* path**, not just a fallback.
 
 ## Why this matters
 
@@ -74,8 +76,8 @@ Yes — this is the **primary moat** bet. Linked accounts create switching costs
 - Provider **access tokens encrypted at rest in Supabase Vault**; never exposed client-side.
 - **Inngest background sync** — initial backfill + incremental refresh.
 - **Transaction + account/balance ingest** for **depository + credit** accounts (cash-flow), append/CDC with dedup; provider-supplied categories, normalized to one schema.
-- **CSV import fallback** mapped to the same transaction schema — covers institutions the provider excludes (e.g. Fidelity, some credit unions).
-- **Connection-health status** surface (connected / needs-reauth / error) per cross-cutting observability standards.
+- **CSV / OFX / QFX import** mapped to the same transaction schema (no manual column-mapping for standard exports) — covers institutions the provider excludes (e.g. Fidelity, some credit unions) **and** serves the privacy-first secondary persona as a *primary* path.
+- **Connection-health + connected-accounts UI** — a list of linked accounts (institution, mask, type, last-synced, sync status) with connected / needs-reauth / error states and a **re-auth CTA**; connection-health is first-class (per the reconnection-churn risk below), not an afterthought.
 - **RLS default-deny** on all financial tables, keyed to `auth.uid()`; explicit consent + a disconnect/data-deletion path.
 
 ### Out of scope
@@ -109,11 +111,13 @@ _Decomposed one at a time via `/create-story WLT-2` after this brief + the bet a
 ### Decisions
 - [2026-06-07] [PM] **MVP = 1 provider + CSV, not 2** — rationale: the loop needs exactly one real connection + CSV; KR2's "2 providers" is an end-of-Q2 target, not an MVP gate; proving one provider + the ingest/Vault/sync pipeline de-risks the 2nd (an additive adapter) — area: scope — alternatives: 2 providers now (rejected — doubles integration + cost surface before the pipeline is proven) — reversibility: easy
 - [2026-06-07] [PM] **Read-only, US-only, depository+credit only for MVP** — rationale: the in-scope workflows are cash-flow; investments / payment-initiation / UK add surface + regulatory load without serving the first loop — area: scope — alternatives: include investments/UK now (rejected) — reversibility: medium
-- [2026-06-07] [PM] **architecture_required: true** — provider selection (ADR), token-vault design, ingest schema (append/CDC + dedup), and connection-health are load-bearing → `/create-bet-architecture WLT-2` **ran 2026-06-07 (see `architecture.md`, `architecture_status: proposed` — awaiting re-approval after independent-review hardening)** — area: architecture — reversibility: medium
+- [2026-06-07] [PM] **architecture_required: true** — provider selection (ADR), token-vault design, ingest schema (append/CDC + dedup), and connection-health are load-bearing → `/create-bet-architecture WLT-2` **ran + approved 2026-06-08 (see `architecture.md`; hardened through 2 independent + Codex review rounds — supersedes the naive `(account_id,date,amount,description)` dedup with `(dedup_key, content_hash)` + `superseded_by` to handle Plaid modified/removed/pending)** — area: architecture — reversibility: medium
 - [2026-06-07] [PM] Jira mirror **skipped** — no Jira MCP on host (consistent with WLT-1) — area: tooling — reversibility: easy
 
 ### Risks
 - [2026-06-07] [Researcher] **Aggregation data quality is the comparable-product long pole** — single provider + CSV may under-deliver "real data" trust at uncovered institutions — likelihood: medium — impact: high — mitigation: CSV fallback in scope + connection-health observability + pick highest-coverage provider in the ADR — area: technical
+- [2026-06-08] [Researcher] **Plaid reconnection churn** — comparable products see ~15–25% annual reconnection rates; a silently-stale connection erodes trust and churns the user — likelihood: high — impact: medium — mitigation: connection-health monitoring + re-auth prompt within 24h of token expiry, first-class in scope — area: technical/UX
+- [2026-06-08] [PM] **CFPB 1033 / data-access fee shift** — the open-banking rewrite + Plaid→JPMorgan paid access could raise per-connection cost — likelihood: medium — impact: medium — mitigation: monitor quarterly; MX as a hedge provider (the 2nd-provider adapter slot); model fees as a first-order cost — area: financial/regulatory
 - [2026-06-07] [PM] **Aggregation cost is variable + rising** (Plaid→JPMorgan paid access) — likelihood: med-high — impact: high (margin) — mitigation: model per-connection fees as a first-order cost; prune dead links via connection-health; revisit 2nd-provider/cost at scale — area: financial
 - [2026-06-07] [Security] **Data-practices liability** ($58M Plaid precedent) — likelihood: low — impact: high — mitigation: tokens in Supabase Vault, RLS default-deny, explicit consent + revocation + data-deletion path; mandatory Security Review at build — area: security/regulatory
 - [2026-06-07] [PM] **PSD2/open-banking gap** if UK launch — likelihood: medium — impact: high — mitigation: US-only MVP; resolve PSD2 pre-UK (carried from product DRI) — area: regulatory
@@ -123,4 +127,4 @@ _Decomposed one at a time via `/create-story WLT-2` after this brief + the bet a
 
 ---
 
-_Approved by: Vivek on 2026-06-07_
+_Approved by: Vivek on 2026-06-07 · reconciled with the co-work/prime brief 2026-06-08 (kept the sharper persona/scope/risks; kept `architecture_required: true` + the hardened dedup)_
