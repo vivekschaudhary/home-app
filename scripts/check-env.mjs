@@ -90,6 +90,11 @@ if (missing.length) errors.push(`Missing required env: ${missing.join(", ")}`);
     }
     const secretKey = plaidEnv === "production" ? "PLAID_PRODUCTION_SECRET" : "PLAID_SANDBOX_SECRET";
     if (!isSet(secretKey)) errors.push(`Missing ${secretKey} (required for PLAID_ENV=${plaidEnv})`);
+    // Aggregation's backfill runs on Inngest — required once Plaid is active, or
+    // link/complete 502s after creating the connection (no event key to send to).
+    for (const k of ["INNGEST_EVENT_KEY", "INNGEST_SIGNING_KEY"]) {
+      if (!isSet(k)) errors.push(`Missing ${k} (aggregation backfill needs Inngest when Plaid is configured)`);
+    }
   }
 }
 
