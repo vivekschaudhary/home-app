@@ -182,6 +182,14 @@ suite("intent RLS (WLT-3): owner CRUD", () => {
       const other = await asUser(USER_B, "select count(*)::int as n from intents where id=$1", [id]);
       expect(other.rows[0].n).toBe(0);
 
+      // goals (same owner-CRUD posture — AC6 covers BOTH intents + goals): owner
+      // inserts + reads its own derived goal; another tenant sees none.
+      await asUser(USER_A, "insert into goals (user_id, intent_id, kind) values ($1,$2,'save_specific')", [USER_A, id]);
+      const goalOwner = await asUser(USER_A, "select count(*)::int as n from goals where intent_id=$1", [id]);
+      expect(goalOwner.rows[0].n).toBe(1);
+      const goalOther = await asUser(USER_B, "select count(*)::int as n from goals where intent_id=$1", [id]);
+      expect(goalOther.rows[0].n).toBe(0);
+
       // Soft-delete via service role (the user-driven soft-delete-via-RLS path —
       // setting deleted_at moves the row out of one's own SELECT visibility, a
       // Postgres WITH-CHECK quirk — is deferred to the intent-management slice;

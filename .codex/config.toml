@@ -4,7 +4,7 @@
 
 # Model is a top-level STRING key (Codex rejects a [model] table). It must sit
 # above the [mcp.*] tables, or TOML would nest it under the last table.
-model = "gpt-5"
+# model = "gpt-5"
 
 [mcp.github]
 type = "http"

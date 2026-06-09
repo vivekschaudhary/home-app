@@ -3,41 +3,67 @@
 import { INTENT_CLUSTERS } from "@wealth/core";
 import { Banner, Button } from "@wealth/ui";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { COPY } from "@/app/lib/copy";
 
-type Status = "idle" | "declaring" | "done" | "error";
+type ErrorKind = "save" | "network" | "server";
+type Status = "idle" | "declaring" | "done" | { error: ErrorKind };
+
+// One year — a dismissed prompt shouldn't re-appear on every login (AC5 non-
+// coercion). Declaring an intent is the permanent skip (hasDeclaredIntent).
+const DISMISS_COOKIE = "intent_prompt_dismissed";
 
 export function IntentFrontDoor() {
   const router = useRouter();
   const [selected, setSelected] = useState<{ cluster: string; intentKey: string } | null>(null);
   const [status, setStatus] = useState<Status>("idle");
+  const confirmRef = useRef<HTMLHeadingElement>(null);
+
+  const done = status === "done";
+  const errorKind = typeof status === "object" ? status.error : null;
+  const declaring = status === "declaring";
+
+  // Move focus to the confirmation on declare (AC10 / design.md).
+  useEffect(() => {
+    if (done) confirmRef.current?.focus();
+  }, [done]);
 
   async function declare() {
     if (!selected) return;
     setStatus("declaring");
+    let res: Response;
     try {
-      const res = await fetch("/api/intent", {
+      res = await fetch("/api/intent", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(selected),
       });
-      if (!res.ok) {
-        setStatus("error");
-        return;
-      }
-      setStatus("done");
     } catch {
-      setStatus("error");
+      setStatus({ error: "network" }); // fetch threw → offline/network
+      return;
     }
+    if (res.ok) {
+      setStatus("done");
+      return;
+    }
+    // Discriminated (AC9): 4xx = validation; 5xx/anything else = our side.
+    setStatus({ error: res.status >= 400 && res.status < 500 ? "save" : "server" });
+  }
+
+  function explore() {
+    // Persist the dismissal so the front door isn't re-prompted every login.
+    document.cookie = `${DISMISS_COOKIE}=1; path=/; max-age=31536000; samesite=lax`;
+    router.push("/dashboard");
   }
 
   // ─── Confirmation (placeholder — WLT-4 not built yet) ──────────────────────
-  if (status === "done") {
+  if (done) {
     return (
       <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-6 px-6 py-12">
-        <div aria-live="polite">
-          <h1 className="text-2xl font-semibold text-slate-900">{COPY.intent.doneTitle}</h1>
+        <div>
+          <h1 ref={confirmRef} tabIndex={-1} className="text-2xl font-semibold text-slate-900 focus:outline-none">
+            {COPY.intent.doneTitle}
+          </h1>
           <p className="mt-3 text-slate-600">{COPY.intent.doneBody}</p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row">
@@ -58,17 +84,19 @@ export function IntentFrontDoor() {
         <p className="mt-2 text-slate-600">{COPY.intent.subtitle}</p>
       </header>
 
-      {status === "error" && (
+      {errorKind && (
         <div className="mb-6">
-          <Banner variant="error">{COPY.intentErrors.save}</Banner>
+          <Banner variant="error">{COPY.intentErrors[errorKind]}</Banner>
         </div>
       )}
 
-      <div className="grid gap-5 sm:grid-cols-2">
+      {/* One radio group across the whole screen (native `name` grouping); each
+          cluster is a labelled <fieldset> for visual + a11y grouping. */}
+      <div className="grid gap-5 sm:grid-cols-2" role="radiogroup" aria-label={COPY.intent.title}>
         {INTENT_CLUSTERS.map((c) => (
           <fieldset key={c.cluster} className="rounded-2xl border border-slate-200 p-5">
             <legend className="px-1 text-sm font-medium text-slate-500">{c.header}</legend>
-            <div className="mt-2 flex flex-col gap-2" role="radiogroup" aria-label={`${c.header} — choose one`}>
+            <div className="mt-2 flex flex-col gap-2">
               {c.intents.map((i) => {
                 const checked = selected?.intentKey === i.intentKey;
                 return (
@@ -95,17 +123,12 @@ export function IntentFrontDoor() {
       </div>
 
       <div className="mt-8 flex flex-col items-start gap-4">
-        <Button
-          onClick={declare}
-          disabled={!selected}
-          loading={status === "declaring"}
-          loadingLabel={COPY.intent.declaring}
-        >
+        <Button onClick={declare} disabled={!selected} loading={declaring} loadingLabel={COPY.intent.declaring}>
           {COPY.intent.cta}
         </Button>
         <button
           type="button"
-          onClick={() => router.push("/dashboard")}
+          onClick={explore}
           className="text-sm text-slate-500 underline-offset-2 hover:underline"
         >
           {COPY.intent.explore}
