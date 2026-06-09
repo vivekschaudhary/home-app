@@ -11,10 +11,10 @@ author: PM
 estimate:
   duration_weeks: 2
   confidence: low
-  refined_by: stub
-  refined_at: 2026-06-05
-  estimated_start: 2026-07-06
-  estimated_end: 2026-07-17
+  refined_by: dep-shift
+  refined_at: 2026-06-09
+  estimated_start: 2026-06-18
+  estimated_end: 2026-07-01
 primary: gdrive://1_tLI4T1udKEiw0f0VfpsmCRa_mC3x8-Kl5gpKg2SO10
 last_synced: 2026-06-05
 ---

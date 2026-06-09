@@ -31,12 +31,13 @@ measurement_window_days: 30
 check_in_cadence: weekly
 area_tags: [backend, payments, data, security]
 estimate:
-  duration_weeks: 2
-  confidence: low
-  refined_by: brief-approval
-  refined_at: 2026-06-07
-  estimated_start: 2026-06-22
-  estimated_end: 2026-07-03
+  duration_weeks: 1.2
+  confidence: medium
+  refined_by: build-actuals
+  refined_at: 2026-06-09
+  estimated_start: 2026-06-08
+  estimated_end: 2026-06-16
+  actual_start: 2026-06-08
 primary: gdrive://1rksze12ty6GH0Jpfcs6n8ectDSz9iDcOuaJLU6pOxZ8
 last_synced: 2026-06-05
 ---

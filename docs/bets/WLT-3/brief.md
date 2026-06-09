@@ -9,12 +9,12 @@ parallel_with: [WLT-2]
 created: 2026-06-05
 author: PM
 estimate:
-  duration_weeks: 2
+  duration_weeks: 1
   confidence: low
-  refined_by: stub
-  refined_at: 2026-06-05
-  estimated_start: 2026-06-22
-  estimated_end: 2026-07-03
+  refined_by: dep-shift
+  refined_at: 2026-06-09
+  estimated_start: 2026-06-10
+  estimated_end: 2026-06-17
 primary: gdrive://1zRVK9LRolTq0OWKAV6p7fHqGkRtZZm4oaA-yoT03eRE
 last_synced: 2026-06-05
 ---

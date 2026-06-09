@@ -9,11 +9,11 @@ parallel_with: [WLT-1]
 created: 2026-06-05
 author: PM
 estimate:
-  duration_weeks: 2
+  duration_weeks: 1
   confidence: low
-  refined_by: stub
-  refined_at: 2026-06-05
-  estimated_start: 2026-06-08
+  refined_by: re-sequence
+  refined_at: 2026-06-09
+  estimated_start: 2026-06-12
   estimated_end: 2026-06-19
 primary: gdrive://1Ejx3hxaXrwmC7TObNFCLWWzntvLd0JfsLFya82TqIA4
 last_synced: 2026-06-05
