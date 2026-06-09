@@ -1,10 +1,14 @@
 # Project Status
 
-_Last updated: 2026-06-08 — WLT-9 merged (first WLT-2 aggregation story); WLT-2 in-build_
+_Last updated: 2026-06-08 — WLT-9 shipped + activated in prod (real bank data live); WLT-10 ready to build_
 
 ## In flight
 
-**WLT-2 — Account aggregation + CSV fallback** — brief + architecture `approved`; **building**. **WLT-9 (connect first bank via Plaid OAuth + initial sync) `merged`** (2026-06-08, PR #18) — shipped the `@wealth/aggregation` **pluggable** pipeline (provider-neutral core + Plaid adapter + Supabase Vault token store + Inngest 90-day backfill + owner-SELECT-only RLS + consent/connected-accounts UI); cross-model Codex code + security review both **Approve**. **Next slices:** CSV import · connection-health + webhook/incremental refresh · 2nd provider (KR2).
+**WLT-2 — Account aggregation + CSV fallback** — brief + architecture `approved`; **building**.
+- **WLT-9 (connect first bank via Plaid OAuth + initial sync) — `shipped` + activated in production** (PR #18). The `@wealth/aggregation` **pluggable** pipeline (provider-neutral core + Plaid adapter + Supabase Vault + Inngest backfill + owner-SELECT RLS + consent/accounts UI); cross-model Codex code + security both **Approve**. **Validated live** with a real Wells Fargo connection (real accounts + 154 transactions). Prod activation surfaced + fixed: Inngest config + app sync, an atomic link-rollback + Inngest preflight gate (PR #20), and a prod-DB cleanup (test-user cruft + a typo-account dupe purged).
+- **WLT-10 (full-history backfill + webhook-driven sync) — `ready`** (PR #21). `days_requested:730` (24mo) + verified Plaid webhook → idempotent incremental re-sync + cron fallback + "importing your history" UX. **Next: `/build WLT-10`** (ops prereq: `PLAID_WEBHOOK_URL` in prod + registered with Plaid).
+- **Later slices:** re-auth/connection-health UI · CSV / email import · Statements (>24-month history) · 2nd provider (KR2).
+- **Open ops note:** prod Supabase **Site URL** still `localhost:3000` (fix → `https://home-app.kindtree.us` so TOTP issuer + email links are correct); two old Plaid items un-revoked on Plaid's side (remove via Plaid dashboard if desired).
 
 WLT-6 + **WLT-7 — authenticator-app (TOTP) backup factor — `shipped`** (2026-06-07). **WLT-8** (support-gated recovery, both-factors-lost) is **parked** by decision: revisit once WLT-7 is in real use and backup-adoption is measured — not auto-queued.
 
