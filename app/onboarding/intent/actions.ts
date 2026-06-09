@@ -11,8 +11,9 @@ export async function dismissIntentPrompt(): Promise<void> {
   if (!userId) return;
   (await cookies()).set("intent_dismissed", userId, {
     httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
     path: "/",
     maxAge: 60 * 60 * 24 * 365,
-    sameSite: "lax",
+    sameSite: "strict",
   });
 }

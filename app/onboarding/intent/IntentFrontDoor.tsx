@@ -58,6 +58,10 @@ export function IntentFrontDoor() {
   if (done) {
     return (
       <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-6 px-6 py-12">
+        {/* Announce success to assistive tech (AC10) in addition to the focus move. */}
+        <p role="status" aria-live="polite" className="sr-only">
+          {COPY.a11y.intentDeclared}
+        </p>
         <div>
           <h1 ref={confirmRef} tabIndex={-1} className="text-2xl font-semibold text-slate-900 focus:outline-none">
             {COPY.intent.doneTitle}
