@@ -5,13 +5,10 @@ import { Banner, Button } from "@wealth/ui";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { COPY } from "@/app/lib/copy";
+import { dismissIntentPrompt } from "./actions";
 
 type ErrorKind = "save" | "network" | "server";
 type Status = "idle" | "declaring" | "done" | { error: ErrorKind };
-
-// One year — a dismissed prompt shouldn't re-appear on every login (AC5 non-
-// coercion). Declaring an intent is the permanent skip (hasDeclaredIntent).
-const DISMISS_COOKIE = "intent_prompt_dismissed";
 
 export function IntentFrontDoor() {
   const router = useRouter();
@@ -50,9 +47,10 @@ export function IntentFrontDoor() {
     setStatus({ error: res.status >= 400 && res.status < 500 ? "save" : "server" });
   }
 
-  function explore() {
-    // Persist the dismissal so the front door isn't re-prompted every login.
-    document.cookie = `${DISMISS_COOKIE}=1; path=/; max-age=31536000; samesite=lax`;
+  async function explore() {
+    // Persist the dismissal (user-bound, server-side) so the front door isn't
+    // re-prompted every login — without leaking across accounts on a device.
+    await dismissIntentPrompt();
     router.push("/dashboard");
   }
 

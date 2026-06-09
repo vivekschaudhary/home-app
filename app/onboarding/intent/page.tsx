@@ -12,7 +12,8 @@ export const dynamic = "force-dynamic";
 // "explore" (AC5 non-coercion) — server redirect, no flash.
 export default async function IntentPage() {
   const userId = await requireAal2();
-  const dismissed = (await cookies()).get("intent_prompt_dismissed")?.value === "1";
+  // User-bound dismissal: only honor it for the account that set it (shared-browser safe).
+  const dismissed = (await cookies()).get("intent_dismissed")?.value === userId;
   if (dismissed || (await hasDeclaredIntent(userId))) redirect("/dashboard");
   return <IntentFrontDoor />;
 }
