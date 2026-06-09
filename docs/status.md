@@ -1,8 +1,10 @@
 # Project Status
 
-_Last updated: 2026-06-08 — WLT-9 shipped + activated in prod (real bank data live); WLT-10 ready to build_
+_Last updated: 2026-06-09 — WLT-3 brief approved (intent-first / user-first); WLT-9 live in prod; WLT-10 ready_
 
 ## In flight
+
+**WLT-3 — Intent-first onboarding** — **brief `approved`** (HITL 2026-06-09; `architecture_required: false` — Intent/Goal are foundation entities). Directive baked in: **intent-first, user-first** — declare intent *before* connecting (defer friction). **Next: `/create-story WLT-3`** — the unblocker for WLT-4 (the engine).
 
 **WLT-2 — Account aggregation + CSV fallback** — brief + architecture `approved`; **building**.
 - **WLT-9 (connect first bank via Plaid OAuth + initial sync) — `shipped` + activated in production** (PR #18). The `@wealth/aggregation` **pluggable** pipeline (provider-neutral core + Plaid adapter + Supabase Vault + Inngest backfill + owner-SELECT RLS + consent/accounts UI); cross-model Codex code + security both **Approve**. **Validated live** with a real Wells Fargo connection (real accounts + 154 transactions). Prod activation surfaced + fixed: Inngest config + app sync, an atomic link-rollback + Inngest preflight gate (PR #20), and a prod-DB cleanup (test-user cruft + a typo-account dupe purged).
@@ -14,15 +16,13 @@ WLT-6 + **WLT-7 — authenticator-app (TOTP) backup factor — `shipped`** (2026
 
 ## Next up (from `docs/foundation/plan.md`)
 
-No story auto-queues. When ready, promote the next bet via `/create-brief`:
-
 | Bet | Title | Why next | Confidence |
 |-----|-------|----------|------------|
-| WLT-5 | TTFV + WAWU instrumentation | measures the backup-adoption that gates WLT-8 + the north-star | low |
-| WLT-2 ∥ WLT-3 | Account aggregation ∥ Intent-first onboarding | the core loop; need WLT-1 (done) | low |
-| WLT-4 | Workflow engine | needs WLT-2 + WLT-3 | low |
+| **WLT-3** | Intent-first onboarding | **brief approved → `/create-story WLT-3`** (unblocks WLT-4) | medium |
+| WLT-5 | TTFV + WAWU instrumentation | unblocked (no deps); instruments the loop as stages land | low |
+| WLT-4 | Workflow engine | **blocked** — needs WLT-3; the novel core + long pole | low |
 
-MVP-loop forecast ~2026-07-17 (low confidence, stub estimates).
+MVP-loop forecast **~2026-07-01** (re-baselined on velocity; WLT-4 carries the risk).
 
 ## Awaiting human approval
 
