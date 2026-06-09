@@ -94,7 +94,7 @@ export function SignInFlow() {
       const result = await challengePasskey();
       if (result.ok) {
         setSuccess(true);
-        setTimeout(() => router.push("/dashboard"), 900);
+        setTimeout(() => router.push("/onboarding/intent"), 900);
         return;
       }
       setChallengeError(result.reason === "cancelled" ? "cancelled" : "error");
@@ -129,7 +129,7 @@ export function SignInFlow() {
     setTotpLoading(false);
     if (res.ok) {
       setSuccess(true);
-      setTimeout(() => router.push("/dashboard"), 900);
+      setTimeout(() => router.push("/onboarding/intent"), 900);
       return;
     }
     setTotpError(res.error ?? "server");

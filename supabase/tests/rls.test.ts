@@ -140,3 +140,69 @@ suite("financial-table RLS (WLT-2): service-role writes only", () => {
     }
   });
 });
+
+// Intent/Goal posture (WLT-3): OWNER CRUD — unlike the financial tables, the user
+// writes their own intent directly (insert_own with-check). Cross-tenant writes
+// are still denied, and soft-deleted rows are hidden.
+suite("intent RLS (WLT-3): owner CRUD", () => {
+  let client: Client;
+  beforeAll(async () => {
+    client = new Client({ connectionString: DB_URL });
+    await client.connect();
+  });
+  afterAll(async () => {
+    await client?.end();
+  });
+  async function asUser(uid: string, sql: string, params: unknown[] = []) {
+    await client.query("select set_config('request.jwt.claims', $1, true)", [
+      JSON.stringify({ sub: uid, role: "authenticated" }),
+    ]);
+    await client.query("set local role authenticated");
+    const res = await client.query(sql, params);
+    await client.query("reset role");
+    return res;
+  }
+
+  it("owner inserts + reads its own intent; cross-tenant insert denied; cross-tenant read = 0; soft-delete hidden", async () => {
+    await client.query("begin");
+    try {
+      await client.query("insert into auth.users (id) values ($1),($2) on conflict do nothing", [USER_A, USER_B]);
+
+      // owner CAN insert their own intent (insert_own with-check)
+      const ins = await asUser(
+        USER_A,
+        "insert into intents (user_id, cluster, intent_key, label) values ($1,'goal','goal_save_specific','Save for something specific') returning id",
+        [USER_A],
+      );
+      const id = ins.rows[0].id;
+
+      const owner = await asUser(USER_A, "select count(*)::int as n from intents where id=$1", [id]);
+      expect(owner.rows[0].n).toBe(1);
+
+      const other = await asUser(USER_B, "select count(*)::int as n from intents where id=$1", [id]);
+      expect(other.rows[0].n).toBe(0);
+
+      // Soft-delete via service role (the user-driven soft-delete-via-RLS path —
+      // setting deleted_at moves the row out of one's own SELECT visibility, a
+      // Postgres WITH-CHECK quirk — is deferred to the intent-management slice;
+      // WLT-11 has no user-delete UI). The guarantee here: soft-deleted rows are
+      // hidden from the owner's SELECT.
+      await client.query("update intents set deleted_at = now() where id=$1", [id]);
+      const afterDelete = await asUser(USER_A, "select count(*)::int as n from intents where id=$1", [id]);
+      expect(afterDelete.rows[0].n).toBe(0);
+
+      // LAST — a failed statement aborts the tx, so the cross-tenant-insert denial
+      // (WITH CHECK) goes after the assertions above. A user can't insert a row
+      // owned by someone else.
+      await expect(
+        asUser(
+          USER_B,
+          "insert into intents (user_id, cluster, intent_key, label) values ($1,'fear','fear_overspending','x')",
+          [USER_A],
+        ),
+      ).rejects.toThrow();
+    } finally {
+      await client.query("rollback");
+    }
+  });
+});

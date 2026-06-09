@@ -156,5 +156,25 @@ export const COPY = {
     capslock: "Caps Lock is on",
     codeHint: "Enter the 6 digits from your authenticator app.",
     copyKeyDone: "Key copied",
+    intentGroup: "{cluster} — choose one", // {cluster} = the cluster header
+    intentDeclared: "Saved. Putting your plan together.",
+  },
+  // WLT-11 intent front door (the cluster headers + starter-intent labels live in
+  // @wealth/core INTENT_CLUSTERS — they're the taxonomy contract). Screen copy:
+  intent: {
+    title: "What would you like help with?",
+    subtitle: "Pick what feels closest. You can always change it later.",
+    cta: "Continue",
+    explore: "I'm not sure yet — just let me look around",
+    declaring: "Saving…",
+    doneTitle: "Got it. We're putting your plan together.",
+    doneBody: "We'll use this to set up the right things for you. Next, connect an account so we can work with your real numbers.",
+    doneCta: "Connect an account",
+    doneSecondary: "I'll do that later",
+  },
+  intentErrors: {
+    save: "We couldn't save that — give it another try.",
+    network: "You appear to be offline. Check your connection and try again.",
+    server: "Something went wrong on our side — your information is safe. Try again in a minute.",
   },
 } as const;

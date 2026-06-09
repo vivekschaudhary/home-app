@@ -3,3 +3,4 @@
 // mechanics (validation, AAL2, WebAuthn) live in @vc1023/passkey-2fa.
 export * from "./funnel";
 export * from "./audit";
+export * from "./intent";
