@@ -34,12 +34,14 @@ measurement_window_days: 30
 check_in_cadence: weekly
 area_tags: [backend, frontend, auth, security]
 estimate:
-  duration_weeks: 2
-  confidence: low
-  refined_by: stub
-  refined_at: 2026-06-05
-  estimated_start: 2026-06-08
-  estimated_end: 2026-06-19
+  duration_weeks: 0.4
+  confidence: high
+  refined_by: build-actuals
+  refined_at: 2026-06-09
+  estimated_start: 2026-06-05
+  estimated_end: 2026-06-07
+  actual_start: 2026-06-05
+  actual_end: 2026-06-07
 primary: gdrive://1N0ncwTqcNYW-wXAhC4lHx55jO-M4AyvAj303I0ATiAI
 last_synced: 2026-06-05
 ---
