@@ -224,5 +224,25 @@ suite("intent RLS (WLT-3): owner CRUD", () => {
     } finally {
       await client.query("rollback");
     }
-  });
+  }, 30_000); // many sequential round-trips to the remote DB
+
+  it("blocks a forged cross-tenant goal→intent link (composite FK)", async () => {
+    await client.query("begin");
+    try {
+      await client.query("insert into auth.users (id) values ($1),($2) on conflict do nothing", [USER_A, USER_B]);
+      const ins = await client.query(
+        "insert into intents (user_id,cluster,intent_key,label) values ($1,'goal','goal_save_specific','x') returning id",
+        [USER_A],
+      );
+      const foreignIntentId = ins.rows[0].id;
+      // USER_B owns the goal (passes the user_id WITH CHECK) but points it at
+      // USER_A's intent — the composite FK (intent_id, user_id)→intents(id, user_id)
+      // rejects it at the DB boundary.
+      await expect(
+        asUser(USER_B, "insert into goals (user_id, intent_id, kind) values ($1,$2,'x')", [USER_B, foreignIntentId]),
+      ).rejects.toThrow();
+    } finally {
+      await client.query("rollback");
+    }
+  }, 30_000);
 });

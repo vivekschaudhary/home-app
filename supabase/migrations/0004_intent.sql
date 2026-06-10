@@ -15,7 +15,8 @@ create table if not exists intents (
   label       text        not null,                     -- verbatim copy.md label at declare time
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now(),
-  deleted_at  timestamptz
+  deleted_at  timestamptz,
+  unique (id, user_id)   -- composite-FK target so goals can enforce same-user intent
 );
 create index if not exists idx_intents_user on intents (user_id) where deleted_at is null;
 
@@ -38,14 +39,17 @@ create policy intents_delete_own on intents for delete using (auth.uid() = user_
 create table if not exists goals (
   id          uuid        primary key default gen_random_uuid(),
   user_id     uuid        not null references auth.users (id) on delete cascade,
-  intent_id   uuid        not null references intents (id) on delete cascade,
+  intent_id   uuid        not null,
   kind        text        not null,                     -- derived from the intent (e.g. save_specific)
   params      jsonb       not null default '{}',         -- optional (target amount / timeframe), filled later
   status      text        not null default 'pending_workflow'
                 check (status in ('pending_workflow','active','done','archived')),
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now(),
-  deleted_at  timestamptz
+  deleted_at  timestamptz,
+  -- COMPOSITE FK: the referenced intent must belong to the SAME user — blocks a
+  -- forged cross-tenant goal→intent link at the DB boundary, not just via RLS.
+  foreign key (intent_id, user_id) references intents (id, user_id) on delete cascade
 );
 create index if not exists idx_goals_user on goals (user_id) where deleted_at is null;
 create index if not exists idx_goals_intent on goals (intent_id);

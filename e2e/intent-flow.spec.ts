@@ -46,11 +46,20 @@ test.describe("intent-first front door (WLT-11)", () => {
 
     // The bridge to connect is offered (intent-first, then friction).
     await expect(page.getByRole("button", { name: "Connect an account" })).toBeVisible();
-  });
 
-  test("returning user with an intent skips the front door", async () => {
-    // (covered functionally by the server gate hasDeclaredIntent → redirect /dashboard;
-    //  exercised end-to-end once a seeded-intent fixture exists — see story follow-ups.)
-    test.skip(true, "needs a seeded-intent fixture; gate covered by RLS + unit tests");
+    // AC7 — a returning user who already declared skips the front door. Go to the
+    // dashboard, sign out, sign back in → the gate routes straight to /dashboard
+    // (NOT /onboarding/intent), because hasDeclaredIntent is now true.
+    await page.getByRole("button", { name: "I'll do that later" }).click();
+    await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
+    await page.getByRole("button", { name: "Sign out" }).click();
+    await expect(page).toHaveURL(/\/sign-in/);
+
+    await page.getByLabel("Email").fill(email);
+    await page.getByLabel("Password").fill(password);
+    await page.getByRole("button", { name: "Sign in" }).click();
+    // Skips the intent front door — lands on the dashboard.
+    await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
+    await expect(page).not.toHaveURL(/\/onboarding\/intent/);
   });
 });
