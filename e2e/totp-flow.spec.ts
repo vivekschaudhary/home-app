@@ -1,4 +1,5 @@
 import { expect, test, type CDPSession } from "@playwright/test";
+import { passIntentToDashboard } from "./helpers";
 import * as OTPAuth from "otpauth";
 
 // Authenticator-app (TOTP) backup factor (WLT-7): enroll a TOTP factor, then
@@ -53,7 +54,7 @@ test.describe("authenticator-app (TOTP) backup (AC1, AC3)", () => {
     await page.getByLabel("Password").fill(password);
     await page.getByRole("button", { name: "Create account" }).click();
     await page.getByRole("button", { name: "Create passkey" }).click();
-    await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
+    await passIntentToDashboard(page);
 
     // Go to Security → add authenticator app.
     await page.getByRole("link", { name: "Security" }).click();
@@ -103,7 +104,7 @@ test.describe("authenticator-app (TOTP) backup (AC1, AC3)", () => {
     await page.getByLabel("6-digit code").fill(signinCode);
     await page.getByRole("button", { name: "Verify", exact: true }).click();
 
-    await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
+    await passIntentToDashboard(page);
     await expect(page.getByText("You're signed in.")).toBeVisible();
   });
 });

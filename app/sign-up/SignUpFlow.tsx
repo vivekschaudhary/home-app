@@ -121,7 +121,7 @@ export function SignUpFlow() {
 
     if (result.ok) {
       setEnrolled(true);
-      setTimeout(() => router.push("/dashboard"), 1200);
+      setTimeout(() => router.push("/onboarding/intent"), 1200);
       return;
     }
     if (result.reason === "cancelled") {

@@ -16,6 +16,8 @@ export const FUNNEL_EVENTS = {
   TRANSACTIONS_SYNCED: "sync_completed",
   ACCOUNT_DISCONNECTED: "account_disconnected",
   CONNECTION_ERROR: "connection_error",
+  // Intent (WLT-3) — ADDITIVE; the intent→workflow conversion baseline (WLT-5).
+  INTENT_DECLARED: "intent_declared",
 } as const;
 
 export type FunnelEvent = (typeof FUNNEL_EVENTS)[keyof typeof FUNNEL_EVENTS];

@@ -1,4 +1,5 @@
 import { expect, test, type CDPSession } from "@playwright/test";
+import { passIntentToDashboard } from "./helpers";
 
 // Full passkey MFA happy path with a WebAuthn virtual authenticator.
 // Gated: needs a real Supabase project (email-confirmation OFF) + E2E_PASSKEY=1,
@@ -40,7 +41,7 @@ test.describe("passkey MFA happy path (AC1, AC2)", () => {
       page.getByRole("heading", { name: "Secure your account with a passkey" }),
     ).toBeVisible();
     await page.getByRole("button", { name: "Create passkey" }).click();
-    await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
+    await passIntentToDashboard(page);
     await expect(page.getByText("You're signed in.")).toBeVisible();
 
     // Sign out
@@ -51,7 +52,7 @@ test.describe("passkey MFA happy path (AC1, AC2)", () => {
     await page.getByLabel("Email").fill(email);
     await page.getByLabel("Password").fill(password);
     await page.getByRole("button", { name: "Sign in" }).click();
-    await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
+    await passIntentToDashboard(page);
     await expect(page.getByText("You're signed in.")).toBeVisible();
   });
 });

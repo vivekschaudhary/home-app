@@ -140,3 +140,109 @@ suite("financial-table RLS (WLT-2): service-role writes only", () => {
     }
   });
 });
+
+// Intent/Goal posture (WLT-3): OWNER CRUD — unlike the financial tables, the user
+// writes their own intent directly (insert_own with-check). Cross-tenant writes
+// are still denied, and soft-deleted rows are hidden.
+suite("intent RLS (WLT-3): owner CRUD", () => {
+  let client: Client;
+  beforeAll(async () => {
+    client = new Client({ connectionString: DB_URL });
+    await client.connect();
+  });
+  afterAll(async () => {
+    await client?.end();
+  });
+  async function asUser(uid: string, sql: string, params: unknown[] = []) {
+    await client.query("select set_config('request.jwt.claims', $1, true)", [
+      JSON.stringify({ sub: uid, role: "authenticated" }),
+    ]);
+    await client.query("set local role authenticated");
+    const res = await client.query(sql, params);
+    await client.query("reset role");
+    return res;
+  }
+
+  it("owner inserts + reads its own intent; cross-tenant insert denied; cross-tenant read = 0; soft-delete hidden", async () => {
+    await client.query("begin");
+    try {
+      await client.query("insert into auth.users (id) values ($1),($2) on conflict do nothing", [USER_A, USER_B]);
+
+      // owner CAN insert their own intent (insert_own with-check)
+      const ins = await asUser(
+        USER_A,
+        "insert into intents (user_id, cluster, intent_key, label) values ($1,'goal','goal_save_specific','Save for something specific') returning id",
+        [USER_A],
+      );
+      const id = ins.rows[0].id;
+
+      const owner = await asUser(USER_A, "select count(*)::int as n from intents where id=$1", [id]);
+      expect(owner.rows[0].n).toBe(1);
+
+      const other = await asUser(USER_B, "select count(*)::int as n from intents where id=$1", [id]);
+      expect(other.rows[0].n).toBe(0);
+
+      // goals (same owner-CRUD posture — AC6 covers BOTH intents + goals): owner
+      // inserts + reads its own derived goal; another tenant sees none.
+      await asUser(USER_A, "insert into goals (user_id, intent_id, kind) values ($1,$2,'save_specific')", [USER_A, id]);
+      const goalOwner = await asUser(USER_A, "select count(*)::int as n from goals where intent_id=$1", [id]);
+      expect(goalOwner.rows[0].n).toBe(1);
+      const goalOther = await asUser(USER_B, "select count(*)::int as n from goals where intent_id=$1", [id]);
+      expect(goalOther.rows[0].n).toBe(0);
+
+      // Owner UPDATE via the authenticated RLS path (AC6 owner-CRUD): the owner
+      // can update their own intent/goal; a cross-tenant update matches 0 rows
+      // (the row is invisible to the UPDATE's USING clause for another user).
+      const updIntent = await asUser(USER_A, "update intents set label='updated' where id=$1", [id]);
+      expect(updIntent.rowCount).toBe(1);
+      const crossIntent = await asUser(USER_B, "update intents set label='hacked' where id=$1", [id]);
+      expect(crossIntent.rowCount).toBe(0);
+      const updGoal = await asUser(USER_A, "update goals set status='active' where intent_id=$1", [id]);
+      expect(updGoal.rowCount).toBe(1);
+      const crossGoal = await asUser(USER_B, "update goals set status='archived' where intent_id=$1", [id]);
+      expect(crossGoal.rowCount).toBe(0);
+
+      // Soft-delete via service role (the user-driven soft-delete-via-RLS path —
+      // setting deleted_at moves the row out of one's own SELECT visibility, a
+      // Postgres WITH-CHECK quirk — is deferred to the intent-management slice;
+      // WLT-11 has no user-delete UI). The guarantee here: soft-deleted rows are
+      // hidden from the owner's SELECT.
+      await client.query("update intents set deleted_at = now() where id=$1", [id]);
+      const afterDelete = await asUser(USER_A, "select count(*)::int as n from intents where id=$1", [id]);
+      expect(afterDelete.rows[0].n).toBe(0);
+
+      // LAST — a failed statement aborts the tx, so the cross-tenant-insert denial
+      // (WITH CHECK) goes after the assertions above. A user can't insert a row
+      // owned by someone else.
+      await expect(
+        asUser(
+          USER_B,
+          "insert into intents (user_id, cluster, intent_key, label) values ($1,'fear','fear_overspending','x')",
+          [USER_A],
+        ),
+      ).rejects.toThrow();
+    } finally {
+      await client.query("rollback");
+    }
+  }, 30_000); // many sequential round-trips to the remote DB
+
+  it("blocks a forged cross-tenant goal→intent link (composite FK)", async () => {
+    await client.query("begin");
+    try {
+      await client.query("insert into auth.users (id) values ($1),($2) on conflict do nothing", [USER_A, USER_B]);
+      const ins = await client.query(
+        "insert into intents (user_id,cluster,intent_key,label) values ($1,'goal','goal_save_specific','x') returning id",
+        [USER_A],
+      );
+      const foreignIntentId = ins.rows[0].id;
+      // USER_B owns the goal (passes the user_id WITH CHECK) but points it at
+      // USER_A's intent — the composite FK (intent_id, user_id)→intents(id, user_id)
+      // rejects it at the DB boundary.
+      await expect(
+        asUser(USER_B, "insert into goals (user_id, intent_id, kind) values ($1,$2,'x')", [USER_B, foreignIntentId]),
+      ).rejects.toThrow();
+    } finally {
+      await client.query("rollback");
+    }
+  }, 30_000);
+});
