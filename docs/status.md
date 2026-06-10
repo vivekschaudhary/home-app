@@ -5,7 +5,7 @@ _Last updated: 2026-06-09 — WLT-3 brief approved (intent-first / user-first); 
 ## In flight
 
 **WLT-3 — Intent-first onboarding** — brief `approved`; **building**. Directive baked in: **intent-first, user-first** — declare intent *before* connecting (defer friction).
-- **WLT-11 (Declare your intent — 6-cluster front door) — `ready`**. The intent-first front door (Fear/Goal/Confusion/Control/Habit/Aspiration → starter intents) → persist `Intent` + derived `Goal` (owner-CRUD RLS) → "putting your plan together" placeholder → bridge to connect. Ships without WLT-4; `intent_declared` baseline event. **Next: `/build WLT-11`** (the unblocker for WLT-4).
+- **WLT-11 (Declare your intent — 6-cluster front door) — `shipped`** (PR #26, 2026-06-09, live in prod). The intent-first front door (Fear/Goal/Confusion/Control/Habit/Aspiration → starter intents) → persist `Intent` + derived `Goal` → "putting your plan together" placeholder → bridge to connect; `intent_declared` baseline event. Post-auth now lands here (session-scoped explore escape). Cross-model Codex code + security both **Approve** after 4 rounds — deepest catch: a **composite FK** `goals(intent_id,user_id)→intents(id,user_id)` blocking forged cross-tenant goal→intent links at the DB. Ships without WLT-4.
 - **Later slices:** free-text intent expression · intent management (edit/add) · richer Goal params.
 
 **WLT-2 — Account aggregation + CSV fallback** — brief + architecture `approved`; **building**.

@@ -2,7 +2,7 @@
 id: WLT-11
 bet: WLT-3
 type: story
-status: ready
+status: shipped
 priority: P1
 created: 2026-06-09
 author: PM
