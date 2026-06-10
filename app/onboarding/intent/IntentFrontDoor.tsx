@@ -86,6 +86,11 @@ export function IntentFrontDoor() {
         <p className="mt-2 text-slate-600">{COPY.intent.subtitle}</p>
       </header>
 
+      {/* Polite announcement of the in-flight "Saving…" state (AC10). */}
+      <p role="status" aria-live="polite" className="sr-only">
+        {declaring ? COPY.intent.declaring : ""}
+      </p>
+
       {errorKind && (
         <div className="mb-6">
           <Banner variant="error">{COPY.intentErrors[errorKind]}</Banner>

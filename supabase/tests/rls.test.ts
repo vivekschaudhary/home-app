@@ -190,6 +190,18 @@ suite("intent RLS (WLT-3): owner CRUD", () => {
       const goalOther = await asUser(USER_B, "select count(*)::int as n from goals where intent_id=$1", [id]);
       expect(goalOther.rows[0].n).toBe(0);
 
+      // Owner UPDATE via the authenticated RLS path (AC6 owner-CRUD): the owner
+      // can update their own intent/goal; a cross-tenant update matches 0 rows
+      // (the row is invisible to the UPDATE's USING clause for another user).
+      const updIntent = await asUser(USER_A, "update intents set label='updated' where id=$1", [id]);
+      expect(updIntent.rowCount).toBe(1);
+      const crossIntent = await asUser(USER_B, "update intents set label='hacked' where id=$1", [id]);
+      expect(crossIntent.rowCount).toBe(0);
+      const updGoal = await asUser(USER_A, "update goals set status='active' where intent_id=$1", [id]);
+      expect(updGoal.rowCount).toBe(1);
+      const crossGoal = await asUser(USER_B, "update goals set status='archived' where intent_id=$1", [id]);
+      expect(crossGoal.rowCount).toBe(0);
+
       // Soft-delete via service role (the user-driven soft-delete-via-RLS path —
       // setting deleted_at moves the row out of one's own SELECT visibility, a
       // Postgres WITH-CHECK quirk — is deferred to the intent-management slice;
