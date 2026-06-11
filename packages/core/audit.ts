@@ -12,6 +12,10 @@ export const AUDIT_ACTIONS = {
   // Aggregation (WLT-2)
   AGGREGATION_CONNECT: "aggregation.connect",
   AGGREGATION_DISCONNECT: "aggregation.disconnect",
+  // Workflow engine (WLT-4) — every workflow action lands in the audit trail
+  // (foundation L88: "workflow actions"; brief security mitigation).
+  WORKFLOW_ASSEMBLE: "workflow.assemble",
+  WORKFLOW_ACTION: "workflow.action",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

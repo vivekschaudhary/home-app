@@ -5,7 +5,7 @@
 
 import { createServerSupabase } from "@vc1023/passkey-2fa";
 import type { NetWorthConfig } from "@wealth/core";
-import { emitFunnel } from "@wealth/db/emit";
+import { emitAudit, emitFunnel } from "@wealth/db/emit";
 import { readAccountBalances } from "./aggregation-read";
 import {
   type ActionResult,
@@ -74,40 +74,28 @@ const store: EngineStore = {
     await supabase.from("goals").update({ status: "active" }).eq("id", goalId).eq("status", "pending_workflow");
   },
 
-  async activeWorkflowOwned(userId, workflowId) {
+  async completeActionAtomic(_userId, workflowId, target) {
+    // complete_workflow_action (0006): SECURITY INVOKER — runs under the
+    // caller's RLS session, so ownership is enforced by the same owner policies;
+    // replay check + run insert + config update commit in ONE transaction.
     const supabase = await createServerSupabase();
-    const { data } = await supabase
-      .from("workflows")
-      .select(`${WF_COLS}, goals!inner(kind)`)
-      .eq("id", workflowId)
-      .eq("user_id", userId)
-      .eq("status", "active")
-      .is("deleted_at", null)
-      .limit(1);
-    const row = (data?.[0] ?? null) as (WorkflowRow & { goals: { kind: string } }) | null;
-    if (!row) return null;
-    const { goals, ...wf } = row;
-    return { ...wf, goalKind: goals.kind };
-  },
-
-  async insertRun(userId, workflowId, kind, context) {
-    const supabase = await createServerSupabase();
-    const { error } = await supabase
-      .from("workflow_runs")
-      .insert({ user_id: userId, workflow_id: workflowId, kind, context });
-    if (!error) return "ok";
-    // 23505 = unique_violation on (workflow_id, kind) — a replayed action.
-    return error.code === "23505" ? "duplicate" : "error";
-  },
-
-  async saveConfig(workflowId, config) {
-    const supabase = await createServerSupabase();
-    const { error } = await supabase.from("workflows").update({ config }).eq("id", workflowId);
-    return !error;
+    const { data, error } = await supabase.rpc("complete_workflow_action", {
+      p_workflow_id: workflowId,
+      p_target: target,
+    });
+    if (error) return "error";
+    const res = data as { ok: boolean; error?: string; archetype?: string; goal_kind?: string } | null;
+    if (!res?.ok) return "invalid";
+    return { ok: true, archetype: res.archetype ?? "", goalKind: res.goal_kind ?? "" };
   },
 };
 
-const engine = createWorkflowEngine({ store, readBalances: readAccountBalances, emit: emitFunnel });
+const engine = createWorkflowEngine({
+  store,
+  readBalances: readAccountBalances,
+  emit: emitFunnel,
+  audit: emitAudit,
+});
 
 export const getOrCreateWorkflow = engine.getOrCreateWorkflow;
 export const completeAction = engine.completeAction;

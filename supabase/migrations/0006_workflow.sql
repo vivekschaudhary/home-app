@@ -86,3 +86,48 @@ drop policy if exists workflow_runs_select_own on workflow_runs;
 create policy workflow_runs_select_own on workflow_runs for select using (auth.uid() = user_id);
 drop policy if exists workflow_runs_insert_own on workflow_runs;
 create policy workflow_runs_insert_own on workflow_runs for insert with check (auth.uid() = user_id);
+
+-- ─── complete_workflow_action: the action commit, ATOMIC ───────────────────
+-- One transaction for run-insert + config-update, so a partial failure can
+-- never strand a workflow (run recorded but target unset → permanently stuck
+-- outside 'running' with replay blocked). SECURITY INVOKER: runs as the calling
+-- authenticated user — every statement stays under owner RLS. FOR UPDATE
+-- serializes concurrent completes on the same workflow.
+create or replace function complete_workflow_action(p_workflow_id uuid, p_target numeric)
+returns jsonb
+language plpgsql
+security invoker
+as $$
+declare
+  v_wf record;
+begin
+  select w.id, w.user_id, w.archetype, w.config, g.kind as goal_kind
+    into v_wf
+    from workflows w
+    join goals g on g.id = w.goal_id and g.user_id = w.user_id
+   where w.id = p_workflow_id
+     and w.status = 'active'
+     and w.deleted_at is null
+     for update of w;
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'invalid');
+  end if;
+  -- Replay guard (engine layer, now in-transaction): action already completed.
+  if v_wf.config ? 'target' then
+    return jsonb_build_object('ok', false, 'error', 'invalid');
+  end if;
+  begin
+    insert into workflow_runs (user_id, workflow_id, kind, context)
+    values (v_wf.user_id, p_workflow_id, 'target_set', jsonb_build_object('target', p_target));
+  exception when unique_violation then
+    -- The DB replay guard (unique workflow_id+kind) — reject, change nothing.
+    return jsonb_build_object('ok', false, 'error', 'invalid');
+  end;
+  update workflows
+     set config = config || jsonb_build_object('target', p_target)
+   where id = p_workflow_id;
+  return jsonb_build_object('ok', true, 'archetype', v_wf.archetype, 'goal_kind', v_wf.goal_kind);
+end $$;
+
+revoke all on function complete_workflow_action(uuid, numeric) from public;
+grant execute on function complete_workflow_action(uuid, numeric) to authenticated;

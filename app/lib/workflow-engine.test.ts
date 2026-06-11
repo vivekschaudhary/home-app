@@ -13,13 +13,13 @@ function makeFakes(opts?: {
   balances?: AccountBalance[];
   insertConflict?: boolean;
   activateFails?: boolean;
-  runResult?: "ok" | "duplicate" | "error";
+  atomicResult?: "invalid" | "error"; // default: succeed atomically
   existingWorkflow?: WorkflowRow | null;
 }) {
   const goal = opts?.goal === undefined ? { id: "g1", kind: "unified_view", status: "pending_workflow" } : opts.goal;
   let workflow: WorkflowRow | null = opts?.existingWorkflow ?? null;
-  const runs: Array<{ kind: string; context: Record<string, unknown> }> = [];
   const emitted: Array<{ event: string; payload: Record<string, unknown> }> = [];
+  const audited: Array<{ action: string; context: Record<string, unknown> }> = [];
 
   const store: EngineStore = {
     latestLiveGoal: vi.fn(async () => goal),
@@ -39,17 +39,15 @@ function makeFakes(opts?: {
       return true;
     }),
     activateGoal: vi.fn(async () => {}),
-    activeWorkflowOwned: vi.fn(async (_u, id) =>
-      workflow && workflow.id === id && workflow.status === "active" ? { ...workflow, goalKind: goal?.kind ?? "" } : null,
-    ),
-    insertRun: vi.fn(async (_u, _w, kind, context) => {
-      const result = opts?.runResult ?? "ok";
-      if (result === "ok") runs.push({ kind, context });
-      return result;
-    }),
-    saveConfig: vi.fn(async (_id, config) => {
-      workflow = workflow ? { ...workflow, config } : null;
-      return true;
+    // Mirrors complete_workflow_action's semantics: invalid when not the
+    // caller's active workflow OR the target's already set (replay/duplicate);
+    // otherwise commits run + config together (atomic — all or nothing).
+    completeActionAtomic: vi.fn(async (_u, workflowId, target) => {
+      if (opts?.atomicResult) return opts.atomicResult;
+      if (!workflow || workflow.id !== workflowId || workflow.status !== "active") return "invalid" as const;
+      if (typeof (workflow.config as { target?: unknown }).target === "number") return "invalid" as const;
+      workflow = { ...workflow, config: { ...workflow.config, target } };
+      return { ok: true as const, archetype: workflow.archetype, goalKind: goal?.kind ?? "" };
     }),
   };
   const engine = createWorkflowEngine({
@@ -58,8 +56,11 @@ function makeFakes(opts?: {
     emit: vi.fn(async (event, _u, payload) => {
       emitted.push({ event, payload });
     }),
+    audit: vi.fn(async (action, _u, context) => {
+      audited.push({ action, context });
+    }),
   });
-  return { engine, store, emitted, runs, getWorkflow: () => workflow };
+  return { engine, store, emitted, audited, getWorkflow: () => workflow };
 }
 
 // ── getOrCreateWorkflow ─────────────────────────────────────────────────────
@@ -76,14 +77,15 @@ describe("engine.getOrCreateWorkflow (two-phase assembly)", () => {
   });
 
   it("assembles pending_data and STAYS pending without real balances — never fake (AC3/AC4)", async () => {
-    const { engine, emitted } = makeFakes({ balances: [] });
+    const { engine, emitted, audited } = makeFakes({ balances: [] });
     const view = await engine.getOrCreateWorkflow("u1");
     expect(view.state).toBe("pending_data");
     expect(emitted).toHaveLength(0); // not assembled-active yet → no event
+    expect(audited).toHaveLength(0);
   });
 
-  it("personalizes once balances exist: active view + goal flip + workflow_assembled {archetype, goal_kind} (AC3/AC8)", async () => {
-    const { engine, store, emitted } = makeFakes({
+  it("personalizes once balances exist: active view + goal flip + workflow_assembled {archetype, goal_kind} + audit (AC3/AC8)", async () => {
+    const { engine, store, emitted, audited } = makeFakes({
       balances: [
         { kind: "depository", balanceCurrent: 31400 },
         { kind: "credit", balanceCurrent: 7220 },
@@ -95,6 +97,13 @@ describe("engine.getOrCreateWorkflow (two-phase assembly)", () => {
     expect(emitted).toEqual([
       { event: "workflow_assembled", payload: { archetype: "networth_snapshot", goal_kind: "unified_view" } },
     ]);
+    // The audit trail records the assemble transition (foundation L88).
+    expect(audited).toEqual([
+      {
+        action: "workflow.assemble",
+        context: { workflow_id: "wf1", archetype: "networth_snapshot", goal_kind: "unified_view" },
+      },
+    ]);
   });
 
   it("idempotent under the unique-index race: conflict → re-reads the winner (AC3)", async () => {
@@ -103,14 +112,15 @@ describe("engine.getOrCreateWorkflow (two-phase assembly)", () => {
     expect(view).toMatchObject({ state: "pending_data", workflowId: "wf-winner" });
   });
 
-  it("lost the activate race → stays pending this load; no event emitted", async () => {
-    const { engine, emitted } = makeFakes({
+  it("lost the activate race → stays pending this load; no event, no audit", async () => {
+    const { engine, emitted, audited } = makeFakes({
       activateFails: true,
       balances: [{ kind: "depository", balanceCurrent: 100 }],
     });
     const view = await engine.getOrCreateWorkflow("u1");
     expect(view.state).toBe("pending_data");
     expect(emitted).toHaveLength(0);
+    expect(audited).toHaveLength(0);
   });
 
   it("a workflow with a set target reads as running (the persistent state)", async () => {
@@ -136,62 +146,68 @@ const ACTIVE: WorkflowRow = {
   config: { netWorth: 100, assets: 100, debts: 0, suggestedTarget: 500 },
 };
 
-describe("engine.completeAction (the WAWU unit — exactly once)", () => {
-  it("records ONE immutable run + persists the target + emits action_completed {archetype, goal_kind} (AC5/AC8)", async () => {
-    const { engine, emitted, runs, getWorkflow } = makeFakes({ existingWorkflow: { ...ACTIVE } });
+describe("engine.completeAction (the WAWU unit — atomic, exactly once)", () => {
+  it("commits atomically + emits action_completed {archetype, goal_kind} + audits workflow.action (AC5/AC8)", async () => {
+    const { engine, emitted, audited, getWorkflow } = makeFakes({ existingWorkflow: { ...ACTIVE } });
     const res = await engine.completeAction({ userId: "u1", workflowId: "wf1", target: 1234.567 });
     expect(res).toEqual({ ok: true, target: 1234.57 }); // cents-rounded
-    expect(runs).toEqual([{ kind: "target_set", context: { target: 1234.57 } }]);
     expect((getWorkflow()?.config as { target?: number }).target).toBe(1234.57);
     // The WLT-5 funnel CONTRACT: same shape as workflow_assembled.
     expect(emitted).toEqual([
       { event: "action_completed", payload: { archetype: "networth_snapshot", goal_kind: "unified_view" } },
     ]);
+    // The audit trail records the action (brief security mitigation).
+    expect(audited).toEqual([
+      {
+        action: "workflow.action",
+        context: { workflow_id: "wf1", archetype: "networth_snapshot", action_kind: "target_set" },
+      },
+    ]);
   });
 
-  it("rejects a non-finite target", async () => {
-    const { engine } = makeFakes({ existingWorkflow: { ...ACTIVE } });
+  it("rejects a non-finite target before touching the store", async () => {
+    const { engine, store } = makeFakes({ existingWorkflow: { ...ACTIVE } });
     expect(await engine.completeAction({ userId: "u1", workflowId: "wf1", target: Number.NaN })).toEqual({
       ok: false,
       error: "invalid",
     });
+    expect(store.completeActionAtomic).not.toHaveBeenCalled();
   });
 
-  it("rejects when the workflow isn't the caller's active workflow", async () => {
-    const { engine } = makeFakes({ existingWorkflow: null });
+  it("rejects when the workflow isn't the caller's active workflow — no emit, no audit", async () => {
+    const { engine, emitted, audited } = makeFakes({ existingWorkflow: null });
     expect(await engine.completeAction({ userId: "u1", workflowId: "wf-x", target: 100 })).toEqual({
       ok: false,
       error: "invalid",
     });
+    expect(emitted).toHaveLength(0);
+    expect(audited).toHaveLength(0);
   });
 
-  it("REPLAY (engine layer): a workflow whose target is already set is rejected — no run, no emit", async () => {
-    const { engine, emitted, runs } = makeFakes({
+  it("REPLAY: an already-completed action is invalid (in-transaction check) — no re-emit, no double audit", async () => {
+    const { engine, emitted, audited } = makeFakes({
       existingWorkflow: { ...ACTIVE, config: { ...ACTIVE.config, target: 1000 } },
     });
     expect(await engine.completeAction({ userId: "u1", workflowId: "wf1", target: 2000 })).toEqual({
       ok: false,
       error: "invalid",
     });
-    expect(runs).toHaveLength(0);
     expect(emitted).toHaveLength(0);
+    expect(audited).toHaveLength(0);
   });
 
-  it("REPLAY (DB layer): a duplicate run (unique workflow_id+kind) is rejected — never emits", async () => {
-    const { engine, emitted } = makeFakes({ existingWorkflow: { ...ACTIVE }, runResult: "duplicate" });
-    expect(await engine.completeAction({ userId: "u1", workflowId: "wf1", target: 100 })).toEqual({
-      ok: false,
-      error: "invalid",
+  it("ATOMICITY: a store error means NOTHING happened — save_failed, no emit, no audit, workflow untouched", async () => {
+    const { engine, emitted, audited, getWorkflow } = makeFakes({
+      existingWorkflow: { ...ACTIVE },
+      atomicResult: "error",
     });
-    expect(emitted).toHaveLength(0);
-  });
-
-  it("a store error surfaces as save_failed (no emit)", async () => {
-    const { engine, emitted } = makeFakes({ existingWorkflow: { ...ACTIVE }, runResult: "error" });
     expect(await engine.completeAction({ userId: "u1", workflowId: "wf1", target: 100 })).toEqual({
       ok: false,
       error: "save_failed",
     });
     expect(emitted).toHaveLength(0);
+    expect(audited).toHaveLength(0);
+    // The all-or-nothing guarantee: no half-committed target.
+    expect((getWorkflow()?.config as { target?: number }).target).toBeUndefined();
   });
 });

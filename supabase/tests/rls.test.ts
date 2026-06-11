@@ -373,6 +373,46 @@ suite("workflow RLS (WLT-12): owner CRUD + immutable runs + composite FKs", () =
     }
   }, 30_000);
 
+  it("complete_workflow_action (atomic RPC): owner commits run+config together; replay invalid; cross-tenant invalid", async () => {
+    await client.query("begin");
+    try {
+      await client.query("insert into auth.users (id) values ($1),($2) on conflict do nothing", [USER_A, USER_B]);
+      const goalId = await seedGoal(USER_A);
+      const wf = await client.query(
+        `insert into workflows (user_id, goal_id, archetype, status, config)
+         values ($1,$2,'networth_snapshot','active','{"netWorth":100}'::jsonb) returning id`,
+        [USER_A, goalId],
+      );
+      const wfId = wf.rows[0].id;
+
+      // Owner: atomic success — run inserted AND config.target set, together.
+      const ok = await asUser(USER_A, "select complete_workflow_action($1, 500) as r", [wfId]);
+      expect(ok.rows[0].r.ok).toBe(true);
+      const run = await client.query("select count(*)::int as n from workflow_runs where workflow_id=$1", [wfId]);
+      expect(run.rows[0].n).toBe(1);
+      const cfg = await client.query("select (config->>'target')::numeric as t from workflows where id=$1", [wfId]);
+      expect(Number(cfg.rows[0].t)).toBe(500);
+
+      // Replay: invalid — no second run, target unchanged.
+      const replay = await asUser(USER_A, "select complete_workflow_action($1, 999) as r", [wfId]);
+      expect(replay.rows[0].r).toEqual({ ok: false, error: "invalid" });
+      const runAfter = await client.query("select count(*)::int as n from workflow_runs where workflow_id=$1", [wfId]);
+      expect(runAfter.rows[0].n).toBe(1);
+
+      // Cross-tenant: SECURITY INVOKER + RLS → USER_B can't even see it → invalid.
+      const goalB = await seedGoal(USER_B);
+      const wfB = await client.query(
+        `insert into workflows (user_id, goal_id, archetype, status, config)
+         values ($1,$2,'networth_snapshot','active','{}'::jsonb) returning id`,
+        [USER_B, goalB],
+      );
+      const cross = await asUser(USER_A, "select complete_workflow_action($1, 500) as r", [wfB.rows[0].id]);
+      expect(cross.rows[0].r).toEqual({ ok: false, error: "invalid" });
+    } finally {
+      await client.query("rollback");
+    }
+  }, 30_000);
+
   it("REPLAY guard: one completed run per (workflow, kind) — duplicates rejected at the DB", async () => {
     await client.query("begin");
     try {

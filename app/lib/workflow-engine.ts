@@ -6,7 +6,9 @@
 //   one action → ONE immutable WorkflowRun (the WAWU unit; replay-guarded).
 
 import {
+  AUDIT_ACTIONS,
   type AccountBalance,
+  type AuditAction,
   FUNNEL_EVENTS,
   type FunnelEvent,
   type NetWorthConfig,
@@ -38,19 +40,22 @@ export interface EngineStore {
   activateWorkflow(workflowId: string, config: NetWorthConfig): Promise<boolean>;
   /** The WLT-3→WLT-4 handoff: goal pending_workflow→active. */
   activateGoal(goalId: string): Promise<void>;
-  /** The user's own ACTIVE workflow + its goal kind (for the funnel contract). */
-  activeWorkflowOwned(userId: string, workflowId: string): Promise<(WorkflowRow & { goalKind: string }) | null>;
-  /** Immutable run insert; "duplicate" = replay (unique workflow_id+kind). */
-  insertRun(
+  /**
+   * The action commit — ATOMIC (one DB transaction: replay check + immutable
+   * run insert + config update via the complete_workflow_action function,
+   * SECURITY INVOKER → owner RLS applies). A partial failure can never strand
+   * the workflow outside 'running'. "invalid" covers not-owned / not-active /
+   * already-completed / duplicate-run.
+   */
+  completeActionAtomic(
     userId: string,
     workflowId: string,
-    kind: string,
-    context: Record<string, unknown>,
-  ): Promise<"ok" | "duplicate" | "error">;
-  saveConfig(workflowId: string, config: Record<string, unknown>): Promise<boolean>;
+    target: number,
+  ): Promise<{ ok: true; archetype: string; goalKind: string } | "invalid" | "error">;
 }
 
 export type EmitFn = (event: FunnelEvent, userId: string, payload: Record<string, unknown>) => Promise<void>;
+export type AuditFn = (action: AuditAction, userId: string, context: Record<string, unknown>) => Promise<void>;
 
 export type WorkflowView =
   | { state: "none" }
@@ -64,9 +69,10 @@ export interface EngineDeps {
   store: EngineStore;
   readBalances: (userId: string) => Promise<AccountBalance[]>;
   emit: EmitFn;
+  audit: AuditFn;
 }
 
-export function createWorkflowEngine({ store, readBalances, emit }: EngineDeps) {
+export function createWorkflowEngine({ store, readBalances, emit, audit }: EngineDeps) {
   /** Idempotent get-or-assemble-or-advance (lazy, on dashboard load). */
   async function getOrCreateWorkflow(userId: string): Promise<WorkflowView> {
     const goal = await store.latestLiveGoal(userId);
@@ -97,6 +103,12 @@ export function createWorkflowEngine({ store, readBalances, emit }: EngineDeps) 
         archetype: archetype.key,
         goal_kind: goal.kind, // the WLT-5 funnel contract — enumerable, no PII
       });
+      // Audit trail (foundation L88 "workflow actions"): the assemble transition.
+      await audit(AUDIT_ACTIONS.WORKFLOW_ASSEMBLE, userId, {
+        workflow_id: wf.id,
+        archetype: archetype.key,
+        goal_kind: goal.kind,
+      });
       wf = { ...wf, status: "active", config: config as unknown as Record<string, unknown> };
     }
 
@@ -107,28 +119,26 @@ export function createWorkflowEngine({ store, readBalances, emit }: EngineDeps) 
     return { state: "active", workflowId: wf.id, config };
   }
 
-  /** The one platform-prompted action — exactly-once (replay-guarded). */
+  /** The one platform-prompted action — exactly-once, ATOMIC at the DB. */
   async function completeAction(input: { userId: string; workflowId: string; target: number }): Promise<ActionResult> {
     if (!Number.isFinite(input.target)) return { ok: false, error: "invalid" };
     const target = Math.round(input.target * 100) / 100;
 
-    const wf = await store.activeWorkflowOwned(input.userId, input.workflowId);
-    if (!wf) return { ok: false, error: "invalid" };
-    // Replay guard (engine layer): the action already completed → reject, no re-emit.
-    if (typeof (wf.config as { target?: unknown }).target === "number") return { ok: false, error: "invalid" };
-
-    // The immutable run first — the DB unique (workflow_id, kind) is the
-    // defense-in-depth replay guard; a duplicate NEVER emits or re-writes.
-    const run = await store.insertRun(input.userId, wf.id, "target_set", { target });
-    if (run === "duplicate") return { ok: false, error: "invalid" };
-    if (run === "error") return { ok: false, error: "save_failed" };
-
-    const saved = await store.saveConfig(wf.id, { ...wf.config, target });
-    if (!saved) return { ok: false, error: "save_failed" };
+    // One DB transaction: ownership/active/replay checks + run insert + config
+    // update commit together — a partial failure can't strand the workflow.
+    const result = await store.completeActionAtomic(input.userId, input.workflowId, target);
+    if (result === "invalid") return { ok: false, error: "invalid" };
+    if (result === "error") return { ok: false, error: "save_failed" };
 
     await emit(FUNNEL_EVENTS.ACTION_COMPLETED, input.userId, {
-      archetype: wf.archetype,
-      goal_kind: wf.goalKind, // SAME contract shape as workflow_assembled (AC8)
+      archetype: result.archetype,
+      goal_kind: result.goalKind, // SAME contract shape as workflow_assembled (AC8)
+    });
+    // Audit trail (foundation L88 "workflow actions"; brief security mitigation).
+    await audit(AUDIT_ACTIONS.WORKFLOW_ACTION, input.userId, {
+      workflow_id: input.workflowId,
+      archetype: result.archetype,
+      action_kind: "target_set",
     });
     return { ok: true, target };
   }
