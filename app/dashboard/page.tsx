@@ -1,9 +1,34 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { getSessionUser, requireAal2 } from "@vc1023/passkey-2fa";
 import { SignOutButton } from "@/app/components/SignOutButton";
+import { COPY } from "@/app/lib/copy";
+import { getOrCreateWorkflow } from "@/app/lib/workflow";
 import { DashboardNudge } from "./DashboardNudge";
+import { WorkflowCard } from "./WorkflowCard";
 
 export const dynamic = "force-dynamic";
+
+// WLT-12: lazy idempotent assembly — select/advance the user's workflow from
+// their declared goal; personalizes once real balances exist (two-phase). An
+// async section so the Suspense fallback below RENDERS the assembling state
+// while the engine works (streamed; AC9/AC10 — announced via role="status").
+async function WorkflowSection({ userId }: { userId: string }) {
+  const workflow = await getOrCreateWorkflow(userId);
+  return <WorkflowCard view={workflow} />;
+}
+
+function WorkflowAssembling() {
+  return (
+    <section aria-busy="true" className="mt-6 rounded-lg border border-gray-200 bg-white p-6">
+      <p role="status" aria-live="polite" className="text-sm text-gray-500">
+        {COPY.workflow.assembling}
+      </p>
+      {/* skeleton; motion-reduce keeps it static (AC11 reduced-motion) */}
+      <div aria-hidden="true" className="mt-3 h-8 w-44 animate-pulse rounded bg-gray-100 motion-reduce:animate-none" />
+    </section>
+  );
+}
 
 // Protected app shell. requireAal2() enforces the second factor server-side
 // (AC2) — a session without a verified passkey is redirected to /sign-in.
@@ -31,6 +56,11 @@ export default async function DashboardPage() {
           Your account is protected with a passkey. Signed in as{" "}
           <span className="font-medium text-gray-900">{user?.email}</span>.
         </p>
+        {user ? (
+          <Suspense fallback={<WorkflowAssembling />}>
+            <WorkflowSection userId={user.id} />
+          </Suspense>
+        ) : null}
         <DashboardNudge />
       </section>
     </main>
