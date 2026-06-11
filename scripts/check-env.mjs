@@ -95,6 +95,13 @@ if (missing.length) errors.push(`Missing required env: ${missing.join(", ")}`);
     for (const k of ["INNGEST_EVENT_KEY", "INNGEST_SIGNING_KEY"]) {
       if (!isSet(k)) errors.push(`Missing ${k} (aggregation backfill needs Inngest when Plaid is configured)`);
     }
+    // PLAID_WEBHOOK_URL enables real-time sync (WLT-10). Without it, full history
+    // still completes via the 6h cron — so it's a warning, not a hard failure.
+    if (!isSet("PLAID_WEBHOOK_URL")) {
+      console.warn(
+        "⚠ Env preflight: PLAID_WEBHOOK_URL unset — real-time webhook sync disabled (full history still completes via the cron fallback). Set it to https://<host>/api/aggregation/plaid/webhook + register with Plaid.",
+      );
+    }
   }
 }
 

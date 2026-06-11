@@ -13,6 +13,7 @@ import {
   startLink,
 } from "@/app/lib/aggregation-client";
 import { COPY } from "@/app/lib/copy";
+import { isImporting, statusFor } from "./import-state";
 
 function errorCopy(e: AggError): string {
   switch (e) {
@@ -37,16 +38,6 @@ function relativeTime(iso: string): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-type DisplayStatus = "connected" | "syncing" | "needs_reauth" | "error";
-
-function statusFor(conn: ConnectionView): { status: DisplayStatus; label: string } {
-  if (conn.healthStatus === "needs_reauth")
-    return { status: "needs_reauth", label: COPY.accounts.needsReauthStatus };
-  if (conn.healthStatus === "error") return { status: "error", label: COPY.accounts.errorStatus };
-  if (!conn.lastSyncedAt) return { status: "syncing", label: COPY.accounts.syncingStatus };
-  return { status: "connected", label: COPY.accounts.connectedStatus };
-}
-
 export function AccountsClient({ initialConnections }: { initialConnections: ConnectionView[] }) {
   const [connections, setConnections] = useState<ConnectionView[]>(initialConnections);
   const [consentOpen, setConsentOpen] = useState(false);
@@ -54,13 +45,24 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [syncing, setSyncing] = useState(false);
   const [disconnectTarget, setDisconnectTarget] = useState<ConnectionView | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
 
   const refresh = useCallback(async () => {
     setConnections(await fetchConnections());
   }, []);
+
+  // While ANY connection is still in its import window, poll so transactions +
+  // the settled state surface. Server-derived (created_at) → this resumes after
+  // navigating away and back, not just for the session that connected (AC7).
+  const anyImporting = connections.some(isImporting);
+  useEffect(() => {
+    if (!anyImporting) return;
+    const t = setInterval(() => {
+      void refresh();
+    }, 3000);
+    return () => clearInterval(t);
+  }, [anyImporting, refresh]);
 
   const onPlaidSuccess = useCallback(
     async (publicToken: string) => {
@@ -74,15 +76,8 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
       }
       setError(null);
       setToast(COPY.connect.success);
-      setSyncing(true);
+      // The new connection is in its import window → the polling effect takes over.
       await refresh();
-      // The 90-day backfill runs off the request path; poll briefly so the
-      // transactions/last-synced surface as they land (non-blocking UI).
-      for (let i = 0; i < 6; i += 1) {
-        await new Promise((r) => setTimeout(r, 2500));
-        await refresh();
-      }
-      setSyncing(false);
     },
     [refresh],
   );
@@ -188,9 +183,9 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
                 ));
               })}
             </ul>
-            {syncing ? (
+            {anyImporting ? (
               <p aria-live="polite" className="text-sm text-gray-500">
-                {COPY.accounts.syncing}
+                {COPY.accounts.importingNote}
               </p>
             ) : null}
             <div className="max-w-xs">

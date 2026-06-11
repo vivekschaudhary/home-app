@@ -63,6 +63,7 @@ jobs:
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/0002_auth_webauthn.sql
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/0003_aggregation.sql
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/0004_intent.sql
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/0005_aggregation_history.sql
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
             -c "grant select, insert, update, delete on all tables in schema public to authenticated;"
 
@@ -93,6 +94,7 @@ jobs:
             "/api/aggregation/link/complete/route",
             "/api/aggregation/connections/route",
             "/api/aggregation/connections/[id]/disconnect/route",
+            "/api/aggregation/plaid/webhook/route",
             "/settings/accounts/page",
             "/api/intent/route",
             "/onboarding/intent/page",

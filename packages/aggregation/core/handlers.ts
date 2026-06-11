@@ -38,6 +38,8 @@ export interface ConnectionView {
   institutionName: string | null;
   healthStatus: string;
   lastSyncedAt: string | null;
+  historySyncedAt: string | null;
+  createdAt: string;
   accounts: AccountView[];
 }
 
@@ -138,7 +140,7 @@ export function createAggregationHandlers(opts: AggregationHandlerOptions): Aggr
       const [{ data: conns }, { data: accts }] = await Promise.all([
         svc
           .from("account_connections")
-          .select("id, provider, institution_name, health_status, last_synced_at")
+          .select("id, provider, institution_name, health_status, last_synced_at, history_synced_at, created_at")
           .eq("user_id", userId)
           .is("deleted_at", null)
           .order("created_at", { ascending: true }),
@@ -170,6 +172,8 @@ export function createAggregationHandlers(opts: AggregationHandlerOptions): Aggr
         institutionName: (c.institution_name as string | null) ?? null,
         healthStatus: String(c.health_status),
         lastSyncedAt: (c.last_synced_at as string | null) ?? null,
+        historySyncedAt: (c.history_synced_at as string | null) ?? null,
+        createdAt: String(c.created_at),
         accounts: byConn.get(String(c.id)) ?? [],
       }));
     },

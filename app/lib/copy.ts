@@ -116,6 +116,8 @@ export const COPY = {
     syncing: "Syncing your transactions…",
     connectedStatus: "Connected",
     syncingStatus: "Syncing",
+    importingStatus: "Importing…", // historical pull in progress (WLT-10)
+    importingNote: "Importing your history — this can take a minute. You can keep using the app; we'll keep loading in the background.",
     needsReauthStatus: "Needs sign-in", // connection-health states surface fully in a later story
     errorStatus: "Error",
     rowLastSynced: "Updated {time}", // {time} = relative time (e.g. "just now", "2m ago")
