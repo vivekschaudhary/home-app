@@ -1,7 +1,7 @@
 ---
 id: WLT-4
 type: feature
-status: proposed
+status: approved
 priority: P1
 parent: FOUNDATION-PRODUCT
 portfolio_stub: false
@@ -48,11 +48,11 @@ last_synced: 2026-06-05
 
 ## Problem
 
-A user who declared an intent (WLT-3) now has a `Goal` sitting at `pending_workflow` and real aggregated data (WLT-2) — but **nothing runs**. They see WLT-11's *"we're putting your plan together"* placeholder and then… nothing assembles, no action is prompted. The loop is open: declared intent → placeholder → dead end. This is precisely the failure mode the product thesis names — existing tools fail at **orchestration, not information** (product.md L60): they hand the user a blank canvas and manual discipline (YNAB, Monarch, Copilot each win one category but none turn a stated goal into a *running, personalized plan*). The user never gets the one thing they came for: a plan that's actually working and tells them the next concrete thing to do.
+A user who declared an intent (WLT-3) now has a `Goal` sitting at `pending_workflow` and real aggregated data (WLT-2) — but **nothing runs**. They see WLT-11's _"we're putting your plan together"_ placeholder and then… nothing assembles, no action is prompted. The loop is open: declared intent → placeholder → dead end. This is precisely the failure mode the product thesis names — existing tools fail at **orchestration, not information** (product.md L60): they hand the user a blank canvas and manual discipline (YNAB, Monarch, Copilot each win one category but none turn a stated goal into a _running, personalized plan_). The user never gets the one thing they came for: a plan that's actually working and tells them the next concrete thing to do.
 
 ## User
 
-The **Consumer persona (~80%)** — "connects accounts, runs pre-built/marketplace workflows, builds nothing; success = control + consistent progress" (product.md L23). At this point in the loop they've already declared an intent and connected real data; their job-to-be-done is *"turn what I said I want into something that's running and tells me my next move,"* without composing anything themselves.
+The **Consumer persona (~80%)** — "connects accounts, runs pre-built/marketplace workflows, builds nothing; success = control + consistent progress" (product.md L23). At this point in the loop they've already declared an intent and connected real data; their job-to-be-done is _"turn what I said I want into something that's running and tells me my next move,"_ without composing anything themselves.
 
 ## Why this matters
 
@@ -64,13 +64,14 @@ If we **auto-assemble a personalized, running workflow from a declared Goal on t
 
 ## Defensibility (optional for feature bets)
 
-This is the feature that *activates* the two primary moats, not just a convenience. Running workflows + their run-history raise **switching costs** (product.md moat row 2: "linked accounts + workflows + history = high exit friction") — leaving now means abandoning live automation, not just exporting data. And WorkflowRun outcomes become **proprietary action-effectiveness data** (moat row 3 / L68) that no point-solution competitor holds.
+This is the feature that _activates_ the two primary moats, not just a convenience. Running workflows + their run-history raise **switching costs** (product.md moat row 2: "linked accounts + workflows + history = high exit friction") — leaving now means abandoning live automation, not just exporting data. And WorkflowRun outcomes become **proprietary action-effectiveness data** (moat row 3 / L68) that no point-solution competitor holds.
 
 **Moat impact (one line):** Turns passive linked-data into embedded running automation → switching costs become real, and run outcomes seed the action-intelligence data moat.
 
 ## Scope
 
 ### In scope
+
 - **Data model** (migration): `Workflow` (definition; JSONB config; soft-delete), `WorkflowRun` (execution instance = the WAWU action unit; status lifecycle), and a minimal `Block` representation for templates. Owner-scoped RLS (`auth.uid()`); **same-user FK enforcement** on `workflow_id` / `goal_id` (the WLT-11 composite-FK lesson — no forged cross-tenant links).
 - **Goal → Workflow auto-assembly** via **template-selection + real-data personalization** (per elicitation): map each `Goal.kind` WLT-3 emits to a pre-built workflow template, then personalize it with the user's accounts/transactions (WLT-2). No runtime composition.
 - **Pre-built workflow template set — one per `Goal.kind`** (per elicitation: "no dead-end"), spanning all 6 clusters (the KR1 "5 across 6" shape). Thin but real: each produces a concrete, real-data-backed action.
@@ -79,9 +80,10 @@ This is the feature that *activates* the two primary moats, not just a convenien
 - **Funnel events** (reusing the `emitFunnel` path, as `intent_declared` does): `workflow_assembled`, `action_completed` — the raw signal WLT-5 will instrument.
 
 ### Out of scope
+
 - **Dynamic Block-composition** (assembling workflows from primitives at runtime) — deferred; MVP is template-select + personalize.
 - **The marketplace** (`MarketplaceListing`, Builder-published workflows, the Block library) and the **Builder persona's** authoring tools — later phase (product.md L24).
-- **WAWU / TTFV instrumentation dashboards** — WLT-5 owns; WLT-4 only *emits* the events.
+- **WAWU / TTFV instrumentation dashboards** — WLT-5 owns; WLT-4 only _emits_ the events.
 - **Anomaly-/alert-triggered** workflows — the first action set is goal-driven; anomaly triggers are a later slice.
 - **Multi-step chains / scheduling beyond the first action** — the first WorkflowRun closes the loop; depth is a fast-follow.
 
@@ -109,18 +111,21 @@ _Decomposed one at a time via `/create-story WLT-4` after this brief is approved
 ## DRI Log
 
 ### Decisions
+
 - [2026-06-11] [PM] **Promoted from portfolio stub.** Scope = close the MVP loop: Goal → assembled running Workflow → one platform-prompted action (WorkflowRun = WAWU). Marketplace + Builder tooling explicitly deferred — area: scope — reversibility: medium
 - [2026-06-11] [PM, elicited] **Workflow breadth = one template per `Goal.kind` (no dead-end)** — rationale: every declared intent across the 6 clusters must assemble into a real workflow or the loop dead-ends for that user; this is the "thin to the minimum needed for one loop" reading of the KR1 "5 across 6" target — area: scope — alternatives: one flagship cluster (rejected — leaves other clusters at "coming soon"), full richly-built KR1 set (rejected — over-scopes the convergence-point bet) — reversibility: easy
 - [2026-06-11] [PM, elicited] **Engine depth = template-selection + real-data personalization; dynamic Block-composition deferred** — rationale: the loop closes with "pick the right template + fill it with the user's real data + surface one action"; runtime composition + the marketplace are a later phase and would push the loop-close out — area: scope/architecture — alternatives: dynamic Block-composition (rejected for MVP), hybrid template+Block-seam (rejected — over-engineering before the marketplace exists) — reversibility: medium
-- [2026-06-11] [PM] **`architecture_required: true`** — the foundation defines the *entities* (Goal/Workflow/WorkflowRun/Block, ER L119–123) but not the *engine*: the assembly algorithm, template/Block representation, the WorkflowRun state machine, and the action-surface contract are novel and load-bearing — area: process — reversibility: n/a
+- [2026-06-11] [PM] **`architecture_required: true`** — the foundation defines the _entities_ (Goal/Workflow/WorkflowRun/Block, ER L119–123) but not the _engine_: the assembly algorithm, template/Block representation, the WorkflowRun state machine, and the action-surface contract are novel and load-bearing — area: process — reversibility: n/a
 - [2026-06-11] [PM] **Primary metric = intent→first-action conversion (≥40%, inaugural baseline)** rather than raw WAWU — rationale: this bet's falsifiable claim is that the assembled workflow produces an action users actually take; WAWU is the ongoing north-star WLT-5 tracks — area: metrics — reversibility: easy
 - [2026-06-11] [PM] **Jira/Confluence mirror skipped** — no MCP on this host (same posture as prior bets); logged per no-silent-skips — area: tooling — reversibility: easy
 
 ### Risks
+
 - [2026-06-11] [PM] **Convergence-point slip cascades to the whole loop** (inherited from portfolio) — likelihood: medium — impact: high — mitigation: thinnest real scope chosen (template-select, one-per-kind); first story proves the loop end-to-end on ONE cluster before breadth — area: schedule
 - [2026-06-11] [PM] **"Personalization" can degrade into a glorified static template** (no real data → no value, fails the Real-data guardrail + the trust moat) — likelihood: medium — impact: high — mitigation: Real-data-integrity guardrail (0 mock runs); each template must consume actual accounts/transactions to produce its action — area: product/trust
 - [2026-06-11] [PM] **Measurement depends on WLT-5** (dashboards not built) — likelihood: high — impact: low — mitigation: WLT-4 emits raw `workflow_assembled` / `action_completed` into `auth_funnel_events` now; baseline is computable from raw events pre-WLT-5 — area: measurement
 - [2026-06-11] [Security] **WorkflowRun executes an action on financial data = new write surface** — likelihood: medium — impact: high — mitigation: owner-scoped RLS + same-user FK enforcement; AAL2-gated; mandatory Security Review at build; AuditEvent on every run — area: security
 
 ### Issues
+
 - [2026-06-11] [PM] Jira + Confluence MCPs not connected on this host — severity: low — owner: PM — status: open — area: tooling

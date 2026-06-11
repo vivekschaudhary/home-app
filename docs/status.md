@@ -4,6 +4,8 @@ _Last updated: 2026-06-11 — WLT-10 (full-history + webhook sync) shipped to pr
 
 ## In flight
 
+**WLT-4 — Workflow engine + pre-built workflows** — brief `approved` (2026-06-11); **architecture in review**. The MVP-loop **convergence point**: consume the declared `Goal` (WLT-3) + real data (WLT-2) → auto-assemble a personalized running workflow → surface one platform-prompted action (`WorkflowRun` = the WAWU north-star unit). Scope (PM-elicited): **template-select + personalize** (composition/marketplace deferred); **one workflow per Goal.kind** via a ~6-archetype registry mapping all 14 goalKinds (no dead-end). Architecture: 2 tables (`workflows`/`workflow_runs`), composite same-user FKs, immutable runs, two-phase assembly (archetype at declare → personalize post-connect), no new tooling. **Next: HITL-approve `architecture.md` → `/create-story WLT-4`.**
+
 **WLT-3 — Intent-first onboarding** — brief `approved`; **building**. Directive baked in: **intent-first, user-first** — declare intent *before* connecting (defer friction).
 - **WLT-11 (Declare your intent — 6-cluster front door) — `shipped`** (PR #26, 2026-06-09, live in prod). The intent-first front door (Fear/Goal/Confusion/Control/Habit/Aspiration → starter intents) → persist `Intent` + derived `Goal` → "putting your plan together" placeholder → bridge to connect; `intent_declared` baseline event. Post-auth now lands here (session-scoped explore escape). Cross-model Codex code + security both **Approve** after 4 rounds — deepest catch: a **composite FK** `goals(intent_id,user_id)→intents(id,user_id)` blocking forged cross-tenant goal→intent links at the DB. Ships without WLT-4.
 - **Later slices:** free-text intent expression · intent management (edit/add) · richer Goal params.
