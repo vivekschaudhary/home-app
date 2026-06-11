@@ -55,7 +55,7 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
   // While ANY connection is still in its import window, poll so transactions +
   // the settled state surface. Server-derived (created_at) → this resumes after
   // navigating away and back, not just for the session that connected (AC7).
-  const anyImporting = connections.some((c) => isImporting(c, Date.now()));
+  const anyImporting = connections.some(isImporting);
   useEffect(() => {
     if (!anyImporting) return;
     const t = setInterval(() => {
@@ -153,7 +153,7 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
           <>
             <ul className="space-y-2">
               {connections.flatMap((conn) => {
-                const { status, label } = statusFor(conn, Date.now());
+                const { status, label } = statusFor(conn);
                 return conn.accounts.map((a) => (
                   <AccountCard
                     key={a.id}

@@ -22,12 +22,18 @@ const registry = createProviderRegistry([createPlaidProvider()]);
 const vault = createSupabaseVault();
 
 /** Structural subset of the Inngest step API we use (avoids importing its type). */
-type StepRunner = { run: <T>(id: string, fn: () => Promise<T>) => Promise<T> };
+type StepRunner = {
+  run: <T>(id: string, fn: () => Promise<T>) => Promise<T>;
+  sleep: (id: string, duration: string) => Promise<unknown>;
+};
 
 // The shared sync core. `useStoredCursor=false` → backfill from null; `true` →
-// incremental refresh continuing from the connection's persisted cursor.
+// incremental refresh continuing from the connection's persisted cursor. When
+// `settle` (backfill only), keep re-syncing until Plaid's async historical pull
+// brings nothing new — THEN stamp `history_synced_at`, the real "import done"
+// signal the UI derives "Importing…" from (not a clock).
 async function syncConnection(
-  input: { connectionId: string; userId: string; useStoredCursor: boolean },
+  input: { connectionId: string; userId: string; useStoredCursor: boolean; settle: boolean },
   step: StepRunner,
 ): Promise<{ connectionId: string; accounts: number; transactions: number }> {
   const { connectionId, userId, useStoredCursor } = input;
@@ -111,6 +117,34 @@ async function syncConnection(
     totalInserted += result.inserted;
   }
 
+  // Settle (backfill only): Plaid streams the 24-month history asynchronously, so
+  // the first drain isn't necessarily complete. Re-sync after short waits until a
+  // re-sync brings nothing new (genuinely caught up) or a safety cap — THEN stamp
+  // history_synced_at. This is the real "import settled" signal (not a clock).
+  if (input.settle) {
+    for (let s = 0; s < 4; s += 1) {
+      await step.sleep(`settle-wait-${s}`, "45s");
+      const r: { inserted: number; nextCursor: string | null } = await step.run(`settle-sync-${s}`, async () => {
+        const svc = createServiceSupabase();
+        const secret = await vault.get({ ref: conn.vault_token_ref });
+        const delta = await provider.fetchTransactions({ accessSecret: secret, cursor });
+        const ingest = await ingestTransactions({ userId, page: delta, accountIdByProviderAccountId: accMap, svc });
+        await svc
+          .from("account_connections")
+          .update({ sync_cursor: delta.nextCursor, last_synced_at: new Date().toISOString() })
+          .eq("id", connectionId);
+        return { inserted: ingest.inserted, nextCursor: delta.nextCursor };
+      });
+      cursor = r.nextCursor;
+      totalInserted += r.inserted;
+      if (r.inserted === 0) break; // caught up — history settled
+    }
+    await step.run("mark-history-synced", async () => {
+      const svc = createServiceSupabase();
+      await svc.from("account_connections").update({ history_synced_at: new Date().toISOString() }).eq("id", connectionId);
+    });
+  }
+
   await step.run("emit-sync-completed", async () => {
     await emitFunnel(FUNNEL_EVENTS.TRANSACTIONS_SYNCED, userId, {
       connectionId,
@@ -122,13 +156,27 @@ async function syncConnection(
   return { connectionId, accounts: accounts.length, transactions: totalInserted };
 }
 
-// Initial backfill (WLT-9) — fires when a connection is linked.
+// Initial backfill (WLT-9 + WLT-10) — fires when a connection is linked. Settles
+// the 24-month history then stamps history_synced_at. On final failure → error,
+// so the connection doesn't sit "Importing…" forever.
 export const aggregationBackfill = inngest.createFunction(
-  { id: "aggregation-initial-backfill", retries: 3 },
+  {
+    id: "aggregation-initial-backfill",
+    retries: 3,
+    onFailure: async ({ event, step }) => {
+      const original = (event as { data: { event: { data: { connectionId: string; userId: string } } } }).data.event;
+      const { connectionId, userId } = original.data;
+      await step.run("mark-connection-error", async () => {
+        const svc = createServiceSupabase();
+        await svc.from("account_connections").update({ health_status: "error" }).eq("id", connectionId);
+        await emitFunnel(FUNNEL_EVENTS.CONNECTION_ERROR, userId, { connectionId, reason: "backfill_failed" });
+      });
+    },
+  },
   { event: CONNECTION_LINKED_EVENT },
   async ({ event, step }) => {
     const { connectionId, userId } = event.data as { connectionId: string; userId: string };
-    return syncConnection({ connectionId, userId, useStoredCursor: false }, step as unknown as StepRunner);
+    return syncConnection({ connectionId, userId, useStoredCursor: false, settle: true }, step as unknown as StepRunner);
   },
 );
 
@@ -155,7 +203,7 @@ export const aggregationRefresh = inngest.createFunction(
   { event: CONNECTION_REFRESH_EVENT },
   async ({ event, step }) => {
     const { connectionId, userId } = event.data as { connectionId: string; userId: string };
-    return syncConnection({ connectionId, userId, useStoredCursor: true }, step as unknown as StepRunner);
+    return syncConnection({ connectionId, userId, useStoredCursor: true, settle: false }, step as unknown as StepRunner);
   },
 );
 
