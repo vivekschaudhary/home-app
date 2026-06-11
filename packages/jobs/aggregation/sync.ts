@@ -29,12 +29,13 @@ type StepRunner = {
 };
 
 // The shared sync core. `useStoredCursor=false` → backfill from null; `true` →
-// incremental refresh continuing from the connection's persisted cursor. When
-// `settle` (backfill only), keep re-syncing until Plaid's async historical pull
-// brings nothing new — THEN stamp `history_synced_at`, the real "import done"
-// signal the UI derives "Importing…" from (not a clock).
+// incremental refresh continuing from the connection's persisted cursor. Any
+// connection whose `history_synced_at` is still null is treated as importing:
+// after the drain we re-sync until activity STABILIZES (consecutive quiet passes)
+// and only then stamp history_synced_at — the real "import done" signal the UI
+// derives "Importing…" from (not a clock, not a single quiet pass).
 async function syncConnection(
-  input: { connectionId: string; userId: string; useStoredCursor: boolean; settle: boolean },
+  input: { connectionId: string; userId: string; useStoredCursor: boolean },
   step: StepRunner,
 ): Promise<{ connectionId: string; accounts: number; transactions: number }> {
   const { connectionId, userId, useStoredCursor } = input;
@@ -43,13 +44,18 @@ async function syncConnection(
     const svc = createServiceSupabase();
     const { data, error } = await svc
       .from("account_connections")
-      .select("id, provider, vault_token_ref, sync_cursor")
+      .select("id, provider, vault_token_ref, sync_cursor, history_synced_at")
       .eq("id", connectionId)
       .eq("user_id", userId)
       .is("deleted_at", null)
       .maybeSingle();
     if (error || !data) throw new Error(`[sync] connection ${connectionId} not found`);
-    return data as { provider: string; vault_token_ref: string; sync_cursor: string | null };
+    return data as {
+      provider: string;
+      vault_token_ref: string;
+      sync_cursor: string | null;
+      history_synced_at: string | null;
+    };
   });
 
   const provider = registry.get(conn.provider);
@@ -91,7 +97,6 @@ async function syncConnection(
   let hasMore = true;
   let page = 0;
   let totalInserted = 0;
-  let lastInserted = 0;
   while (hasMore && page < 50) {
     page += 1;
     const result: { inserted: number; nextCursor: string | null; hasMore: boolean } = await step.run(
@@ -117,18 +122,16 @@ async function syncConnection(
     cursor = result.nextCursor;
     hasMore = result.hasMore;
     totalInserted += result.inserted;
-    lastInserted = result.inserted;
   }
 
-  // Did the history actually SETTLE (Plaid stopped returning new data)? Only then
-  // do we stamp history_synced_at — otherwise the UI would flip to "Connected"
-  // while Plaid is still streaming (see settle.ts).
-  let caughtUp: boolean;
-  if (input.settle) {
-    // Backfill: actively re-sync (with waits) until a pass brings nothing new, or
-    // a safety cap. If capped while STILL receiving, caughtUp=false → no stamp
-    // (the cron refresh becomes the backstop).
-    caughtUp = await settleHistory(
+  // Stabilization gate: a connection stays "importing" until its history settles.
+  // While history_synced_at is null, re-sync (with waits) until activity stays
+  // quiet for CONSECUTIVE passes — real stabilization, not one transient quiet
+  // pass — and only then stamp. Applies to the backfill AND any refresh on a
+  // not-yet-settled connection (the backstop that settles one whose backfill
+  // capped while Plaid was still streaming).
+  if (conn.history_synced_at === null) {
+    const stabilized = await settleHistory(
       async (s) => {
         const r: { inserted: number; nextCursor: string | null } = await step.run(`settle-sync-${s}`, async () => {
           const svc = createServiceSupabase();
@@ -146,24 +149,20 @@ async function syncConnection(
         return r.inserted;
       },
       (s) => step.sleep(`settle-wait-${s}`, "45s"),
-      4,
+      6, // up to ~4.5 min of re-syncs
+      2, // require 2 consecutive quiet passes (~90s stable) before settling
     );
-  } else {
-    // Refresh: caught up iff this pass found nothing new. This is what stamps a
-    // connection whose backfill capped while Plaid was still streaming.
-    caughtUp = lastInserted === 0;
-  }
-
-  if (caughtUp) {
-    await step.run("mark-history-synced", async () => {
-      const svc = createServiceSupabase();
-      // Idempotent: stamp once, the first time we genuinely catch up.
-      await svc
-        .from("account_connections")
-        .update({ history_synced_at: new Date().toISOString() })
-        .is("history_synced_at", null)
-        .eq("id", connectionId);
-    });
+    if (stabilized) {
+      await step.run("mark-history-synced", async () => {
+        const svc = createServiceSupabase();
+        // Idempotent: stamp once, the first time activity genuinely stabilizes.
+        await svc
+          .from("account_connections")
+          .update({ history_synced_at: new Date().toISOString() })
+          .is("history_synced_at", null)
+          .eq("id", connectionId);
+      });
+    }
   }
 
   await step.run("emit-sync-completed", async () => {
@@ -197,7 +196,7 @@ export const aggregationBackfill = inngest.createFunction(
   { event: CONNECTION_LINKED_EVENT },
   async ({ event, step }) => {
     const { connectionId, userId } = event.data as { connectionId: string; userId: string };
-    return syncConnection({ connectionId, userId, useStoredCursor: false, settle: true }, step as unknown as StepRunner);
+    return syncConnection({ connectionId, userId, useStoredCursor: false }, step as unknown as StepRunner);
   },
 );
 
@@ -224,7 +223,7 @@ export const aggregationRefresh = inngest.createFunction(
   { event: CONNECTION_REFRESH_EVENT },
   async ({ event, step }) => {
     const { connectionId, userId } = event.data as { connectionId: string; userId: string };
-    return syncConnection({ connectionId, userId, useStoredCursor: true, settle: false }, step as unknown as StepRunner);
+    return syncConnection({ connectionId, userId, useStoredCursor: true }, step as unknown as StepRunner);
   },
 );
 
