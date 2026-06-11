@@ -93,6 +93,7 @@ jobs:
             "/api/aggregation/link/complete/route",
             "/api/aggregation/connections/route",
             "/api/aggregation/connections/[id]/disconnect/route",
+            "/api/aggregation/plaid/webhook/route",
             "/settings/accounts/page",
             "/api/intent/route",
             "/onboarding/intent/page",

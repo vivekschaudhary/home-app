@@ -13,7 +13,7 @@ import {
 import type { AggregationProvider, FetchTransactionsPage } from "../core/provider";
 import { mapAccount, mapTransaction } from "./map";
 
-function plaidClient(): PlaidApi {
+export function plaidClient(): PlaidApi {
   const env = (process.env.PLAID_ENV ?? "sandbox").toLowerCase();
   const clientId = process.env.PLAID_CLIENT_ID;
   const secret =
@@ -39,12 +39,17 @@ export function createPlaidProvider(): AggregationProvider {
     id: "plaid",
 
     async createLinkSession({ userId, redirectUri }) {
+      const webhook = process.env.PLAID_WEBHOOK_URL;
       const res = await plaidClient().linkTokenCreate({
         user: { client_user_id: userId },
         client_name: "Wealth at Your Fingertips",
         products: [Products.Transactions],
         country_codes: [CountryCode.Us],
         language: "en",
+        // Request the full 24-month history (Transactions ceiling); the default is 90d.
+        transactions: { days_requested: 730 },
+        // Real-time sync: Plaid posts SYNC_UPDATES_AVAILABLE / ITEM webhooks here.
+        ...(webhook ? { webhook } : {}),
         ...(redirectUri ? { redirect_uri: redirectUri } : {}),
       });
       return { clientToken: res.data.link_token, expiresAt: res.data.expiration };
