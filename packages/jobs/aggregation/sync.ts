@@ -134,8 +134,24 @@ export const aggregationBackfill = inngest.createFunction(
 
 // Incremental refresh (WLT-10) — fires from the Plaid webhook + the cron. Resumes
 // from the stored cursor, so the async historical pull + ongoing updates land.
+// `debounce` collapses duplicate/replayed deliveries for the same connection into
+// ONE effect (AC2/AC3). On final failure, the connection transitions to `error`
+// with a funnel signal (AC9/AC10).
 export const aggregationRefresh = inngest.createFunction(
-  { id: "aggregation-refresh", retries: 3 },
+  {
+    id: "aggregation-refresh",
+    retries: 3,
+    debounce: { key: "event.data.connectionId", period: "30s" },
+    onFailure: async ({ event, step }) => {
+      const original = (event as { data: { event: { data: { connectionId: string; userId: string } } } }).data.event;
+      const { connectionId, userId } = original.data;
+      await step.run("mark-connection-error", async () => {
+        const svc = createServiceSupabase();
+        await svc.from("account_connections").update({ health_status: "error" }).eq("id", connectionId);
+        await emitFunnel(FUNNEL_EVENTS.CONNECTION_ERROR, userId, { connectionId, reason: "refresh_failed" });
+      });
+    },
+  },
   { event: CONNECTION_REFRESH_EVENT },
   async ({ event, step }) => {
     const { connectionId, userId } = event.data as { connectionId: string; userId: string };

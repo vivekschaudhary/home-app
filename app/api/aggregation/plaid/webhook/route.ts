@@ -1,5 +1,7 @@
 import { createServiceSupabase } from "@vc1023/passkey-2fa";
 import { verifyPlaidWebhook } from "@wealth/aggregation/plaid/webhook";
+import { FUNNEL_EVENTS } from "@wealth/core";
+import { emitFunnel } from "@wealth/db/emit";
 import { CONNECTION_REFRESH_EVENT, inngest } from "@wealth/jobs";
 
 // Plaid webhook receiver. UNauthenticated but VERIFIED (JWT/JWK + body-hash +
@@ -44,6 +46,7 @@ export async function POST(req: Request) {
     const errorCode = (body.error as { error_code?: string } | undefined)?.error_code;
     if (errorCode === "ITEM_LOGIN_REQUIRED" || code === "PENDING_EXPIRATION") {
       await svc.from("account_connections").update({ health_status: "needs_reauth" }).eq("id", c.id);
+      await emitFunnel(FUNNEL_EVENTS.CONNECTION_ERROR, c.user_id, { connectionId: c.id, reason: "needs_reauth" });
     }
   }
 

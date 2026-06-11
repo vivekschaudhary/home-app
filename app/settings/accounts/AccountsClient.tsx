@@ -39,11 +39,16 @@ function relativeTime(iso: string): string {
 
 type DisplayStatus = "connected" | "syncing" | "needs_reauth" | "error";
 
-function statusFor(conn: ConnectionView): { status: DisplayStatus; label: string } {
+// `importingId` = the connection whose 24-month history is still landing (WLT-10):
+// shown as "Importing…" until the backfill settles, so we never show "Connected"
+// before the history is actually in (AC7).
+function statusFor(conn: ConnectionView, importingId: string | null): { status: DisplayStatus; label: string } {
   if (conn.healthStatus === "needs_reauth")
     return { status: "needs_reauth", label: COPY.accounts.needsReauthStatus };
   if (conn.healthStatus === "error") return { status: "error", label: COPY.accounts.errorStatus };
-  if (!conn.lastSyncedAt) return { status: "syncing", label: COPY.accounts.syncingStatus };
+  if (conn.connectionId === importingId)
+    return { status: "syncing", label: COPY.accounts.importingStatus }; // historical import in progress
+  if (!conn.lastSyncedAt) return { status: "syncing", label: COPY.accounts.syncingStatus }; // initial
   return { status: "connected", label: COPY.accounts.connectedStatus };
 }
 
@@ -54,7 +59,7 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [syncing, setSyncing] = useState(false);
+  const [importingId, setImportingId] = useState<string | null>(null);
   const [disconnectTarget, setDisconnectTarget] = useState<ConnectionView | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
 
@@ -74,15 +79,24 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
       }
       setError(null);
       setToast(COPY.connect.success);
-      setSyncing(true);
+      setImportingId(res.connectionId);
       await refresh();
-      // The 90-day backfill runs off the request path; poll briefly so the
-      // transactions/last-synced surface as they land (non-blocking UI).
-      for (let i = 0; i < 6; i += 1) {
-        await new Promise((r) => setTimeout(r, 2500));
-        await refresh();
+      // The 24-month history lands asynchronously (webhook/cron). Poll — non-
+      // blocking — until last_synced_at stops advancing (settled) or a ~3-min cap,
+      // so we keep "Importing…" until the history is actually in (AC7), not 15s.
+      let stable = 0;
+      let lastSeen: string | null = null;
+      for (let i = 0; i < 60 && stable < 3; i += 1) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const conns = await fetchConnections();
+        setConnections(conns);
+        const c = conns.find((x) => x.connectionId === res.connectionId);
+        if (c && (c.healthStatus === "needs_reauth" || c.healthStatus === "error")) break;
+        const ts = c?.lastSyncedAt ?? null;
+        stable = ts && ts === lastSeen ? stable + 1 : 0;
+        lastSeen = ts;
       }
-      setSyncing(false);
+      setImportingId(null);
     },
     [refresh],
   );
@@ -158,7 +172,7 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
           <>
             <ul className="space-y-2">
               {connections.flatMap((conn) => {
-                const { status, label } = statusFor(conn);
+                const { status, label } = statusFor(conn, importingId);
                 return conn.accounts.map((a) => (
                   <AccountCard
                     key={a.id}
@@ -188,9 +202,9 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
                 ));
               })}
             </ul>
-            {syncing ? (
+            {importingId ? (
               <p aria-live="polite" className="text-sm text-gray-500">
-                {COPY.accounts.syncing}
+                {COPY.accounts.importingNote}
               </p>
             ) : null}
             <div className="max-w-xs">
