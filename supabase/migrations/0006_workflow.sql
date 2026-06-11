@@ -73,6 +73,11 @@ create table if not exists workflow_runs (
 );
 create index if not exists idx_workflow_runs_user on workflow_runs (user_id);
 create index if not exists idx_workflow_runs_workflow on workflow_runs (workflow_id);
+-- Replay guard: ONE completed action of a given kind per workflow. A replayed
+-- POST cannot append duplicate immutable runs (WAWU/metrics integrity). Future
+-- repeatable actions get their own kind or a relaxation per archetype.
+create unique index if not exists uniq_workflow_runs_kind_once
+  on workflow_runs (workflow_id, kind);
 
 alter table workflow_runs enable row level security;
 -- Owner SELECT + INSERT only. Deliberately NO update/delete policies: the run

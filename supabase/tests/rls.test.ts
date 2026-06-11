@@ -373,6 +373,31 @@ suite("workflow RLS (WLT-12): owner CRUD + immutable runs + composite FKs", () =
     }
   }, 30_000);
 
+  it("REPLAY guard: one completed run per (workflow, kind) — duplicates rejected at the DB", async () => {
+    await client.query("begin");
+    try {
+      await client.query("insert into auth.users (id) values ($1) on conflict do nothing", [USER_A]);
+      const goalId = await seedGoal(USER_A);
+      const wf = await client.query(
+        "insert into workflows (user_id, goal_id, archetype) values ($1,$2,'networth_snapshot') returning id",
+        [USER_A, goalId],
+      );
+      await asUser(USER_A, "insert into workflow_runs (user_id, workflow_id, kind) values ($1,$2,'target_set')", [
+        USER_A,
+        wf.rows[0].id,
+      ]);
+      // A replayed action cannot append a second immutable run (metrics integrity).
+      await expect(
+        asUser(USER_A, "insert into workflow_runs (user_id, workflow_id, kind) values ($1,$2,'target_set')", [
+          USER_A,
+          wf.rows[0].id,
+        ]),
+      ).rejects.toThrow();
+    } finally {
+      await client.query("rollback");
+    }
+  }, 30_000);
+
   it("one live workflow per goal (idempotency index)", async () => {
     await client.query("begin");
     try {
