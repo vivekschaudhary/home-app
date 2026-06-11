@@ -2,7 +2,7 @@
 id: WLT-12
 bet: WLT-4
 type: story
-status: ready
+status: shipped
 priority: P1
 created: 2026-06-11
 author: PM
@@ -72,5 +72,11 @@ Per `docs/bets/WLT-4/architecture.md` (approved). Within-stack; no foundational 
 - [2026-06-11] [PM] **Net worth from balances can mislead** if an account is mid-sync / needs reauth — likelihood: medium — impact: low — mitigation: personalize only from `active`/synced accounts; stay `pending_data` if none (AC4) — area: data-quality
 - [2026-06-11] [Security] **New owner-writable workflow tables + a financial-data read on the action path** — likelihood: medium — impact: high — mitigation: owner-CRUD RLS + composite same-user FK + immutable runs; AAL2-gated; mandatory Security Review — area: security
 
+- [2026-06-11] [Engineer→review] **The action commits via an atomic plpgsql function (`complete_workflow_action`, SECURITY INVOKER)** — rationale: a successful run-insert + failed config-save would strand the workflow outside `running` with the replay guard blocking recovery; one transaction (FOR UPDATE) makes the half-committed state unreachable while owner RLS still applies — area: data-integrity — reversibility: medium
+- [2026-06-11] [Engineer→review] **Replay-guarded at two layers** — in-transaction `config ? 'target'` check + DB `unique (workflow_id, kind)` on runs — a replayed POST can never append WAWU-counted runs or re-emit `action_completed` — area: metrics-integrity — reversibility: medium
+- [2026-06-11] [Engineer→review] **`workflow.assemble` + `workflow.action` audit events** added (foundation L88 "workflow actions"); ids/enums only — area: security
+- [2026-06-11] [Engineer→review] **Engine logic behind an injectable `EngineStore` seam** (pure `workflow-engine.ts` / supabase `workflow.ts`) — same discipline as `@wealth/aggregation`; 12 unit tests + live-PG RLS incl. the atomic RPC driven as an authenticated user — area: testability
+- [2026-06-11] [Engineer] **E2E verified live** (19.5s, real stack): declare → bridge (no fake figure) → real snapshot → one-tap target → running → reload-persistent → exactly one immutable run + goal `active` — area: verification
+
 ### Issues
-- _none open — ready for `/build WLT-12` after design + copy reviewed._
+- _none — shipped 2026-06-11 (PR #31; 4 review rounds: funnel contract, loading state, engine coverage, replay, atomicity, audit, E2E)._
