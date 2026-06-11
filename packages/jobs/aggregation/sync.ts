@@ -14,6 +14,7 @@ import { createSupabaseVault } from "@wealth/aggregation/vault";
 import { FUNNEL_EVENTS } from "@wealth/core";
 import { emitFunnel } from "@wealth/db/emit";
 import { inngest } from "../client";
+import { settleHistory } from "./settle";
 
 export const CONNECTION_LINKED_EVENT = "aggregation/connection.linked";
 export const CONNECTION_REFRESH_EVENT = "aggregation/connection.refresh";
@@ -90,6 +91,7 @@ async function syncConnection(
   let hasMore = true;
   let page = 0;
   let totalInserted = 0;
+  let lastInserted = 0;
   while (hasMore && page < 50) {
     page += 1;
     const result: { inserted: number; nextCursor: string | null; hasMore: boolean } = await step.run(
@@ -115,33 +117,52 @@ async function syncConnection(
     cursor = result.nextCursor;
     hasMore = result.hasMore;
     totalInserted += result.inserted;
+    lastInserted = result.inserted;
   }
 
-  // Settle (backfill only): Plaid streams the 24-month history asynchronously, so
-  // the first drain isn't necessarily complete. Re-sync after short waits until a
-  // re-sync brings nothing new (genuinely caught up) or a safety cap — THEN stamp
-  // history_synced_at. This is the real "import settled" signal (not a clock).
+  // Did the history actually SETTLE (Plaid stopped returning new data)? Only then
+  // do we stamp history_synced_at — otherwise the UI would flip to "Connected"
+  // while Plaid is still streaming (see settle.ts).
+  let caughtUp: boolean;
   if (input.settle) {
-    for (let s = 0; s < 4; s += 1) {
-      await step.sleep(`settle-wait-${s}`, "45s");
-      const r: { inserted: number; nextCursor: string | null } = await step.run(`settle-sync-${s}`, async () => {
-        const svc = createServiceSupabase();
-        const secret = await vault.get({ ref: conn.vault_token_ref });
-        const delta = await provider.fetchTransactions({ accessSecret: secret, cursor });
-        const ingest = await ingestTransactions({ userId, page: delta, accountIdByProviderAccountId: accMap, svc });
-        await svc
-          .from("account_connections")
-          .update({ sync_cursor: delta.nextCursor, last_synced_at: new Date().toISOString() })
-          .eq("id", connectionId);
-        return { inserted: ingest.inserted, nextCursor: delta.nextCursor };
-      });
-      cursor = r.nextCursor;
-      totalInserted += r.inserted;
-      if (r.inserted === 0) break; // caught up — history settled
-    }
+    // Backfill: actively re-sync (with waits) until a pass brings nothing new, or
+    // a safety cap. If capped while STILL receiving, caughtUp=false → no stamp
+    // (the cron refresh becomes the backstop).
+    caughtUp = await settleHistory(
+      async (s) => {
+        const r: { inserted: number; nextCursor: string | null } = await step.run(`settle-sync-${s}`, async () => {
+          const svc = createServiceSupabase();
+          const secret = await vault.get({ ref: conn.vault_token_ref });
+          const delta = await provider.fetchTransactions({ accessSecret: secret, cursor });
+          const ingest = await ingestTransactions({ userId, page: delta, accountIdByProviderAccountId: accMap, svc });
+          await svc
+            .from("account_connections")
+            .update({ sync_cursor: delta.nextCursor, last_synced_at: new Date().toISOString() })
+            .eq("id", connectionId);
+          return { inserted: ingest.inserted, nextCursor: delta.nextCursor };
+        });
+        cursor = r.nextCursor; // outside the step → replay-safe
+        totalInserted += r.inserted;
+        return r.inserted;
+      },
+      (s) => step.sleep(`settle-wait-${s}`, "45s"),
+      4,
+    );
+  } else {
+    // Refresh: caught up iff this pass found nothing new. This is what stamps a
+    // connection whose backfill capped while Plaid was still streaming.
+    caughtUp = lastInserted === 0;
+  }
+
+  if (caughtUp) {
     await step.run("mark-history-synced", async () => {
       const svc = createServiceSupabase();
-      await svc.from("account_connections").update({ history_synced_at: new Date().toISOString() }).eq("id", connectionId);
+      // Idempotent: stamp once, the first time we genuinely catch up.
+      await svc
+        .from("account_connections")
+        .update({ history_synced_at: new Date().toISOString() })
+        .is("history_synced_at", null)
+        .eq("id", connectionId);
     });
   }
 
