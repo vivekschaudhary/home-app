@@ -2,7 +2,7 @@
 id: WLT-10
 bet: WLT-2
 type: story
-status: ready
+status: shipped
 priority: P1
 created: 2026-06-08
 author: PM
@@ -58,6 +58,8 @@ Build per the approved architecture (`docs/bets/WLT-2/architecture.md` → Sync 
 ### Decisions
 - [2026-06-08] [PM] **Scope = depth + freshness via webhooks (with cron fallback); defer re-auth UI + Statements** — rationale: "full history on first connect" needs `days_requested` *and* an async re-sync trigger; webhooks deliver that *and* ongoing freshness (the architecture's intent), so they're the same slice. The re-auth *flow* and >24-month Statements are independent follow-ups — area: scope — alternatives: poll/sleep-only backfill (rejected — doesn't solve ongoing freshness; webhooks needed eventually anyway) — reversibility: easy
 - [2026-06-08] [PM] **Cron fallback is in-scope, not deferred** — rationale: without it, a single missed historical webhook means the user never gets full history (a silent data-completeness failure on the headline AC) — area: reliability — reversibility: easy
+- [2026-06-11] [Engineer→review] **"Import settled" = a server `history_synced_at` flag set on STABILIZATION (consecutive quiet sync passes), not a clock or a single quiet pass** — rationale: `/transactions/sync` has no "history complete" signal, and a lull between Plaid batches looks identical to "done"; the UI must not flip to Connected early. Settled iff a re-sync brings 0 new rows for N consecutive passes (`settleHistory`, pure + unit-tested); the flag is server-derived so "Importing…" survives reload. Converged over 6 cross-model review rounds (premature-Connected → 5-min clock → unconditional-stamp-after-cap → single-quiet-pass → consecutive-quiet) — area: data/UX — alternatives: client-poll-until-stable (rejected — didn't survive navigation), fixed window (rejected — wrong both directions) — reversibility: medium
+- [2026-06-11] [Engineer] **Settle gate keyed on `history_synced_at IS NULL`, not a backfill/refresh flag** — rationale: makes any unsettled refresh (webhook/cron) a true stabilization backstop for a backfill that capped mid-stream, with one code path — area: reliability — reversibility: easy
 
 ### Risks
 - [2026-06-08] [PM] **Plaid historical pull latency varies** (seconds → minutes) — the UI must not imply "done" prematurely — likelihood: high — impact: low — mitigation: keep the "Importing your history…" state until `last_synced_at` stabilizes / the historical signal lands; the cron backstops — area: UX

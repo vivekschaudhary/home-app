@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026-06-09 — WLT-3 brief approved (intent-first / user-first); WLT-9 live in prod; WLT-10 ready_
+_Last updated: 2026-06-11 — WLT-10 (full-history + webhook sync) shipped to prod; WLT-4 (engine) is the last critical-path bet_
 
 ## In flight
 
@@ -10,7 +10,7 @@ _Last updated: 2026-06-09 — WLT-3 brief approved (intent-first / user-first); 
 
 **WLT-2 — Account aggregation + CSV fallback** — brief + architecture `approved`; **building**.
 - **WLT-9 (connect first bank via Plaid OAuth + initial sync) — `shipped` + activated in production** (PR #18). The `@wealth/aggregation` **pluggable** pipeline (provider-neutral core + Plaid adapter + Supabase Vault + Inngest backfill + owner-SELECT RLS + consent/accounts UI); cross-model Codex code + security both **Approve**. **Validated live** with a real Wells Fargo connection (real accounts + 154 transactions). Prod activation surfaced + fixed: Inngest config + app sync, an atomic link-rollback + Inngest preflight gate (PR #20), and a prod-DB cleanup (test-user cruft + a typo-account dupe purged).
-- **WLT-10 (full-history backfill + webhook-driven sync) — `ready`** (PR #21). `days_requested:730` (24mo) + verified Plaid webhook → idempotent incremental re-sync + cron fallback + "importing your history" UX. **Next: `/build WLT-10`** (ops prereq: `PLAID_WEBHOOK_URL` in prod + registered with Plaid).
+- **WLT-10 (full-history backfill + webhook-driven sync) — `shipped`** (PR #28, 2026-06-11, live in prod). `days_requested:730` (24mo) + a **verified Plaid webhook** (ES256 JWT/JWK + body-hash + replay + ownership re-derivation) → debounced incremental re-sync, **6h cron fallback**, and an **"Importing your history…"** UI that settles on a server `history_synced_at` flag stamped only when sync activity **stabilizes** (consecutive quiet passes — not a clock). Cross-model Codex code **Approve** + Security **clean** after 6 rounds (premature-Connected → clock → unconditional-stamp → single-pass → consecutive-quiet). **Ops to light up real-time:** set `PLAID_WEBHOOK_URL` in Vercel (Production) + register with Plaid — cron completes full history until then.
 - **Later slices:** re-auth/connection-health UI · CSV / email import · Statements (>24-month history) · 2nd provider (KR2).
 - **Open ops note:** prod Supabase **Site URL** still `localhost:3000` (fix → `https://home-app.kindtree.us` so TOTP issuer + email links are correct); two old Plaid items un-revoked on Plaid's side (remove via Plaid dashboard if desired).
 
@@ -20,11 +20,10 @@ WLT-6 + **WLT-7 — authenticator-app (TOTP) backup factor — `shipped`** (2026
 
 | Bet | Title | Why next | Confidence |
 |-----|-------|----------|------------|
-| **WLT-3** | Intent-first onboarding | **brief approved → `/create-story WLT-3`** (unblocks WLT-4) | medium |
+| **WLT-4** | Workflow engine | **unblocked** — its inputs (WLT-2 data + WLT-3 intent) are both live; the novel core + long pole. **Next: `/create-brief WLT-4`** | low |
 | WLT-5 | TTFV + WAWU instrumentation | unblocked (no deps); instruments the loop as stages land | low |
-| WLT-4 | Workflow engine | **blocked** — needs WLT-3; the novel core + long pole | low |
 
-MVP-loop forecast **~2026-07-01** (re-baselined on velocity; WLT-4 carries the risk).
+MVP-loop forecast **~2026-07-01** (re-baselined on velocity; WLT-4 carries the risk). Loop status: ①②③ live · ④ WLT-4 + ⑤ WLT-5 remain.
 
 ## Awaiting human approval
 
@@ -32,6 +31,7 @@ _None._ The 3 remaining stubs (`WLT-3..WLT-5`) stay `proposed` by design (`portf
 
 ## Recently shipped
 
+- **WLT-10 — Full-history backfill + webhook-driven sync** — `shipped` 2026-06-11 to production (PR #28); deepens WLT-2 from the recent ~90 days to the full **24 months** + keeps it fresh. `days_requested:730`; a **verified public Plaid webhook** (ES256 JWT vs Plaid JWK cached by `kid` + body-sha256 + `iat` replay-guard + item→connection ownership re-derivation) → **debounced** incremental refresh; **6h cron** missed-webhook fallback; `needs_reauth`/`error` health + `CONNECTION_ERROR` funnel signals. The **"Importing your history…"** UI derives from a server `history_synced_at` flag stamped only when sync activity **stabilizes** (consecutive quiet passes, via the pure unit-tested `settleHistory`) — survives reload, correct in both directions. 60 tests; cross-model Codex **Approve** + Security **clean** after 6 rounds. **Real-time webhooks pending one ops step:** `PLAID_WEBHOOK_URL` in Vercel (cron completes full history until set).
 - **WLT-9 — Connect first bank via Plaid OAuth + initial sync** — `shipped` 2026-06-08 to production (PR #18), **activated** (prod Plaid keys live, Production-only scope); the first WLT-2 aggregation story and the moment the loop touches **real money**. Built the `@wealth/aggregation` pluggable pipeline (provider-neutral core → never imports Plaid; isolated Plaid adapter; Supabase Vault token store — 0 tokens in tables; Inngest 90-day backfill, cursor-after-commit; owner-SELECT-only RLS, service-role writes; consent → unwrapped Plaid Link → connected-accounts → disconnect). 40 tests (+ live-PG RLS), cross-model Codex code + security review both **Approve**. Prod deploy in flight; **production Plaid keys pending** (ships dark via `check-env` until set).
 - **WLT-7 — Authenticator-app (TOTP) backup factor** — `shipped` 2026-06-07 (PR #12). Optional TOTP second factor + sign-in fallback; closes the passkey-lockout DRI risk. Codex code + Security review clean (cross-model); 3 review rounds + an independent package audit (fixed credential-table RLS + signing-key hardening). Published as **`@vc1023/passkey-2fa@0.3.0`** (password + passkey + authenticator).
 - **`@vc1023/passkey-2fa` published to npm** — 0.1.1 → 0.2.0 → **0.3.0**; reusable password + passkey + authenticator(TOTP) 2FA for Next.js + Supabase, extracted from WLT-6.
