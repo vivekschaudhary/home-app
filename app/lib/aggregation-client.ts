@@ -17,6 +17,7 @@ export interface ConnectionView {
   institutionName: string | null;
   healthStatus: string;
   lastSyncedAt: string | null;
+  createdAt: string;
   accounts: AccountView[];
 }
 

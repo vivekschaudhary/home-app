@@ -13,6 +13,7 @@ import {
   startLink,
 } from "@/app/lib/aggregation-client";
 import { COPY } from "@/app/lib/copy";
+import { isImporting, statusFor } from "./import-state";
 
 function errorCopy(e: AggError): string {
   switch (e) {
@@ -37,21 +38,6 @@ function relativeTime(iso: string): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-type DisplayStatus = "connected" | "syncing" | "needs_reauth" | "error";
-
-// `importingId` = the connection whose 24-month history is still landing (WLT-10):
-// shown as "Importing…" until the backfill settles, so we never show "Connected"
-// before the history is actually in (AC7).
-function statusFor(conn: ConnectionView, importingId: string | null): { status: DisplayStatus; label: string } {
-  if (conn.healthStatus === "needs_reauth")
-    return { status: "needs_reauth", label: COPY.accounts.needsReauthStatus };
-  if (conn.healthStatus === "error") return { status: "error", label: COPY.accounts.errorStatus };
-  if (conn.connectionId === importingId)
-    return { status: "syncing", label: COPY.accounts.importingStatus }; // historical import in progress
-  if (!conn.lastSyncedAt) return { status: "syncing", label: COPY.accounts.syncingStatus }; // initial
-  return { status: "connected", label: COPY.accounts.connectedStatus };
-}
-
 export function AccountsClient({ initialConnections }: { initialConnections: ConnectionView[] }) {
   const [connections, setConnections] = useState<ConnectionView[]>(initialConnections);
   const [consentOpen, setConsentOpen] = useState(false);
@@ -59,13 +45,24 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [importingId, setImportingId] = useState<string | null>(null);
   const [disconnectTarget, setDisconnectTarget] = useState<ConnectionView | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
 
   const refresh = useCallback(async () => {
     setConnections(await fetchConnections());
   }, []);
+
+  // While ANY connection is still in its import window, poll so transactions +
+  // the settled state surface. Server-derived (created_at) → this resumes after
+  // navigating away and back, not just for the session that connected (AC7).
+  const anyImporting = connections.some((c) => isImporting(c, Date.now()));
+  useEffect(() => {
+    if (!anyImporting) return;
+    const t = setInterval(() => {
+      void refresh();
+    }, 3000);
+    return () => clearInterval(t);
+  }, [anyImporting, refresh]);
 
   const onPlaidSuccess = useCallback(
     async (publicToken: string) => {
@@ -79,24 +76,8 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
       }
       setError(null);
       setToast(COPY.connect.success);
-      setImportingId(res.connectionId);
+      // The new connection is in its import window → the polling effect takes over.
       await refresh();
-      // The 24-month history lands asynchronously (webhook/cron). Poll — non-
-      // blocking — until last_synced_at stops advancing (settled) or a ~3-min cap,
-      // so we keep "Importing…" until the history is actually in (AC7), not 15s.
-      let stable = 0;
-      let lastSeen: string | null = null;
-      for (let i = 0; i < 60 && stable < 3; i += 1) {
-        await new Promise((r) => setTimeout(r, 3000));
-        const conns = await fetchConnections();
-        setConnections(conns);
-        const c = conns.find((x) => x.connectionId === res.connectionId);
-        if (c && (c.healthStatus === "needs_reauth" || c.healthStatus === "error")) break;
-        const ts = c?.lastSyncedAt ?? null;
-        stable = ts && ts === lastSeen ? stable + 1 : 0;
-        lastSeen = ts;
-      }
-      setImportingId(null);
     },
     [refresh],
   );
@@ -172,7 +153,7 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
           <>
             <ul className="space-y-2">
               {connections.flatMap((conn) => {
-                const { status, label } = statusFor(conn, importingId);
+                const { status, label } = statusFor(conn, Date.now());
                 return conn.accounts.map((a) => (
                   <AccountCard
                     key={a.id}
@@ -202,7 +183,7 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
                 ));
               })}
             </ul>
-            {importingId ? (
+            {anyImporting ? (
               <p aria-live="polite" className="text-sm text-gray-500">
                 {COPY.accounts.importingNote}
               </p>
