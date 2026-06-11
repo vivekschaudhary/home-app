@@ -18,6 +18,9 @@ export const FUNNEL_EVENTS = {
   CONNECTION_ERROR: "connection_error",
   // Intent (WLT-3) — ADDITIVE; the intent→workflow conversion baseline (WLT-5).
   INTENT_DECLARED: "intent_declared",
+  // Workflow engine (WLT-4) — ADDITIVE; intent→workflow→action funnel (WLT-5).
+  WORKFLOW_ASSEMBLED: "workflow_assembled",
+  ACTION_COMPLETED: "action_completed", // one WorkflowRun = the WAWU unit
 } as const;
 
 export type FunnelEvent = (typeof FUNNEL_EVENTS)[keyof typeof FUNNEL_EVENTS];

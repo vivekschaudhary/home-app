@@ -4,3 +4,4 @@
 export * from "./funnel";
 export * from "./audit";
 export * from "./intent";
+export * from "./workflow";

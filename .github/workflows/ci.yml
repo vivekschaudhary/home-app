@@ -64,6 +64,7 @@ jobs:
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/0003_aggregation.sql
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/0004_intent.sql
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/0005_aggregation_history.sql
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/0006_workflow.sql
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
             -c "grant select, insert, update, delete on all tables in schema public to authenticated;"
 
@@ -97,6 +98,7 @@ jobs:
             "/api/aggregation/plaid/webhook/route",
             "/settings/accounts/page",
             "/api/intent/route",
+            "/api/workflow/action/route",
             "/onboarding/intent/page",
           ]
           missing = [k for k in need if k not in m]

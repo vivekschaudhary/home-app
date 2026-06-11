@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { getSessionUser, requireAal2 } from "@vc1023/passkey-2fa";
 import { SignOutButton } from "@/app/components/SignOutButton";
+import { getOrCreateWorkflow } from "@/app/lib/workflow";
 import { DashboardNudge } from "./DashboardNudge";
+import { WorkflowCard } from "./WorkflowCard";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +12,9 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage() {
   await requireAal2();
   const user = await getSessionUser();
+  // WLT-12: lazy idempotent assembly — select/advance the user's workflow from
+  // their declared goal; personalizes once real balances exist (two-phase).
+  const workflow = user ? await getOrCreateWorkflow(user.id) : ({ state: "none" } as const);
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col px-6 py-10">
@@ -31,6 +36,7 @@ export default async function DashboardPage() {
           Your account is protected with a passkey. Signed in as{" "}
           <span className="font-medium text-gray-900">{user?.email}</span>.
         </p>
+        <WorkflowCard view={workflow} />
         <DashboardNudge />
       </section>
     </main>
