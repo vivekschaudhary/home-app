@@ -65,8 +65,11 @@ jobs:
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/0004_intent.sql
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/0005_aggregation_history.sql
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/0006_workflow.sql
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/0007_metrics.sql
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
             -c "grant select, insert, update, delete on all tables in schema public to authenticated;"
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
+            -c "revoke all on metrics_first_events, metrics_ttfv_per_user, metrics_ttfv_summary, metrics_wawu_weekly, metrics_funnel_stages from authenticated;"
 
       - name: Test (incl. live cross-tenant RLS — AC8)
         run: pnpm test
@@ -100,6 +103,7 @@ jobs:
             "/api/intent/route",
             "/api/workflow/action/route",
             "/onboarding/intent/page",
+            "/admin/metrics/page",
           ]
           missing = [k for k in need if k not in m]
           if missing:
