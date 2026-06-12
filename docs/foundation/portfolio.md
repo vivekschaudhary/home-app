@@ -87,7 +87,8 @@ _Populated as each stub gets promoted to a full brief via `/create-brief <bet-id
 | WLT-1 | 2026-06-05 | approved (HITL 2026-06-05) |
 | WLT-2 | 2026-06-07 | approved (HITL 2026-06-07) |
 | WLT-3 | 2026-06-09 | approved (HITL 2026-06-09) — intent-first / user-first |
-| WLT-4 | 2026-06-11 | proposed (awaiting HITL) — engine = template-select + personalize, one workflow per Goal.kind; architecture_required |
+| WLT-4 | 2026-06-11 | approved (HITL 2026-06-11) — engine = template-select + personalize, one workflow per Goal.kind; architecture approved same day |
+| WLT-5 | 2026-06-12 | proposed (awaiting HITL) — TTFV clock = full loop (signup→action_completed) + split times; surface = AAL2/admin-gated in-app metrics page |
 
 ## DRI Log
 
