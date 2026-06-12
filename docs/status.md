@@ -1,8 +1,11 @@
 # Project Status
 
-_Last updated: 2026-06-11 — **the MVP loop is closed**: WLT-12 (workflow engine + first archetype) shipped to prod the same day as WLT-10; a user can now sign up → connect → declare → get an assembled workflow → complete the first action (the first WAWU event). WLT-5 (instrumentation) is the last bet_
+_Last updated: 2026-06-12 — **the MVP loop is closed**; WLT-5 (the last bet) brief approved + WLT-13 story ready: the instrument panel that makes the hypothesis falsifiable_
 
 ## In flight
+
+**WLT-5 — TTFV + WAWU instrumentation** — brief `approved` (2026-06-12); **building**. The last MVP bet: compute + surface what the loop already emits (no new events; the 17-event contract stays frozen — renames declined). Elicited: **TTFV clock = full loop** (`signup_started → action_completed`, p80 vs 180s, with split times at connected/plan so a miss is attributable); **surface = AAL2 + admin-gated in-app page** (aggregates only, n on every figure, no PII).
+- **WLT-13 (The instrument panel: TTFV + WAWU + funnel views, admin page, snapshots) — `ready`.** `0007` read-only views (SELECT revoked from authenticated/anon — no PostgREST leak) · `/admin/metrics` (AAL2 + `ADMIN_EMAILS` allow-list, non-admin → 404) · `scripts/metrics-snapshot.mjs` → `docs/metrics/WLT-5-<date>.json` for `/measure` · pre-launch honesty (n everywhere, no-KR-verdicts banner). **Next: `/build WLT-13`** — the final story of the MVP portfolio.
 
 **WLT-4 — Workflow engine + pre-built workflows** — brief + architecture `approved` (2026-06-11); **building**. The MVP-loop **convergence point**: consume the declared `Goal` (WLT-3) + real data (WLT-2) → auto-assemble a personalized running workflow → surface one platform-prompted action (`WorkflowRun` = the WAWU north-star unit). Scope (PM-elicited): **template-select + personalize** (composition/marketplace deferred); **one workflow per Goal.kind** via a ~6-archetype registry mapping all 14 goalKinds (no dead-end). Architecture: 2 tables (`workflows`/`workflow_runs`), composite same-user FKs, immutable runs, two-phase assembly, no new tooling.
 - **WLT-12 (Assemble + run your first workflow — net-worth snapshot) — `shipped`** (PR #31, 2026-06-11, live in prod). **The loop-closing story.** The engine end-to-end + `networth_snapshot` (5 goalKinds, balances-only): declare → plan-ready connect bridge → real net-worth snapshot → one-tap "set your target" → an **immutable `WorkflowRun` (the first WAWU event)** → "Running — tracking toward {target}". Engine: archetype registry + two-phase assembly + injectable `EngineStore` seam; the action commits via an **atomic SECURITY-INVOKER plpgsql function** (replay-guarded at two layers); `workflow.assemble`/`workflow.action` audit events; `workflow_assembled`/`action_completed` funnel events. Cross-model: 4 Codex rounds (funnel contract → loading state → engine tests/replay → **atomicity** + audit → E2E), Security **clean**. **Full-path E2E verified live** (19.5s, real stack). Other 9 goalKinds keep the WLT-11 placeholder until their archetype story (total-coverage = bet exit gate).
@@ -24,14 +27,14 @@ WLT-6 + **WLT-7 — authenticator-app (TOTP) backup factor — `shipped`** (2026
 
 | Bet | Title | Why next | Confidence |
 |-----|-------|----------|------------|
-| **WLT-5** | TTFV + WAWU instrumentation | **the last MVP bet** — the loop now emits every funnel event (`signup → account_linked → intent_declared → workflow_assembled → action_completed`); WLT-5 turns them into the TTFV/WAWU baselines that make the foundational hypothesis falsifiable. **Next: `/create-brief WLT-5`** | medium |
+| **WLT-13** | The instrument panel (WLT-5's story) | brief approved + story `ready` — **`/build WLT-13`** closes the MVP portfolio | medium |
 | WLT-4 (slices) | Remaining archetypes | `savings_rule` → `debt_payoff` etc., one story each on the shipped engine; total-coverage test = bet exit gate | medium |
 
 **Loop status: ①②③④ live — the MVP loop is closed** (ahead of the ~2026-07-01 forecast). ⑤ WLT-5 (instrumentation) remains, plus WLT-4's breadth slices.
 
 ## Awaiting human approval
 
-_None._ WLT-5 is the last stub (`portfolio_stub: true`) — it awaits promotion via `/create-brief`, not approval.
+_None._ All 5 MVP bets are promoted + approved; WLT-13 is the last story.
 
 ## Recently shipped
 

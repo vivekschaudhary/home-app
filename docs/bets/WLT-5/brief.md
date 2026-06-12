@@ -1,7 +1,7 @@
 ---
 id: WLT-5
 type: feature
-status: proposed
+status: Approved
 priority: P1
 parent: FOUNDATION-PRODUCT
 portfolio_stub: false
@@ -72,6 +72,7 @@ Indirect. Measurement doesn't create a moat itself, but the **data/proprietary-i
 ## Scope
 
 ### In scope
+
 - **TTFV** — clock = **`signup_started` → `action_completed`** per user (the full loop; elicited decision #1): per-user durations, the **p80 vs the <3-min target** (KR1's "≥80% of new accounts" framing), plus **split times** at `account_linked` and `workflow_assembled` so a red TTFV is attributable (product speed vs OAuth vs deliberation).
 - **WAWU** — weekly rollup: distinct users with ≥1 `action_completed` per 7-day window (the WorkflowRun = the WAWU unit, product.md L38). The KR5 baseline.
 - **Funnel conversion** — stage-by-stage: signup → mfa_enrolled → account_linked → intent_declared → workflow_assembled → action_completed; includes KR3's **intent→workflow conversion baseline** (also WLT-4's key_metric source).
@@ -80,6 +81,7 @@ Indirect. Measurement doesn't create a moat itself, but the **data/proprietary-i
 - **`/measure` wiring** — the queries packaged so the compass `/measure` workflow can record `docs/metrics/<bet-id>-<date>.json` snapshots + brief check-ins (the framework's artifact trail).
 
 ### Out of scope
+
 - **Event renames / schema changes** — the contract stays frozen; consolidation happens in views (decided, see DRI).
 - **Day-30 retention, plan-adherence, anomaly catch rate** — named as WAWU input metrics (product.md L38) but their features don't exist yet; each lands with its feature.
 - **Alerting/paging** on metric thresholds — read first, alert later.
@@ -110,17 +112,20 @@ _Decomposed via `/create-story WLT-5` after approval. Likely a single story (1-w
 ## DRI Log
 
 ### Decisions
+
 - [2026-06-12] [PM] **Promoted from portfolio stub.** Scope = compute + surface (views, admin page, snapshots); the emission layer is already complete — this bet writes no new events — area: scope — reversibility: easy
-- [2026-06-12] [PM, elicited] **TTFV clock = `signup_started` → `action_completed`** (the full loop; value = the user *acted*) — rationale: the strictest reading of the MVP definition ("the loop completing once"); honest consequence: the <3-min target now includes Plaid OAuth + human deliberation, so **split times at `account_linked` and `workflow_assembled` ship alongside** to make a miss attributable — area: metrics — alternatives: stop at `workflow_assembled` (rejected — measures the product's speed but not the thesis's "action" claim), stop at `account_linked` (rejected — undersells the value moment) — reversibility: easy (views recompute)
+- [2026-06-12] [PM, elicited] **TTFV clock = `signup_started` → `action_completed`** (the full loop; value = the user _acted_) — rationale: the strictest reading of the MVP definition ("the loop completing once"); honest consequence: the <3-min target now includes Plaid OAuth + human deliberation, so **split times at `account_linked` and `workflow_assembled` ship alongside** to make a miss attributable — area: metrics — alternatives: stop at `workflow_assembled` (rejected — measures the product's speed but not the thesis's "action" claim), stop at `account_linked` (rejected — undersells the value moment) — reversibility: easy (views recompute)
 - [2026-06-12] [PM, elicited] **Measurement surface = in-app AAL2 + admin-gated metrics page**, with `/measure` snapshots as the artifact trail — rationale: day-to-day visibility in the product itself; aggregates-only + no-PII guardrails bound the new surface's risk — area: surface — alternatives: SQL views + snapshots only (rejected — DRI wants an in-product panel), external Supabase Studio/Sentry (rejected — metrics outside the repo, vendor-coupled reading of the north star) — reversibility: easy
-- [2026-06-12] [PM] **The event contract stays frozen — renames declined** — rationale: WLT-5 owns the rename right (funnel.ts L13) and exercises it by *declining*: every consumer comment says "no rename later", and views give consolidation without breaking the seam — area: data — reversibility: medium
+- [2026-06-12] [PM] **The event contract stays frozen — renames declined** — rationale: WLT-5 owns the rename right (funnel.ts L13) and exercises it by _declining_: every consumer comment says "no rename later", and views give consolidation without breaking the seam — area: data — reversibility: medium
 - [2026-06-12] [PM] **`architecture_required: false`** — within-stack (Postgres views + one gated Next page + the existing emit/RLS patterns); no new tooling, boundaries, or contracts — area: process — reversibility: n/a
 - [2026-06-12] [PM] **Jira/Confluence mirror skipped** — no MCP on this host (consistent posture); logged per no-silent-skips — area: tooling — reversibility: easy
 
 ### Risks
+
 - [2026-06-12] [PM] **Tiny-n baseline reads as signal** — pre-launch traffic is ~1 real user — likelihood: high — impact: medium — mitigation: every aggregate carries its n; snapshots labeled pre-launch; no KR verdicts until n is meaningful — area: measurement
 - [2026-06-12] [PM] **Full-loop TTFV may read red for non-product reasons** (OAuth latency, user deliberation) — likelihood: medium — impact: medium — mitigation: the split times decompose the clock; KR conversations cite the splits — area: metrics
 - [2026-06-12] [Security] **New admin surface over cross-user data** — likelihood: low — impact: high — mitigation: AAL2 + admin gate, aggregates-only, no PII, service-role reads server-side only; mandatory Security Review at build — area: security
 
 ### Issues
+
 - [2026-06-12] [PM] Jira + Confluence MCPs not connected on this host — severity: low — owner: PM — status: open — area: tooling
