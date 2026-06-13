@@ -1,7 +1,7 @@
 ---
 id: WLT-5
 type: feature
-status: Approved
+status: shipped
 priority: P1
 parent: FOUNDATION-PRODUCT
 portfolio_stub: false

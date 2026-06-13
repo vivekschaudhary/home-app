@@ -2,7 +2,7 @@
 id: WLT-13
 bet: WLT-5
 type: story
-status: ready
+status: shipped
 priority: P1
 created: 2026-06-12
 author: PM
@@ -66,5 +66,9 @@ Per the approved brief (`architecture_required: false` — within-stack: Postgre
 - [2026-06-12] [PM] **Tiny-n baseline misread as signal** — likelihood: high — impact: medium — mitigation: n on every figure + the explicit pre-launch empty state (AC7); no KR verdicts until n is meaningful — area: measurement
 - [2026-06-12] [Security] **New cross-user-aggregate surface + service-role reads in an RSC** — likelihood: low — impact: high — mitigation: AAL2 + allow-list + 404; aggregates-only (AC6); service client never serialized to the client; mandatory Security Review — area: security
 
+- [2026-06-12] [Engineer→review] **Unauthorized → 404 via `getAal2UserId()` + `notFound()`, never `requireAal2()`** — rationale: `requireAal2()` REDIRECTS signed-out/non-AAL2 sessions to `/sign-in`, which leaks the route's existence; the gate must 404 for EVERY unauthorized state (signed-out, non-AAL2, non-admin) to stay unenumerable — area: security — reversibility: easy
+- [2026-06-12] [Engineer→review] **View SELECT revoked from `authenticated`/`anon`** — Postgres views run with owner privileges, so base-table RLS doesn't protect readers; the revoke (not RLS) is the boundary; live-PG test asserts `permission denied` — area: security — reversibility: easy
+- [2026-06-12] [Engineer] **Gate + no-PII verified by a real-route E2E** (3/3 live: signed-out 404 / non-admin 404 / admin 200) + mechanical no-PII on the rendered HTML (only the viewer's own session values allowed) and every committed snapshot — area: verification
+
 ### Issues
-- _none open — ready for `/build WLT-13`._
+- _none — shipped 2026-06-12 (PR #34; cross-model Codex Approve + Security clean; 3 review rounds: AC11 route+no-PII E2E → AC5 signed-out-redirect→404)._
