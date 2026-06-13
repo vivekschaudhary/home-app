@@ -38,6 +38,13 @@ async function signUpWithPasskey(page: Page, client: CDPSession, email: string, 
 test.describe("admin metrics gate (WLT-13)", () => {
   test.skip(!RUN || !DB_URL, "Set E2E_PASSKEY=1 + SUPABASE_DB_URL + a real Supabase project to run.");
 
+  test("a SIGNED-OUT visitor gets a 404 — NOT a redirect to /sign-in (AC5: unenumerable)", async ({ page }) => {
+    const resp = await page.goto("/admin/metrics");
+    expect(resp?.status()).toBe(404); // a redirect (302→/sign-in 200) would leak the route's existence
+    expect(new URL(page.url()).pathname).toBe("/admin/metrics"); // did not bounce to /sign-in
+    await expect(page.getByText("Metrics — internal")).toHaveCount(0);
+  });
+
   test("a signed-in NON-admin gets a 404 — the surface is unenumerable (AC5)", async ({ page, context }) => {
     const cdp = await context.newCDPSession(page);
     const email = `e2e-nonadmin+${Date.now()}@example.com`;

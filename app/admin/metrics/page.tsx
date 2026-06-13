@@ -1,12 +1,15 @@
 import { notFound } from "next/navigation";
-import { getSessionUser, requireAal2 } from "@vc1023/passkey-2fa";
+import { getAal2UserId, getSessionUser } from "@vc1023/passkey-2fa";
 import { COPY } from "@/app/lib/copy";
 import { type FunnelStage, formatDuration, isAdmin, readMetrics } from "@/app/lib/metrics";
 
-// WLT-13 — the instrument panel. Operator surface: AAL2 + ADMIN_EMAILS gate
-// (non-admins get a 404 — the route is unenumerable); server-rendered tables of
-// cross-user AGGREGATES only (n on every figure, no PII, no drill-down). The
-// service-role reads stay in this server component; only rendered numbers ship.
+// WLT-13 — the instrument panel. Operator surface: AAL2 + ADMIN_EMAILS gate.
+// EVERY unauthorized state (signed-out, non-AAL2, non-admin) returns 404 — the
+// route stays unenumerable. We deliberately use getAal2UserId() (returns null),
+// NOT requireAal2() (which REDIRECTS to /sign-in and would leak the route's
+// existence to unauthenticated callers). Server-rendered tables of cross-user
+// AGGREGATES only (n on every figure, no PII, no drill-down); the service-role
+// reads stay in this server component — only rendered numbers ship.
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
@@ -25,7 +28,9 @@ function conv(stage: FunnelStage, prev: FunnelStage | undefined): string {
 }
 
 export default async function AdminMetricsPage() {
-  await requireAal2();
+  // Non-redirecting gate: signed-out / non-AAL2 → null → 404 (NOT a redirect).
+  const userId = await getAal2UserId();
+  if (!userId) notFound();
   const user = await getSessionUser();
   if (!isAdmin(user?.email)) notFound(); // 404 — not 403; the surface stays unenumerable
 
