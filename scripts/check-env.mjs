@@ -105,6 +105,12 @@ if (missing.length) errors.push(`Missing required env: ${missing.join(", ")}`);
   }
 }
 
+// WLT-13: the /admin/metrics instrument panel is gated by ADMIN_EMAILS. Unset
+// means NOBODY can view metrics (deny-by-default) — fine, but say so.
+if (!isSet("ADMIN_EMAILS")) {
+  console.warn("⚠ Env preflight: ADMIN_EMAILS unset — /admin/metrics is inaccessible (deny-by-default).");
+}
+
 if (errors.length) {
   console.error(`\n✗ Env preflight FAILED for VERCEL_ENV=${target}:`);
   for (const e of errors) console.error(`  - ${e}`);

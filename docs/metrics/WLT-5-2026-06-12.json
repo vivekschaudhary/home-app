@@ -1,0 +1,47 @@
+{
+  "bet": "WLT-5",
+  "generated_at": "2026-06-12T20:20:04.825Z",
+  "note": "Aggregates only — no PII. Thin n = baseline, not verdict.",
+  "ttfv": {
+    "clock": "signup_started -> action_completed (first occurrence per user)",
+    "target": "p80 <= 180s (KR1: <3 min for >=80% of new accounts)",
+    "n_completed": 0,
+    "n_signups": 0,
+    "p80_seconds": null,
+    "median_seconds": null,
+    "median_split_linked_seconds": null,
+    "median_split_assembled_seconds": null
+  },
+  "wawu_weekly": [
+    {
+      "week_start": "2026-06-08T07:00:00.000Z",
+      "wawu": 1
+    }
+  ],
+  "funnel": [
+    {
+      "stage": "signup_started",
+      "users": 0
+    },
+    {
+      "stage": "mfa_enrolled",
+      "users": 2
+    },
+    {
+      "stage": "account_linked",
+      "users": 0
+    },
+    {
+      "stage": "intent_declared",
+      "users": 1
+    },
+    {
+      "stage": "workflow_assembled",
+      "users": 1
+    },
+    {
+      "stage": "action_completed",
+      "users": 1
+    }
+  ]
+}
