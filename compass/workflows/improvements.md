@@ -1408,3 +1408,21 @@ The user observed the real-world pattern: "create the bets across all and then h
 - **Other 10 agents + 13 workflows pending migration.** Migrate incrementally as new project surfaces need. Each migration is its own session; same shape (agent file → task definitions → workflow refactor to dispatch graph).
 - **`tool_assignments:` deprecation removal in v0.4.** Don't remove during v0.3.x grace period — projects may have local overrides. Removal in v0.4 alongside `compass/roles/*` deletion once all agents migrated.
 
+
+---
+
+### 2026-06-14 — Test suites went green while the real session→RLS→render seam was never exercised (dogfood: home-app #36)
+
+**Friction:** Dogfooding Compass on home-app, the first real user connected two banks in production; the link + 24-month backfill succeeded (2 connections, 3 accounts, ~800 real transactions in the DB, owned by the user). But `/settings/accounts` rendered the **empty state**, and the dashboard plan never personalized. The product had **94 tests green** — 40+ live-PG RLS policy assertions, gated passkey/intent/workflow/admin E2E — and **none of them touched the path that broke.** A retro found why: every test layer verified a *stand-in* for the real read, and all the stand-ins were green. (1) RLS tests authenticate by injecting the JWT claim straight into Postgres (`set_config('request.jwt.claims', …)`) — they prove the *policy* is right but hand Postgres a valid identity, bypassing the app's session→RLS binding entirely. (2) Handler unit tests `vi.mock` the Supabase client — the function that returns empty in prod is never executed against a real client. (3) The closest E2E seeded **connectionless** `financial_accounts` via pg and asserted the **dashboard** net-worth — never created an `account_connection`, never visited `/settings/accounts`, and ran fast enough on `next dev`/localhost that the session token was always fresh (so the leading root-cause candidate — an RSC read silently falling back to an unauthenticated query — was structurally unreachable). High test count masked a coverage hole at the single most important seam: *does a real browser session actually authenticate the real server-side read.*
+
+**Change:**
+- **`compass/workflows/build.md` Phase 2 step 6 gains `[real-path-integration-coverage]`** (load-bearing): for any access-controlled data surface (RLS / per-tenant / auth-gated read or write), at least one test must traverse the REAL path end-to-end — authenticated session → the app's actual data client (not injected DB claims, not a mock) → policy → rendered/returned rows, on a production-like build. Names the empty-render failure class and why stand-in tests (policy-only, mocked-client) stay green through it.
+- **home-app fix tracked at issue #36** with a regression test written first (the missing real-auth-path E2E), per `/fix` discipline.
+
+**Files touched:** `compass/workflows/build.md`, `compass/workflows/improvements.md` (this entry). (home-app product fix lands separately under #36.)
+
+**Watch for:**
+- **Candidate pattern `[real-path-integration-coverage]` at 1 instance.** Codify into `AGENTS.md` / the engineer agent's `implement-story` task after a 2nd independent instance (per the Compass 2-instance rule). Likely recurs on any RLS-on-Supabase-SSR project — token-refresh-in-RSC and session→policy binding are framework-shaped, not app-shaped.
+- **Don't let "N tests green" stand in for "the real path is covered."** The dashboard E2E passing created false confidence that "reads work" — it read connectionless accounts directly, a different path than the connection-listing read that broke. Coverage is about *which* paths, not *how many* assertions.
+- **E2E on `next dev` + localhost hides prod-build / https-cookie / RSC-streaming behavior.** Consider a CI lane that runs the auth-path E2E against `next build && next start`. The most security-relevant bugs live exactly in that gap.
+- **Counter ticks to #32.** Next retro fires after #35 (Retro #007); 2 of 5.
