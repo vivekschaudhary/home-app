@@ -28,11 +28,14 @@ function bannerCopy(error?: ApiErrorCode): string {
   switch (error) {
     case "invalid_credentials":
       return COPY.errors.invalidCredentials;
+    case "email_confirmation_required":
+      return COPY.errors.emailConfirmationRequired;
+    case "rate_limited":
+      return COPY.errors.rateLimited;
     case "network":
       return COPY.errors.network;
     case "server":
       return COPY.errors.server;
-    // "rate_limited" has no dedicated copy yet (UX Writer follow-up) → generic.
     default:
       return COPY.errors.unknown;
   }

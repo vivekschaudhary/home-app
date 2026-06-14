@@ -4,6 +4,7 @@
 
 import type { AuthenticationResponseJSON, RegistrationResponseJSON } from "@simplewebauthn/server";
 import { signInSchema, signUpSchema } from "./validation";
+import { mapSignInError } from "./signin-error";
 import { createServerSupabase } from "./supabase";
 import { clearAal2Cookie, getAal2UserId, getSessionUser, setAal2Cookie } from "./guard";
 import {
@@ -123,7 +124,16 @@ export function createPasskeyAuthHandlers(opts: PasskeyAuthOptions = {}): Passke
       });
       if (error || !data.user) {
         await emit({ type: "signin_failure" });
-        return json({ ok: false, error: "invalid_credentials" }, 401);
+        if (error) {
+          // Diagnosis (#40) — log the REAL Supabase error so "wrong password" is
+          // no longer the only thing we ever see. No PII: never the email/password.
+          console.warn("[signIn] auth error", {
+            code: (error as { code?: string }).code,
+            status: (error as { status?: number }).status,
+          });
+        }
+        const mapped = mapSignInError(error as { code?: string } | null);
+        return json({ ok: false, error: mapped }, mapped === "server" ? 502 : 401);
       }
       // AAL1 only — not app-privileged until the passkey challenge succeeds.
       return json({ ok: true });
