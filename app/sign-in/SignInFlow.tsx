@@ -204,6 +204,11 @@ export function SignInFlow() {
           <Button type="submit" loading={loading} loadingLabel={COPY.signin.ctaLoading}>
             {COPY.signin.cta}
           </Button>
+          <p className="text-center text-sm">
+            <Link href="/forgot" className="font-medium text-gray-500 underline hover:text-gray-700">
+              {COPY.forgot.link}
+            </Link>
+          </p>
         </form>
         <p className="mt-4 text-center text-sm text-gray-600">
           <Link href="/sign-up" className="font-medium text-gray-900 underline">

@@ -103,6 +103,11 @@ jobs:
             "/api/intent/route",
             "/api/workflow/action/route",
             "/onboarding/intent/page",
+            "/forgot/page",
+            "/reset/page",
+            "/api/auth/callback/route",
+            "/api/auth/password/reset-request/route",
+            "/api/auth/password/update/route",
             "/admin/metrics/page",
           ]
           missing = [k for k in need if k not in m]

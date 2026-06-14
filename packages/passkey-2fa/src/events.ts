@@ -12,6 +12,10 @@ export type AuthEvent =
   | { type: "totp_enroll_started"; userId: string }
   | { type: "totp_enrolled"; userId: string }
   | { type: "totp_challenge_failure"; userId: string }
-  | { type: "signout"; userId: string };
+  | { type: "signout"; userId: string }
+  // Password reset (WLT-14). `requested` carries no userId — anti-enumeration:
+  // we never reveal (or even learn, on a miss) whose email it was.
+  | { type: "password_reset_requested" }
+  | { type: "password_reset_completed"; userId: string };
 
 export type OnAuthEvent = (event: AuthEvent) => void | Promise<void>;

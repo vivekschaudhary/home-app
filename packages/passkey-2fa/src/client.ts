@@ -48,6 +48,15 @@ export function signOut(): Promise<ApiResult> {
   return postJSON(`${BASE}/sign-out`);
 }
 
+// Password reset (WLT-14).
+export function requestPasswordReset(email: string): Promise<ApiResult> {
+  return postJSON(`${BASE}/password/reset-request`, { email });
+}
+
+export function updatePassword(password: string): Promise<ApiResult> {
+  return postJSON(`${BASE}/password/update`, { password });
+}
+
 /** Enroll a passkey (sign-up step 2). Runs the registration ceremony + verify. */
 export async function enrollPasskey(): Promise<CeremonyResult> {
   const options = await postForOptions(`${BASE}/webauthn/register/options`);

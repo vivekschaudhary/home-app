@@ -21,7 +21,10 @@
       "Bash(git branch *)",
       "Bash(gh issue comment 3 --body '## Triage \\(2026-06-14\\) — 3/4 done, 1 scale-gated *)",
       "Bash(gh issue *)",
-      "Bash(git commit -q -m 'chore\\(e2e\\): self-clean gated-E2E user residue \\(stop polluting a shared DB\\) *)"
+      "Bash(git commit -q -m 'chore\\(e2e\\): self-clean gated-E2E user residue \\(stop polluting a shared DB\\) *)",
+      "Bash(git pull *)",
+      "Bash(git stash *)",
+      "Bash(grep -nE \"export interface AuthRoutes|export function create|signOut:|requestPasswordReset|interface.*Deps|return \\\\{$\" packages/passkey-2fa/src/routes.ts)"
     ],
     "defaultMode": "plan",
     "additionalDirectories": [

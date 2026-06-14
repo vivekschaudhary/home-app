@@ -245,4 +245,42 @@ export const COPY = {
     empty: "No events yet.",
     error: "Couldn't load metrics. Check the server logs.",
   },
+  // WLT-14 — forgot password (self-serve reset). copy.md verbatim.
+  forgot: {
+    link: "Forgot password?",
+    title: "Reset your password",
+    body: "Enter your email and we'll send you a link to set a new password.",
+    emailLabel: "Email",
+    submit: "Send reset link",
+    sending: "Sending…",
+    backToSignIn: "Back to sign in",
+    sentTitle: "Check your email",
+    sentBody:
+      "If an account exists for that email, we've sent a link to reset your password. It expires in a little while, so use it soon. Don't see it? Check your spam folder.",
+  },
+  reset: {
+    title: "Set a new password",
+    body: "Choose a new password for your account.",
+    passwordLabel: "New password",
+    submit: "Set new password",
+    saving: "Saving…",
+    doneTitle: "Your password's updated",
+    doneBody:
+      "You can sign in with your new password now. You'll still use your passkey to finish signing in — that hasn't changed.",
+    doneCta: "Go to sign in",
+    expiredTitle: "This link's expired",
+    expiredBody:
+      "Reset links can only be used once, and they don't last long. Request a new one and we'll send it over.",
+    expiredCta: "Request a new link",
+  },
+  passwordErrors: {
+    weak: "Your password needs at least 12 characters.",
+    network: "You appear to be offline. Check your connection and try again.",
+    server: "Something went wrong on our side — your information is safe. Try again in a minute.",
+    rateLimited: "Too many attempts. Wait a minute, then try again.",
+  },
+  resetA11y: {
+    requested: "If an account exists, a reset link is on its way.",
+    passwordUpdated: "Password updated. Taking you to sign in.",
+  },
 } as const;
