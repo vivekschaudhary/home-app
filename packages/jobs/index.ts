@@ -5,9 +5,15 @@ import {
   aggregationBackfill,
   aggregationRefresh,
   aggregationScheduledRefresh,
+  aggregationSettleSweep,
 } from "./aggregation/sync";
 
 export { inngest } from "./client";
 export { CONNECTION_LINKED_EVENT, CONNECTION_REFRESH_EVENT } from "./aggregation/sync";
 
-export const functions = [aggregationBackfill, aggregationRefresh, aggregationScheduledRefresh];
+export const functions = [
+  aggregationBackfill,
+  aggregationRefresh,
+  aggregationScheduledRefresh,
+  aggregationSettleSweep,
+];
