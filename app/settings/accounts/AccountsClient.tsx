@@ -52,6 +52,17 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
     setConnections(await fetchConnections());
   }, []);
 
+  // Reconcile with the live server state on mount (#36). This page is
+  // force-dynamic and changes out-of-band — the connect modal, background sync —
+  // and Next can hand a STALE prefetched payload (e.g. cached while the user had
+  // no accounts, before connecting). Without this, an empty/stale initial render
+  // persists on navigate-back and never recovers; trusting `initialConnections`
+  // forever is the bug. The server render stays the fast first paint; this
+  // guarantees correctness.
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
   // While ANY connection is still in its import window, poll so transactions +
   // the settled state surface. Server-derived (created_at) → this resumes after
   // navigating away and back, not just for the session that connected (AC7).
