@@ -24,6 +24,8 @@ _None — the MVP portfolio is complete (see Recently shipped). Open follow-on t
 - **Open ops note:** prod Supabase **Site URL** still `localhost:3000` (fix → `https://home-app.kindtree.us` so TOTP issuer + email links are correct); two old Plaid items un-revoked on Plaid's side (remove via Plaid dashboard if desired).
 
 WLT-6 + **WLT-7 — authenticator-app (TOTP) backup factor — `shipped`** (2026-06-07). **WLT-8** (support-gated recovery, both-factors-lost) is **parked** by decision: revisit once WLT-7 is in real use and backup-adoption is measured — not auto-queued.
+- **WLT-14 (Forgot password — self-serve reset) — `ready`** (2026-06-14). Surfaced by dogfooding: a locked-out user had **no way back** (first real user needed an admin password reset). The standard flow — "Forgot password?" → email link → `/reset` → sign in — recovering the **first factor only** (passkey AAL2 still applies; both-factors-lost stays WLT-8). Anti-enumeration + rate-limited; new handlers in `@vc1023/passkey-2fa` (minor bump 0.4.0). **Ops prerequisite:** the prod Supabase **Site URL** (currently `localhost:3000`) + reset email template — this story also closes that long-standing ops note. **Next: `/build WLT-14`.**
+- **Later slice:** change-password while signed in (shares `updatePassword`; a thin fast-follow).
 
 ## Next up (from `docs/foundation/plan.md`)
 
