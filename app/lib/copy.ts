@@ -98,6 +98,8 @@ export const COPY = {
     validationEmail: "Enter a valid email address, like name@example.com.",
     validationPassword: "Your password needs at least 12 characters.",
     invalidCredentials: "That email and password combination doesn't match our records. Try again.",
+    emailConfirmationRequired: "Please confirm your email first — check your inbox for the link we sent.",
+    rateLimited: "Too many attempts. Wait a minute, then try again.",
     network: "You appear to be offline. Check your connection and try again.",
     server: "Something went wrong on our side — your information is safe. Try again in a minute.",
     unknown:
