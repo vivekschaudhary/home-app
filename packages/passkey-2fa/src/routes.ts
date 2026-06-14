@@ -164,10 +164,12 @@ export function createPasskeyAuthHandlers(opts: PasskeyAuthOptions = {}): Passke
       const email = emailSchema.safeParse(body?.email);
       if (email.success) {
         const supabase = await createServerSupabase();
-        // The link returns to a route handler that exchanges the code (RSCs can't
-        // set cookies) → /reset. Errors swallowed: never leak existence/timing.
+        // The recovery link targets /reset (the approved AC2 contract); /reset
+        // bounces the PKCE code through the callback route for the cookie-safe
+        // exchange (an RSC can't persist session cookies). Errors swallowed:
+        // never leak account existence or timing.
         await supabase.auth
-          .resetPasswordForEmail(email.data, { redirectTo: `${appUrl()}/api/auth/callback?next=/reset` })
+          .resetPasswordForEmail(email.data, { redirectTo: `${appUrl()}/reset` })
           .catch(() => {});
         await emit({ type: "password_reset_requested" }); // no userId — anti-enum
       }
