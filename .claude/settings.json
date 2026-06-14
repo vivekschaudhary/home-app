@@ -14,7 +14,14 @@
       "Bash(cd \"/Volumes/Vivek mac/apps/home-app\" *)",
       "Read(//private/tmp/**)",
       "Bash(gh api *)",
-      "Bash(vercel env *)"
+      "Bash(vercel env *)",
+      "Bash(git checkout *)",
+      "Bash(grep -nA2 \"audit\" .github/workflows/ci.yml)",
+      "Bash(grep -nB1 -A6 \"export function clientIp\\\\|function clientIp\" packages/passkey-2fa/src/rate-limit.ts)",
+      "Bash(git branch *)",
+      "Bash(gh issue comment 3 --body '## Triage \\(2026-06-14\\) — 3/4 done, 1 scale-gated *)",
+      "Bash(gh issue *)",
+      "Bash(git commit -q -m 'chore\\(e2e\\): self-clean gated-E2E user residue \\(stop polluting a shared DB\\) *)"
     ],
     "defaultMode": "plan",
     "additionalDirectories": [

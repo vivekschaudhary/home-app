@@ -2,6 +2,8 @@
 // specs run. Without this, each new page/route compiles on first hit mid-flow
 // (1–5s each), so per-assertion timeouts fail at random points run to run.
 
+import { purgeE2EUsers } from "./purge-e2e-users";
+
 const PAGES = ["/", "/sign-up", "/sign-in", "/unsupported", "/dashboard", "/settings/security"];
 const API = [
   "/api/auth/sign-up",
@@ -19,6 +21,9 @@ const API = [
 ];
 
 export default async function globalSetup() {
+  // Start clean — clear any residue a prior run's teardown couldn't (crash / ^C).
+  await purgeE2EUsers();
+
   const base = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 
   // Wait for the dev server to be reachable.
