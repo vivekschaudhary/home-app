@@ -7,6 +7,7 @@ export type ApiErrorCode =
   | "validation_password"
   | "invalid_credentials"
   | "email_confirmation_required"
+  | "reset_link_invalid"
   | "network"
   | "server"
   | "unknown"

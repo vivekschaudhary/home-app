@@ -3,9 +3,10 @@
 // `onEvent` hook — the package itself stores no observability data.
 
 import type { AuthenticationResponseJSON, RegistrationResponseJSON } from "@simplewebauthn/server";
-import { signInSchema, signUpSchema } from "./validation";
+import { emailSchema, passwordSchema, signInSchema, signUpSchema } from "./validation";
 import { mapSignInError } from "./signin-error";
 import { createServerSupabase } from "./supabase";
+import { appUrl } from "./config";
 import { clearAal2Cookie, getAal2UserId, getSessionUser, setAal2Cookie } from "./guard";
 import {
   createAuthenticationOptions,
@@ -55,6 +56,9 @@ export interface PasskeyAuthHandlers {
   totpChallengeVerify: (req: Request) => Promise<Response>;
   factorsList: (req: Request) => Promise<Response>;
   totpUnenroll: (req: Request) => Promise<Response>;
+  // Password reset (WLT-14).
+  requestPasswordReset: (req: Request) => Promise<Response>;
+  updatePassword: (req: Request) => Promise<Response>;
 }
 
 export function createPasskeyAuthHandlers(opts: PasskeyAuthOptions = {}): PasskeyAuthHandlers {
@@ -147,6 +151,50 @@ export function createPasskeyAuthHandlers(opts: PasskeyAuthOptions = {}): Passke
       await clearAal2Cookie();
       await supabase.auth.signOut();
       if (user) await emit({ type: "signout", userId: user.id });
+      return json({ ok: true });
+    },
+
+    // WLT-14 — request a reset link. ANTI-ENUMERATION: the response is identical
+    // whether or not the email is registered (and whether Supabase errors); we
+    // only fire the send when the address is well-formed. Rate-limited.
+    async requestPasswordReset(req) {
+      const limit = await limiter(`reset:${clientIp(req)}`, 5, 5 * 60 * 1000);
+      if (!limit.ok) return tooManyRequests(limit.retryAfterSeconds);
+      const body = (await req.json().catch(() => null)) as { email?: unknown } | null;
+      const email = emailSchema.safeParse(body?.email);
+      if (email.success) {
+        const supabase = await createServerSupabase();
+        // The link returns to a route handler that exchanges the code (RSCs can't
+        // set cookies) → /reset. Errors swallowed: never leak existence/timing.
+        await supabase.auth
+          .resetPasswordForEmail(email.data, { redirectTo: `${appUrl()}/api/auth/callback?next=/reset` })
+          .catch(() => {});
+        await emit({ type: "password_reset_requested" }); // no userId — anti-enum
+      }
+      return json({ ok: true }); // identical in every case
+    },
+
+    // WLT-14 — set the new password under the recovery session established by the
+    // callback. Recovers AAL1 only; the passkey (AAL2) still gates the app, and we
+    // sign the recovery session out so the user re-authenticates cleanly.
+    async updatePassword(req) {
+      const limit = await limiter(`pwupdate:${clientIp(req)}`, 10, 5 * 60 * 1000);
+      if (!limit.ok) return tooManyRequests(limit.retryAfterSeconds);
+      const body = (await req.json().catch(() => null)) as { password?: unknown } | null;
+      const parsed = passwordSchema.safeParse(body?.password);
+      if (!parsed.success) return json({ ok: false, error: "validation_password" }, 400);
+      const supabase = await createServerSupabase();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return json({ ok: false, error: "reset_link_invalid" }, 401); // link expired/used/absent
+      const { error } = await supabase.auth.updateUser({ password: parsed.data });
+      if (error) {
+        console.warn("[updatePassword] supabase error", { code: (error as { code?: string }).code });
+        return json({ ok: false, error: "server" }, 502);
+      }
+      await emit({ type: "password_reset_completed", userId: user.id });
+      await supabase.auth.signOut(); // clear the recovery session → re-auth (passkey) fresh
       return json({ ok: true });
     },
 

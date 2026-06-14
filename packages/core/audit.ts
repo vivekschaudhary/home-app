@@ -9,6 +9,9 @@ export const AUDIT_ACTIONS = {
   SIGNIN_FAILURE: "auth.signin.failure",
   MFA_CHALLENGE_FAILURE: "auth.mfa.challenge.failure",
   SIGNOUT: "auth.signout",
+  // Password reset (WLT-14) — security-relevant; requested carries no user.
+  PASSWORD_RESET_REQUESTED: "auth.password_reset.requested",
+  PASSWORD_RESET_COMPLETED: "auth.password_reset.completed",
   // Aggregation (WLT-2)
   AGGREGATION_CONNECT: "aggregation.connect",
   AGGREGATION_DISCONNECT: "aggregation.disconnect",

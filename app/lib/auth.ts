@@ -42,6 +42,12 @@ async function onEvent(e: AuthEvent): Promise<void> {
     case "signout":
       await emitAudit(AUDIT_ACTIONS.SIGNOUT, e.userId);
       break;
+    case "password_reset_requested":
+      await emitAudit(AUDIT_ACTIONS.PASSWORD_RESET_REQUESTED, null); // anti-enum: no user
+      break;
+    case "password_reset_completed":
+      await emitAudit(AUDIT_ACTIONS.PASSWORD_RESET_COMPLETED, e.userId);
+      break;
   }
 }
 
