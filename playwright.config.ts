@@ -10,6 +10,8 @@ export default defineConfig({
   testDir: "./e2e",
   // Warm dev-server route compilation before tests (see e2e/global-setup.ts).
   globalSetup: "./e2e/global-setup.ts",
+  // Purge gated-E2E user residue after the run so a shared DB doesn't accumulate it.
+  globalTeardown: "./e2e/global-teardown.ts",
   // Output under node_modules/.cache so writes don't land in the project root,
   // where `next dev`'s file-watcher would trigger Fast Refresh and remount the
   // multi-step auth flow mid-test. `list` reporter avoids a playwright-report/ dir.
