@@ -254,3 +254,34 @@ export const aggregationScheduledRefresh = inngest.createFunction(
     return { fannedOut: conns.length };
   },
 );
+
+// Quiescence settle-sweep (#39) — the backfill's stabilization loop is the
+// PRIMARY path to history_synced_at, but it caps after ~4.5 min; a real
+// multi-account import can keep streaming past that, stamp nothing, and then
+// sit "Importing…" until a webhook (silent once settled) or the 6h refresh —
+// hours of a false state. This frequent, provider-free sweep closes the gap: a
+// connection that has SYNCED but seen ZERO new activity for QUIET_MINUTES has
+// demonstrably settled (no data is arriving) → stamp it. Sustained inactivity
+// IS a stabilization signal — it's measuring quiet, not a clock from creation.
+const QUIET_MINUTES = 5;
+export const aggregationSettleSweep = inngest.createFunction(
+  { id: "aggregation-settle-sweep" },
+  { cron: "*/10 * * * *" },
+  async ({ step }) => {
+    const stamped = await step.run("stamp-quiesced", async () => {
+      const svc = createServiceSupabase();
+      const cutoff = new Date(Date.now() - QUIET_MINUTES * 60 * 1000).toISOString();
+      const { data } = await svc
+        .from("account_connections")
+        .update({ history_synced_at: new Date().toISOString() })
+        .eq("health_status", "active") // not needs_reauth/error/disconnected
+        .is("history_synced_at", null) // only the not-yet-settled
+        .is("deleted_at", null)
+        .not("last_synced_at", "is", null) // must have actually synced (not a never-ran backfill)
+        .lt("last_synced_at", cutoff) // …and gone quiet for ≥ QUIET_MINUTES
+        .select("id");
+      return data?.length ?? 0;
+    });
+    return { stamped };
+  },
+);
