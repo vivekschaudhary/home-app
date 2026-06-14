@@ -2,7 +2,7 @@
 id: WLT-14
 bet: WLT-1
 type: story
-status: ready
+status: shipped
 priority: P1
 created: 2026-06-14
 author: PM
@@ -67,5 +67,11 @@ Within-stack (`architecture_required: false`) — Supabase Auth's built-in passw
 - [2026-06-14] [PM] **Supabase default email deliverability/rate limits** (built-in SMTP is throttled) — likelihood: medium — impact: medium — mitigation: fine for dogfood/low volume; a real SMTP provider is a later infra slice — area: infra
 - [2026-06-14] [Security] **New unauthenticated public endpoints** (request + token-based update) — likelihood: medium — impact: high — mitigation: anti-enumeration, rate-limit, single-use time-limited Supabase tokens, no token/PII in logs; mandatory Security Review — area: security
 
+- [2026-06-14] [Engineer→review] **redirectTo = `<prod>/reset` (AC2); /reset bounces the PKCE code through the callback route** — rationale: an RSC can't persist the session cookie (the #36 constraint), so the cookie-safe exchange lives in a route handler while the email link target stays `/reset` as approved — area: auth/SSR — reversibility: easy
+- [2026-06-14] [Engineer] **Anti-enumeration verified at both layers** — handler always returns ok + the "check your email" UI is existence-agnostic; 6 component tests (expired state, weak-password reject, success-names-the-passkey, invalid-link mapping) — area: security
+- [2026-06-14] [Engineer] Package bumped 0.3.0→0.4.0 (new feature, workspace-linked); audit trail via `password_reset_*` events.
+
 ### Issues
-- _none open — ready for `/build WLT-14` (note the AC11 ops prerequisite before prod verification)._
+- [2026-06-14] [Engineer] **Real-path E2E deferred** — the full recovery round-trip (Supabase admin `generateLink` → callback → /reset → set password) is the one remaining `[real-path-integration-coverage]` test; component tests + manual prod verification cover it for now — severity: low — owner: Engineer — status: open
+
+_Shipped 2026-06-14 (PR #45; cross-model Codex Approve + Security clean; 1 round — AC2 redirectTo)._
