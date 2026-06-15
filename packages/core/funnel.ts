@@ -26,6 +26,10 @@ export const FUNNEL_EVENTS = {
   // action_completed (so WAWU counts it, weekly-repeatable).
   RECAP_VIEWED: "recap_viewed",
   RECAP_ACTION_PROMPTED: "recap_action_prompted",
+  // Anomalies (WLT-18) — surfaced once per anomaly (open→surfaced); dismissed on
+  // the quiet escape. The "Review it" action reuses action_completed (WAWU).
+  ANOMALY_SURFACED: "anomaly_surfaced",
+  ANOMALY_DISMISSED: "anomaly_dismissed",
 } as const;
 
 export type FunnelEvent = (typeof FUNNEL_EVENTS)[keyof typeof FUNNEL_EVENTS];

@@ -7,6 +7,7 @@ import {
   aggregationScheduledRefresh,
   aggregationSettleSweep,
 } from "./aggregation/sync";
+import { anomalyScanDaily } from "./recap/anomaly-scan";
 import { netWorthSnapshotDaily } from "./recap/snapshot";
 
 export { inngest } from "./client";
@@ -18,4 +19,5 @@ export const functions = [
   aggregationScheduledRefresh,
   aggregationSettleSweep,
   netWorthSnapshotDaily,
+  anomalyScanDaily,
 ];

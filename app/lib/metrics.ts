@@ -42,23 +42,33 @@ export interface FunnelStage {
   users: number;
 }
 
+export interface AnomalyWeek {
+  weekStart: string;
+  detected: number;
+  surfaced: number;
+  acted: number;
+  dismissed: number;
+}
+
 export interface MetricsSnapshot {
   ttfv: TtfvSummary;
   wawu: WawuWeek[];
   returns: ReturnWeek[];
+  anomalies: AnomalyWeek[];
   funnel: FunnelStage[];
 }
 
 export async function readMetrics(): Promise<MetricsSnapshot> {
   const svc = createServiceSupabase();
 
-  const [ttfvRes, wawuRes, returnRes, funnelRes] = await Promise.all([
+  const [ttfvRes, wawuRes, returnRes, anomalyRes, funnelRes] = await Promise.all([
     svc.from("metrics_ttfv_summary").select("*").single(),
     svc.from("metrics_wawu_weekly").select("*").limit(12),
     svc.from("metrics_return_weekly").select("*").limit(12),
+    svc.from("metrics_anomaly_weekly").select("*").limit(12),
     svc.from("metrics_funnel_stages").select("*").order("stage_order"),
   ]);
-  if (ttfvRes.error || wawuRes.error || returnRes.error || funnelRes.error) {
+  if (ttfvRes.error || wawuRes.error || returnRes.error || anomalyRes.error || funnelRes.error) {
     throw new Error("[metrics] view read failed"); // page maps to the copy error line
   }
 
@@ -80,6 +90,16 @@ export async function readMetrics(): Promise<MetricsSnapshot> {
     returns: (returnRes.data ?? []).map((r) => {
       const row = r as { week_start: string; returners: number };
       return { weekStart: row.week_start, returners: Number(row.returners) };
+    }),
+    anomalies: (anomalyRes.data ?? []).map((r) => {
+      const row = r as { week_start: string; detected: number; surfaced: number; acted: number; dismissed: number };
+      return {
+        weekStart: row.week_start,
+        detected: Number(row.detected),
+        surfaced: Number(row.surfaced),
+        acted: Number(row.acted),
+        dismissed: Number(row.dismissed),
+      };
     }),
     funnel: (funnelRes.data ?? []).map((r) => {
       const row = r as { stage: string; stage_order: number; users: number };

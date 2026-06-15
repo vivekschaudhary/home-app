@@ -111,6 +111,67 @@ test.describe("since-last-time recap — movement + target progress + spending (
       await expect(page.getByText("Spent $420 this week")).toBeVisible();
       await expect(page.getByText(/\$120 more than last week/)).toBeVisible();
       await expect(page.getByText(/Groceries \$420/)).toBeVisible();
+
+      // ── WLT-18: anomaly surface + Dismiss + Review, real-path ──
+      const wf = await db.query("select id from workflows where user_id = $1", [userId]);
+      const workflowId = wf.rows[0].id as string;
+
+      // Seed an anomaly (service-role write); it reads back through the real session.
+      await db.query(
+        `insert into anomalies (user_id, account_id, kind, severity, summary, detected_on, dedup_key)
+         values ($1,$2,'large_charge','attention',$3::jsonb,$4,'large_charge:e2e-1')`,
+        [userId, checkingId, JSON.stringify({ amount: 480, category: "Groceries", date: isoDay(-1) }), isoDay(-1)],
+      );
+      await page.reload();
+      // The "Worth a look" callout outranks the target action (suppressed).
+      await expect(page.getByText("Worth a look")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText(/larger-than-usual charge: \$480 in Groceries/)).toBeVisible();
+      await expect(page.getByRole("button", { name: "Aim higher?" })).toHaveCount(0);
+      // AC6: surfacing it (open→surfaced) emits anomaly_surfaced.
+      const surfaced = await db.query(
+        "select count(*)::int as n from auth_funnel_events where user_id = $1 and event = 'anomaly_surfaced'",
+        [userId],
+      );
+      expect(surfaced.rows[0].n).toBeGreaterThanOrEqual(1);
+
+      // Dismiss → quiet status change (no run). Callout gone after reload (real persist).
+      await page.getByRole("button", { name: "Dismiss" }).click();
+      await expect(page.getByText("Worth a look")).toHaveCount(0);
+      await page.reload();
+      await expect(page.getByText("Worth a look")).toHaveCount(0);
+      const dismissed = await db.query("select status from anomalies where dedup_key = 'large_charge:e2e-1'");
+      expect(dismissed.rows).toEqual([{ status: "dismissed" }]);
+      // AC6: Dismiss emits anomaly_dismissed (and writes NO workflow_run).
+      const dismissEvent = await db.query(
+        "select count(*)::int as n from auth_funnel_events where user_id = $1 and event = 'anomaly_dismissed'",
+        [userId],
+      );
+      expect(dismissEvent.rows[0].n).toBeGreaterThanOrEqual(1);
+
+      // Seed a second anomaly → Review it = the WAWU action (status acted + a run).
+      await db.query(
+        `insert into anomalies (user_id, account_id, kind, severity, summary, detected_on, dedup_key)
+         values ($1,$2,'low_balance','attention',$3::jsonb,$4,'low_balance:e2e-2')`,
+        [userId, checkingId, JSON.stringify({ amount: 40 }), isoDay(0)],
+      );
+      await page.reload();
+      await expect(page.getByText(/account is running low: \$40/)).toBeVisible({ timeout: 15_000 });
+      await page.getByRole("button", { name: "Review it" }).click();
+      await expect(page.getByText("Thanks — noted.")).toBeVisible({ timeout: 15_000 });
+
+      const acted = await db.query("select status from anomalies where dedup_key = 'low_balance:e2e-2'");
+      expect(acted.rows).toEqual([{ status: "acted" }]);
+      const reviewRun = await db.query(
+        "select kind from workflow_runs where workflow_id = $1 and kind = 'recap_review_anomaly'",
+        [workflowId],
+      );
+      expect(reviewRun.rows).toEqual([{ kind: "recap_review_anomaly" }]);
+      // AC6: Review reuses the action_completed event (the WAWU unit), source=anomaly_review.
+      const reviewEvent = await db.query(
+        "select count(*)::int as n from auth_funnel_events where user_id = $1 and event = 'action_completed' and context->>'source' = 'anomaly_review'",
+        [userId],
+      );
+      expect(reviewEvent.rows[0].n).toBeGreaterThanOrEqual(1);
     } finally {
       await db.end();
     }
