@@ -1,7 +1,7 @@
 ---
 id: WLT-19-ARCH
 bet: WLT-19
-status: proposed
+status: approved
 created: 2026-06-15
 authors: [Architect, Enterprise/Solution Architect]
 area_tags: [frontend, navigation, auth, routing]
@@ -53,44 +53,52 @@ middleware.ts                    ← protectedPaths extended to all shell routes
 - **`AppShell`** is a `"use client"` component owning the drawer open/closed state; `Sidebar`/`AccountMenu` render inside it. The server layout passes the user's email + the (server-rendered) nav.
 
 ### Data model changes
+
 **None.**
 
 ### API / contract changes
+
 **None** (no endpoints). The internal "contract" is `NAV_SECTIONS` + the `<ComingSoon>` component: a feature bet flips its section `coming_soon → live` and replaces the stub `page.tsx`. **Routing changes** (additive + one redirect): new `/budget /goals /debt /investments /subscriptions`; `/accounts` (new) + `/settings/accounts` → 301/redirect to it; `/dashboard` + `/settings/security` URLs unchanged.
 
 ### Dependencies (justified)
+
 - **`@headlessui/react`** (elicited) — unstyled, accessible primitives for the **mobile drawer** (`Dialog`: focus trap, `aria-modal`, Esc/overlay-close, scroll lock) and the **account menu** (`Menu`: roving focus, keyboard). Hand-rolling correct a11y for these is the error-prone alternative the elicitation rejected. Tailwind-family (same authors as Tailwind), unstyled (we style with our Tailwind classes), tree-shakeable.
-- **An icon set for the 7 nav items + hamburger/close** — recommend **`@heroicons/react`** (Tailwind-family, tree-shakeable). *Alternative:* inline SVGs (zero dependency) — Engineer's call; both are fine.
+- **An icon set for the 7 nav items + hamburger/close** — recommend **`@heroicons/react`** (Tailwind-family, tree-shakeable). _Alternative:_ inline SVGs (zero dependency) — Engineer's call; both are fine.
 
 ## Enterprise/Solution Architect input
 
 ### Cross-system implications
+
 None — no new service, data store, runtime, or boundary crosses. This is frontend routing + layout within the existing Next.js/Vercel deploy. No change to Supabase, Inngest, or the API surface.
 
 ### Standards compliance — and the **foundational-stack deviation gate (step 7)**
+
 **Assessed: not a foundational-stack deviation requiring a `/setup-foundation-architecture` amend.** Headless UI + heroicons are **leaf UI-primitive libraries** within the **already-approved frontend** (Next.js + React + **Tailwind**, Stack table) — companions to Tailwind (same authors), not a new framework, runtime, data store, service, or load-bearing architectural choice. The Stack table enumerates architecture-level picks, not component libraries; adding accessible primitives is below the deviation-gate threshold. **This is recorded explicitly, not silently** (the gate's actual concern). _Option:_ if the team wants it formalized, a one-line entry in the foundation Stack table ("UI primitives: Headless UI + heroicons") is a trivial foundation note — **not a blocker for this bet.** Other standards: routing follows App-Router conventions; the auth gate stays server-enforced (cross-cutting "fail-closed on auth"); no PII; responsive + a11y per the brief guardrails.
 
 ### Cost / capacity / vendor lock-in
+
 Negligible. Two small client deps (tens of KB, tree-shaken); no runtime/infra cost. Lock-in: low — Headless UI is unstyled (our markup/classes stay ours); replaceable. Must hold the **p95<200ms / bundle** fitness function — verify the shell doesn't bloat first load (it shouldn't; the heavy primitives are client-islands, lazy where possible).
 
 ## Alternatives considered
 
-| Option | Pros | Cons | Why not chosen |
-|--------|------|------|----------------|
-| **Chosen** — `(app)` route group + shared layout-gate + `NAV_SECTIONS` config + Headless UI drawer | One gate (DRY + secure); URL-clean; the config is the mount contract; a11y for free | adds 2 small deps; a routing move | — |
-| **Per-page shell + per-page `requireAal2`** (no group) | no route move | the gate is duplicated N times (drift/forget risk — the brief's #1 risk); every feature re-wraps the shell | Rejected — defeats build-the-frame-once + risks an ungated route |
-| **Gate only in middleware** (drop the server `requireAal2`) | one edge check | middleware AAL checks are coarser + the existing pattern is defense-in-depth server-side; a middleware-only gate is a weaker boundary for financial pages | Rejected — keep BOTH layers (edge + server layout) |
-| **shadcn/ui design-system migration** | maximal polish | a design-system shift + bigger dep mid-week; foundation amend | Rejected by the brief elicitation (Headless UI primitives only) |
-| **Hand-rolled drawer/menu (no Headless UI)** | zero new dep | correct focus-trap/aria-modal/scroll-lock is fiddly + easy to get wrong (a11y guardrail) | Rejected by the brief elicitation |
+| Option                                                                                             | Pros                                                                                | Cons                                                                                                                                                      | Why not chosen                                                   |
+| -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| **Chosen** — `(app)` route group + shared layout-gate + `NAV_SECTIONS` config + Headless UI drawer | One gate (DRY + secure); URL-clean; the config is the mount contract; a11y for free | adds 2 small deps; a routing move                                                                                                                         | —                                                                |
+| **Per-page shell + per-page `requireAal2`** (no group)                                             | no route move                                                                       | the gate is duplicated N times (drift/forget risk — the brief's #1 risk); every feature re-wraps the shell                                                | Rejected — defeats build-the-frame-once + risks an ungated route |
+| **Gate only in middleware** (drop the server `requireAal2`)                                        | one edge check                                                                      | middleware AAL checks are coarser + the existing pattern is defense-in-depth server-side; a middleware-only gate is a weaker boundary for financial pages | Rejected — keep BOTH layers (edge + server layout)               |
+| **shadcn/ui design-system migration**                                                              | maximal polish                                                                      | a design-system shift + bigger dep mid-week; foundation amend                                                                                             | Rejected by the brief elicitation (Headless UI primitives only)  |
+| **Hand-rolled drawer/menu (no Headless UI)**                                                       | zero new dep                                                                        | correct focus-trap/aria-modal/scroll-lock is fiddly + easy to get wrong (a11y guardrail)                                                                  | Rejected by the brief elicitation                                |
 
 ## Consequences
 
 **Positive:**
+
 - **One authoritative AAL2 gate** (the layout) for the whole shell — DRY + harder to leave a route ungated than the per-page status quo.
 - **`NAV_SECTIONS` is the mounting contract** — each of the week's features is "flip to `live` + drop a page," which is exactly what the bet's metric measures (zero shell rework).
 - The product reads as one cohesive, responsive surface (the trust input); honest `<ComingSoon>` signals the roadmap without faking it.
 
 **Negative:**
+
 - A **routing move** (dashboard/accounts/security into `(app)`) — mechanical but touches auth-critical paths; needs the redirect + the gate verified on every route.
 - **Two new client deps** (small, Tailwind-family) — a minor surface to keep tree-shaken under the perf budget.
 - The mobile drawer is a client island (state) — acceptable; the rest of the shell is server-rendered.
@@ -115,6 +123,7 @@ Negligible. Two small client deps (tens of KB, tree-shaken); no runtime/infra co
 ## Open questions for Engineer
 
 Escalate to Architect (don't improvise):
+
 - **The gate must hold on every shell route.** Use `requireAal2()` in `(app)/layout.tsx` as the authoritative server gate **and** extend `middleware.ts` `protectedPaths`. If a layout-level gate proves not to short-circuit a child page in your Next version, fall back to per-page `getAal2UserId()`-or-redirect — but the E2E must prove every route redirects when un-AAL2. **Do not ship a shell route that renders without AAL2.**
 - **`/settings/accounts → /accounts` redirect:** permanent redirect; update the in-app links (the dashboard header) to `/accounts`.
 
@@ -123,6 +132,7 @@ Figure out without escalating: the exact Tailwind breakpoints/markup, the icon c
 ## DRI Log
 
 ### Decisions
+
 - [2026-06-15] [Architect] **`(app)` route group + a single layout that gates with `requireAal2()`** — rationale: one authoritative AAL2 gate for the whole shell (DRY + harder to leave a route ungated than per-page); URL-invisible so existing URLs stay — area: auth/routing — alternatives: per-page shell+gate (rejected — duplication/drift risk), middleware-only (rejected — keep edge+server defense-in-depth) — reversibility: medium
 - [2026-06-15] [Architect] **`NAV_SECTIONS` config is the mounting contract** (`{key,label,href,icon,status}`) driving sidebar + active state + `<ComingSoon>` stubs — rationale: a feature mounts by flipping `coming_soon→live` + adding a page = zero shell rework (the bet's metric) — area: frontend — reversibility: easy
 - [2026-06-15] [Architect] **Headless UI `Dialog` (drawer) + `Menu` (account)** for a11y primitives — rationale: focus-trap/aria-modal/scroll-lock + roving focus for free; the elicited choice; unstyled so our Tailwind stays — area: design/a11y — reversibility: medium
@@ -130,14 +140,16 @@ Figure out without escalating: the exact Tailwind breakpoints/markup, the icon c
 - [2026-06-15] [Architect] **Move dashboard/accounts/security into the shell; `/accounts` replaces `/settings/accounts` with a redirect** — rationale: Accounts is a top-level nav item; keep deep links working — area: routing — reversibility: medium (URL change — don't churn again)
 
 ### Risks
+
 - [2026-06-15] [Architect/Security] **An ungated shell route** (the gate forgotten on a new route, or a layout gate that doesn't short-circuit) — likelihood: medium · impact: high (financial data without AAL2 = security regression) — mitigation: the single layout gate + middleware protectedPaths + a **real-path E2E that every shell route redirects un-AAL2 sessions**; the build-manifest check that middleware still registers — area: security
 - [2026-06-15] [Architect] **Responsive breaks on one surface** (the explicit phone/iPad/desktop requirement) — likelihood: medium · impact: medium — mitigation: the responsive-QA pass on all three classes before "done"; Headless UI handles the drawer mechanics — area: ux
 - [2026-06-15] [Enterprise Architect] **Bundle/first-paint regression from the new deps** — likelihood: low · impact: low — mitigation: tree-shaken imports, the drawer as a client island; verify against the p95<200ms FF — area: performance
 
 ### Issues
+
 - [2026-06-15] [Architect] **Onboarding/post-sign-in landing target** — severity: low · owner: Engineer · status: open — area: routing — confirm the post-auth + post-onboarding redirect resolves to `/dashboard` inside the shell.
 - [2026-06-15] [Architect] **Middleware `protectedPaths` maintenance** — severity: low · owner: Engineer · status: open — area: auth — listing each shell route is drift-prone; consider a shared prefix/helper so a new section is auto-protected.
 
 ---
 
-_Approved by: <pending HITL> on <date>_
+_Approved by: Vivek (DRI) on 2026-06-15_

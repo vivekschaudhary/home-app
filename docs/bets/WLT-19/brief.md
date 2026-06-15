@@ -1,13 +1,14 @@
 ---
 id: WLT-19
 type: feature
-status: proposed
+status: Approved
 priority: P1
 parent: FOUNDATION-PRODUCT
 portfolio_stub: false
 depends_on: []
 parallel_with: []
 architecture_required: auto
+architecture_status: approved
 created: 2026-06-15
 author: PM
 sources:
@@ -50,13 +51,14 @@ Today the post-auth product is a handful of **disconnected pages** — `/dashboa
 
 ## User
 
-The **Consumer persona (~80%)** — wants a clean, app-like experience they can navigate across all their money areas on **any device** (phone, iPad, desktop). Their job-to-be-done: *"let me move around my whole financial picture from one place, and make it feel like a real, trustworthy product wherever I open it."*
+The **Consumer persona (~80%)** — wants a clean, app-like experience they can navigate across all their money areas on **any device** (phone, iPad, desktop). Their job-to-be-done: _"let me move around my whole financial picture from one place, and make it feel like a real, trustworthy product wherever I open it."_
 
 ## Why this matters
 
-This is the **navigational frame the week's six features mount into** — built once so each feature is *"add a nav item + a page,"* not *"re-decide the whole layout."* Three payoffs:
+This is the **navigational frame the week's six features mount into** — built once so each feature is _"add a nav item + a page,"_ not _"re-decide the whole layout."_ Three payoffs:
+
 1. **Velocity + consistency for the week.** Five feature bets ship into a ready frame instead of each re-solving nav/responsive/auth.
-2. **It makes the product *feel* like a product.** A clean, full-screen, navigable shell on every surface is a direct input to the **trust moat** (product.md moat row 5) — a prototype-shaped UI undercuts the trust a financial app needs.
+2. **It makes the product _feel_ like a product.** A clean, full-screen, navigable shell on every surface is a direct input to the **trust moat** (product.md moat row 5) — a prototype-shaped UI undercuts the trust a financial app needs.
 3. **The nav IS the product's information architecture made visible.** The sections map to the foundation's workflow archetypes (spending → Budget & Spending; savings/goals → Goals; debt_payoff → Debt payoff) plus product expansion (Investments, Subscriptions) — so the shell renders the roadmap, and **honest "Coming soon" stubs** signal what's next without faking it.
 
 ## Hypothesis (the bet)
@@ -72,6 +74,7 @@ Not a moat itself — an **enabler + a trust input**. It (a) compounds delivery 
 ## Scope
 
 ### In scope
+
 - **A responsive app-shell layout** (a Next.js App Router route group `(app)` with a shared layout): a **fixed left sidebar** on desktop/tablet that **collapses to a hamburger drawer** on mobile (Headless UI `Dialog`/`Disclosure` for the drawer — focus-trapped, Esc/overlay-close).
 - **The left nav** — Dashboard · Budget & Spending · Goals · Debt payoff · Investments · Subscriptions · Accounts — with the **active/current-page** state, icons, and clean typography; scales to 7+ items.
 - **Wire the two that exist:** **Dashboard** → the current dashboard content (recap + workflow card) reframed as the Dashboard page; **Accounts** → the existing accounts surface (today `/settings/accounts`).
@@ -81,8 +84,9 @@ Not a moat itself — an **enabler + a trust input**. It (a) compounds delivery 
 - **Headless UI + Tailwind** for the nav/drawer/menu primitives (accessibility), atop the existing `@wealth/ui` look.
 
 ### Out of scope
+
 - **The actual features** (Budget, Goals, Debt, Investments, Subscriptions logic) — **each is its own bet this week**; this bet only gives them a home.
-- A full **design-system migration** (shadcn) — explicitly *not* chosen (Headless UI primitives only).
+- A full **design-system migration** (shadcn) — explicitly _not_ chosen (Headless UI primitives only).
 - Theming / dark mode, a settings redesign, profile management — later.
 - **Mobile native app** — web-responsive only (Phase-1 stack: web).
 
@@ -113,6 +117,7 @@ _Decomposed one at a time via `/create-story WLT-19` after this brief is approve
 ## DRI Log
 
 ### Decisions
+
 - [2026-06-15] [PM] **This bet = the shell + nav + "Coming soon" stubs ONLY; the six sections are separate feature bets** (per the user: "we will build each of these features this week") — rationale: build-the-frame-once unblocks + speeds the week's work; mixing feature logic in would bloat it — area: scope — alternatives: shell + redesign the Dashboard content (rejected — out of scope), shell + build one real section now (rejected — mixes concerns) — reversibility: easy
 - [2026-06-15] [PM, elicited] **Headless UI + Tailwind for the nav/drawer/menu primitives** (not shadcn, not extend-`@wealth/ui`-only) — rationale: accessible drawer/menu/dialog primitives (focus trap, keyboard) without a full design-system migration mid-week; lighter than shadcn, more robust than hand-rolling a11y — area: design/stack — alternatives: extend @wealth/ui only (rejected — a11y of a hand-rolled drawer is error-prone), adopt shadcn/ui (rejected by user — a design-system shift + a bigger dependency than the week wants) — reversibility: medium
 - [2026-06-15] [PM, elicited] **Collapsible hamburger drawer on mobile; fixed sidebar on desktop/tablet** — rationale: matches the desktop sidebar + the reference + scales to 7+ sections; a bottom tab bar strains at 7 items — area: UX — alternatives: bottom tab bar (rejected — needs a "More" overflow, inconsistent with desktop), top bar + slide-over (rejected — a different pattern from desktop) — reversibility: easy
@@ -120,11 +125,13 @@ _Decomposed one at a time via `/create-story WLT-19` after this brief is approve
 - [2026-06-15] [PM] **`architecture_required: auto`** — rationale: it reorganizes app routing (a `(app)` route group, moving Dashboard/Accounts), adds a dependency (Headless UI), and must re-confirm the AAL2 gate across new routes — a light architectural pass may be warranted; let the architect decide — area: process — reversibility: n/a
 
 ### Risks
+
 - [2026-06-15] [PM] **Route restructuring breaks existing links / the onboarding redirect / the AAL2 gate** — likelihood: medium — impact: high (a broken auth gate is a security regression) — mitigation: gate inherited once at the `(app)` layout (not per-page); keep redirects; a real-path check that every shell route still enforces AAL2 (the #36 discipline) — area: security/routing
 - [2026-06-15] [PM] **Responsive breaks on one surface** (the explicit requirement: phone/iPad/desktop) — likelihood: medium — impact: medium — mitigation: the responsive-correctness guardrail + a QA pass on all three classes before "done" — area: ux
 - [2026-06-15] [PM] **A new dependency (Headless UI) trips the foundation-stack deviation gate** — likelihood: low-medium — impact: low — mitigation: it's a small Tailwind-family primitive lib; the `auto` architecture step records a light ADR note if needed, not a full amend — area: stack
 - [2026-06-15] [PM] **Scope creep into the features** — likelihood: medium — impact: medium — mitigation: the "don't over-build" guardrail; stubs only; each section is its own bet — area: scope
 
 ### Issues
+
 - [2026-06-15] [PM] **Section ↔ archetype naming** — severity: low — owner: PM — status: open — area: product — confirm the nav labels are the product's canonical names (e.g. "Budget & Spending" vs the `spending_snapshot` archetype) before features attach; resolve in the story.
 - [2026-06-15] [PM] Jira/Confluence MCPs not connected — epic mirror skipped (consistent posture) — severity: low — owner: PM — status: open — area: tooling
