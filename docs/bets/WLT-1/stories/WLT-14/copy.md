@@ -41,6 +41,7 @@ Calm, plain, reassuring — the user is locked out and a little stressed. Short 
 | `passwordErrors.network` | You appear to be offline. Check your connection and try again. | Discriminated: network (reused) |
 | `passwordErrors.server` | Something went wrong on our side — your information is safe. Try again in a minute. | Discriminated: server (reused) |
 | `passwordErrors.rateLimited` | Too many attempts. Wait a minute, then try again. | Discriminated: rate-limit (reused from #40) |
+| `passwordErrors.samePassword` | That's already your password — choose a new one. | Discriminated: the new password equals the current one (SUP-7; was a misleading 502). Plain + actionable; reveals nothing about the account. |
 | `a11y.resetRequested` | If an account exists, a reset link is on its way. | aria-live on submit |
 | `a11y.passwordUpdated` | Password updated. Taking you to sign in. | aria-live on success |
 
