@@ -24,16 +24,19 @@ import {
 } from "@wealth/ui";
 import { COPY } from "@/app/lib/copy";
 
-function bannerCopy(error?: ApiErrorCode): string | null {
+// Exported for unit coverage (SUP-8): the page-level banner mapping is the
+// contract that turns a discriminated API code into an actionable message.
+export function bannerCopy(error?: ApiErrorCode): string | null {
   switch (error) {
     case "network":
       return COPY.errors.network;
     case "server":
     case "email_confirmation_required":
       return COPY.errors.server;
+    case "rate_limited": // SUP-8: surface the actionable rate-limit outcome (copy already exists)
+      return COPY.errors.rateLimited;
     case "verify":
     case "unknown":
-    case "rate_limited": // no dedicated rate-limit copy yet (UX Writer follow-up)
       return COPY.errors.unknown;
     default:
       return null; // field-level errors render inline
