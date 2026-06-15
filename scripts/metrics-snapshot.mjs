@@ -21,6 +21,8 @@ await client.connect();
 try {
   const ttfv = (await client.query("select * from metrics_ttfv_summary")).rows[0];
   const wawu = (await client.query("select * from metrics_wawu_weekly limit 12")).rows;
+  // WLT-16: weekly returners (recap viewers) — the Day-7 return signal.
+  const returns = (await client.query("select * from metrics_return_weekly limit 12")).rows;
   const funnel = (await client.query("select * from metrics_funnel_stages order by stage_order")).rows;
 
   const snapshot = {
@@ -40,6 +42,7 @@ try {
         ttfv.median_split_assembled_seconds === null ? null : Number(ttfv.median_split_assembled_seconds),
     },
     wawu_weekly: wawu.map((w) => ({ week_start: w.week_start, wawu: Number(w.wawu) })),
+    return_weekly: returns.map((r) => ({ week_start: r.week_start, returners: Number(r.returners) })),
     funnel: funnel.map((s) => ({ stage: s.stage, users: Number(s.users) })),
   };
 

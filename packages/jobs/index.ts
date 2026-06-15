@@ -7,6 +7,7 @@ import {
   aggregationScheduledRefresh,
   aggregationSettleSweep,
 } from "./aggregation/sync";
+import { netWorthSnapshotDaily } from "./recap/snapshot";
 
 export { inngest } from "./client";
 export { CONNECTION_LINKED_EVENT, CONNECTION_REFRESH_EVENT } from "./aggregation/sync";
@@ -16,4 +17,5 @@ export const functions = [
   aggregationRefresh,
   aggregationScheduledRefresh,
   aggregationSettleSweep,
+  netWorthSnapshotDaily,
 ];

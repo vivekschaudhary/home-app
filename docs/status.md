@@ -1,10 +1,14 @@
 # Project Status
 
-_Last updated: 2026-06-14 — MVP portfolio complete + **dogfood loose ends cleared**: WLT-14 (forgot-password) shipped; #39 (stuck-Importing) + #3 (security follow-ups) closed; E2E DB-isolation; ops fixed (Site URL → prod, ADMIN_EMAILS, PLAID_WEBHOOK_URL all set). Next: the engagement bet (`/create-brief`)._
+_Last updated: 2026-06-14 — **first post-MVP bet opened: WLT-15 (the engagement bet — "your money since last time")**. Brief + bet architecture both `approved` (HITL); first story **WLT-16** decomposed + `ready` for `/build`. MVP portfolio complete + dogfood loose ends cleared (WLT-14 shipped; #39/#3 closed; E2E DB-isolation; ops all set)._
 
 ## In flight
 
-_None — the MVP portfolio is complete (see Recently shipped). Open follow-on tracks: WLT-4's remaining 5 archetypes (one story each on the shipped engine), and the deferred post-MVP items in `portfolio.md` (anomaly detection, marketplace, billing). Next strategic move is the team's: ship/observe (let real traffic populate the instrument panel → `/measure`) or start a follow-on bet._
+**WLT-15 — "Your money since last time" (the reason to return)** — brief + architecture `approved` (2026-06-14); **first story ready**. The post-MVP **engagement/retention bet** — turns WAWU + Day-30 from theoretical into real by making the dashboard different every visit. Surfaced by dogfooding: the first real user hit the dead-end ("nothing left to do" after setting a target). Builds entirely on the shipped loop (WLT-2 data + 24mo history, WLT-4 workflow/target, WLT-5 funnel) — **no new data sources, no foundational-stack deviation**. Four signals (net-worth movement · spending vs last week · progress toward target · high-precision anomalies), each visit surfacing **one** prompted action → a repeatable `WorkflowRun` (WAWU). Architecture: a new `net_worth_snapshots` time-series (daily Inngest sample — balances can't be derived from txns) + the already-modeled `Anomaly` entity (rules-based, dismissible) + new funnel/metric panels. **Sliced:** computable signals + one action first, then the anomaly engine.
+- **WLT-16 (The "since last time" recap — movement + target progress + one move) — `ready`** (2026-06-14). The slice that closes the dead-end + proves the return mechanic: net-worth **movement** since last time + **progress toward target** (wires the WLT-12 "running" workflow to actually track) + **one** honest prompted action → a **weekly-repeatable** `WorkflowRun` (WAWU) + `recap_viewed` return instrumentation → a `/admin/metrics` return panel. Builds the core new infra (`net_worth_snapshots` + `netWorthSnapshotDaily` daily cron). Behind `RECAP_ENABLED`. **Spending (WLT-17) + anomalies (Slice 2) explicitly out of this story.** Carries the #36 lesson (reconcile-on-load + real-path E2E).
+- **Later slices:** `spending_snapshot` / spending-vs-last-week (WLT-17) · the anomaly engine — `anomalies` table + `anomalyScanDaily` + the anomaly action (Slice 2).
+
+_Other open follow-on tracks (team's choice, not critical path): WLT-4's remaining 5 archetypes (one story each on the shipped engine); the rest of the deferred post-MVP items in `portfolio.md` (marketplace, billing); and Observe (let real traffic populate the instrument panel → `/measure`)._
 
 **WLT-5 — TTFV + WAWU instrumentation — `shipped`** (2026-06-12). The last MVP bet, delivered in one story (WLT-13). Compute + surface what the loop already emits (no new events; the 17-event contract frozen). **Loop now measures itself.**
 - **WLT-13 (The instrument panel) — `shipped`** (PR #34, 2026-06-12, live in prod). `0007` read-only views (TTFV full-loop clock + p80 + split times · weekly WAWU · funnel conversion; SELECT revoked from authenticated/anon — Postgres views bypass base-table RLS, so the revoke is the boundary) · `/admin/metrics` (**AAL2 + `ADMIN_EMAILS` allow-list, every unauthorized state → 404 via `getAal2UserId()`+`notFound()` — unenumerable**) · `metrics-snapshot.mjs` → `docs/metrics/` for `/measure` · honest small-n (n everywhere, no-KR-verdicts banner). First baseline recorded: **WAWU=1**. Cross-model Codex **Approve** + Security **clean** after 3 rounds (AC11 route+no-PII E2E → AC5 signed-out redirect→404); gate E2E 3/3 live.
@@ -41,7 +45,7 @@ _The MVP portfolio is delivered — these are **follow-on tracks**, the team's c
 
 ## Awaiting human approval
 
-_None._ All 5 MVP bets are promoted, approved, and **shipped**.
+_None._ WLT-15 brief + architecture both approved (2026-06-14); WLT-16 is `ready` (under `hitl_level: milestones`, story creation auto-advances). Next gate is the WLT-16 build/PR.
 
 ## Recently shipped
 
