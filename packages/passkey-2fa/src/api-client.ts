@@ -9,6 +9,7 @@ export type ApiErrorCode =
   | "email_confirmation_required"
   | "reset_link_invalid"
   | "same_password"
+  | "mfa_required"
   | "network"
   | "server"
   | "unknown"
