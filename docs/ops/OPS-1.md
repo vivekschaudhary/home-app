@@ -3,7 +3,7 @@ id: OPS-1
 type: ops
 bet: null
 hygiene: true
-status: in-execution        # resync done; auto-sync wiring is the open follow-up
+status: shipped             # resync done + auto-sync wired (CI post-deploy PUT)
 domain: ci-cd
 blast_radius: medium
 author: Enterprise/Solution Architect
@@ -39,7 +39,7 @@ Medium. No data loss or corruption — financial data is append/CDC and idempote
 
 1. **[done 2026-06-15]** Resync the `wealth-platform` app in Inngest (Apps → Resync; URL already correct) → function count 1 → **7** (5 declared + 2 `onFailure` handlers for backfill & refresh). Confirmed `recap-networth-snapshot-daily` + the 3 aggregation crons now registered.
 2. **[recommended]** Invoke `recap-networth-snapshot-daily` once to seed today's first snapshot (so movement appears in ~1 day rather than after two cron cycles).
-3. **[OPEN follow-up — the durable fix]** Wire **auto-sync on every Vercel production deploy** so this can't drift again. Options: (a) Inngest's official **Vercel integration** (Integrations → Vercel → connect the `home-app` project) — auto-syncs each deploy [preferred]; (b) a Vercel **Deploy Hook / post-deploy step** that pings Inngest's sync endpoint. Until (a/b) lands, **every deploy that adds/changes an Inngest function requires a manual resync** — call this out in the deploy checklist.
+3. **[done 2026-06-15 — the durable fix]** Wired **auto-sync on every Vercel production deploy** via CI: **`.github/workflows/inngest-sync.yml`** fires on Vercel's GitHub `deployment_status` (state `success`, environment `Production`) and **`PUT`s the serve endpoint**, which makes the freshly-deployed app re-register its current functions with Inngest Cloud (verified: `PUT /api/inngest` → `{"message":"Successfully registered","modified":true}`). Idempotent + retried. **No marketplace integration needed** — the app is a "Serve" app and the PUT trigger is unauthenticated (the app authenticates to Inngest with its own `INNGEST_SIGNING_KEY`). The Inngest-side Vercel marketplace integration (which would populate the app's empty "Vercel project" field) was unavailable/not in use; this CI hook supersedes it.
 
 ## Rollback procedure (MANDATORY)
 
@@ -61,9 +61,9 @@ A resync only *adds* function registrations; there is nothing destructive to rol
 ## Execution log
 
 - Started: 2026-06-15 (during RECAP_ENABLED activation)
-- Steps completed: app resynced (1 → 7 functions); URL confirmed = production alias
-- Open: auto-sync wiring (Plan step 3); manual snapshot invoke (Plan step 2)
-- Outcome: **partial — resync done; durable auto-sync + verification pending**
+- Steps completed: app resynced (1 → 7 functions); URL confirmed = production alias; **auto-sync wired** (`.github/workflows/inngest-sync.yml`, post-deploy `PUT`)
+- Open: manual snapshot invoke (Plan step 2 — optional, seeds today's first net-worth sample sooner)
+- Outcome: **resolved — resync done + durable auto-sync in CI. Verification: the next production deploy (e.g. WLT-18) should auto-sync the function list with no manual click.**
 
 ## DRI Log
 
@@ -75,5 +75,5 @@ A resync only *adds* function registrations; there is nothing destructive to rol
 - [2026-06-15] [Enterprise Architect] **Silent failure mode is the real hazard** — a served-but-unsynced function looks healthy in code/CI/build (the build manifest shows `/api/inngest`) yet never runs — likelihood: medium — impact: medium — mitigation: add a post-deploy check that the Inngest function count matches `functions.length` (+ onFailure handlers)
 
 ### Issues
-- [2026-06-15] [Enterprise Architect] **Auto-sync not wired** — severity: high — owner: Enterprise/Solution Architect — status: open — area: ci-cd — the load-bearing follow-up; without it, every future durable-job ship risks the same silent drift.
+- [2026-06-15] [Enterprise Architect] **Auto-sync not wired** — severity: high — owner: Enterprise/Solution Architect — status: **resolved** — area: ci-cd — wired via `.github/workflows/inngest-sync.yml` (post-deploy `PUT` on Vercel production `deployment_status: success`); supersedes the manual resync. Removes the deploy-checklist manual step.
 - [2026-06-15] [Enterprise Architect] **Aggregation freshness was degraded 6/8→6/15** — severity: medium — owner: Enterprise/Solution Architect — status: resolved-by-resync — area: aggregation — connections refreshed only via initial backfill in that window; now that `aggregation-refresh` + the crons are live, freshness self-heals on the next webhook/cron cycle.
