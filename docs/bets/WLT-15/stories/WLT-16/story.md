@@ -2,7 +2,7 @@
 id: WLT-16
 bet: WLT-15
 type: story
-status: in-build
+status: in-review
 priority: P1
 created: 2026-06-14
 author: PM
@@ -55,7 +55,7 @@ Build strictly within the approved bet architecture (`docs/bets/WLT-15/architect
 
 ## PRs
 
-_Auto-populated as PRs open._
+- PR #47 — implementation (recap surface + snapshot job + 0008 migration + return metrics) — in-review
 
 ## Tests
 
