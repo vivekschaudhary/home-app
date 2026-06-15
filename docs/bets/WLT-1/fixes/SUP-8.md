@@ -55,4 +55,5 @@ Add `mapSignUpError` (mirrors `mapSignInError`) + log the real code:
 - [2026-06-15] [Engineer] **Low value if weak/rate are pre-gated** — likelihood: high — impact: low — mitigation: the real win is the added logging + uniformity, not the rare discriminated case — area: scope
 
 ### Issues
-- _none — this audit closes the recurring-anti-pattern issue opened in #40 / SUP-7._
+- [2026-06-15] [Reviewer→Engineer] **The discrimination must reach the USER, not just the API** — status: resolved — area: frontend — Codex (PR #55): `mapSignUpError` returned `rate_limited` but `SignUpFlow.bannerCopy` still funneled it to the generic "unknown" banner (a stale "no rate-limit copy yet" note — the copy already existed). Fixed: map `rate_limited` → `COPY.errors.rateLimited`; exported + unit-tested `bannerCopy`. The discrimination is only real if the banner shows it — mirrors SUP-7's review.
+- [2026-06-15] [Engineer] CI dependency-advisory gate failed on this PR for an **unrelated transitive CVE** (`form-data`) → fixed standalone as **SUP-9** (PR #56); SUP-8 rebases on it.
