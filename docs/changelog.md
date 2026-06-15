@@ -23,7 +23,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 -
 
 ### Fixed
-- **Password reset now tells you what's wrong (SUP-7):** if you try to set a new password that's the same as your current one (or one we can't accept), the reset page now shows a clear inline message — "That's already your password — choose a new one." — instead of a generic "something went wrong" error. Recovering your account no longer dead-ends on an opaque failure. _(Discriminated `updateUser` errors in the auth package; `@vc1023/passkey-2fa@0.4.1`.)_
+- **Password recovery now works when you have an authenticator (SUP-7):** if your account has an authenticator app set up, resetting your password used to fail with an opaque error — because a reset isn't allowed to skip your second factor. Now the reset page asks for your **authenticator code** to confirm it's you, then sets your new password. Reused (or otherwise unacceptable) passwords also get a clear inline reason instead of a generic failure. _(Adds the second-factor step to recovery — AAL1→AAL2 — and discriminated `updateUser` errors; `@vc1023/passkey-2fa@0.4.2`.)_
 
 ### Deprecated
 -

@@ -5,7 +5,7 @@ bet: WLT-1
 story: WLT-14
 hygiene: false
 severity: P1
-status: re-opened
+status: shipped            # v2 merged + deployed (PR #54); awaiting reporter's live confirmation
 reporter: dogfood (operator)
 created: 2026-06-15
 author: Support
