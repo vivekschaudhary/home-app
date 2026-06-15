@@ -2,7 +2,7 @@
 id: WLT-17
 bet: WLT-15
 type: story
-status: ready
+status: in-review
 priority: P1
 created: 2026-06-15
 author: PM

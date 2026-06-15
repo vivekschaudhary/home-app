@@ -14,6 +14,15 @@ const STEADY: Extract<RecapView, { visible: true }> = {
   movement: { direction: "up", delta: 420 },
   progress: { current: 24600, target: 36000, percent: 68, status: "on_track" },
   action: { type: "raise_target", kind: "recap_raise_target", suggestedTarget: 27000 },
+  spending: {
+    thisWeek: 1240,
+    comparable: true,
+    delta: { direction: "less", amount: 180 },
+    topCategories: [
+      { category: "Groceries", amount: 420 },
+      { category: "Dining", amount: 310 },
+    ],
+  },
 };
 
 afterEach(() => {
@@ -38,9 +47,38 @@ describe("RecapCard", () => {
   });
 
   it("cold-start: honest 'watching' line, never a fabricated movement number", () => {
-    render(<RecapCard view={{ ...STEADY, movement: null }} />);
+    render(<RecapCard view={{ ...STEADY, movement: null, spending: null }} />);
     expect(screen.getByText(/We've started watching your money/)).toBeTruthy();
     expect(screen.queryByText(/since last week/)).toBeNull();
+  });
+
+  it("spending: shows 'where your money went' + comparison + top categories (display only, no CTA)", () => {
+    render(<RecapCard view={STEADY} />);
+    expect(screen.getByText("Where your money went")).toBeTruthy();
+    expect(screen.getByText(/Spent \$1,240 this week/)).toBeTruthy();
+    expect(screen.getByText(/\$180 less than last week/)).toBeTruthy();
+    expect(screen.getByText(/Groceries \$420/)).toBeTruthy();
+    // still exactly ONE action button (the target action) — spending adds no CTA
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Aim higher?" })).toBeTruthy();
+  });
+
+  it("spending first-week: this-week-only + honest 'no comparison yet', no fabricated delta", () => {
+    render(
+      <RecapCard
+        view={{
+          ...STEADY,
+          spending: { thisWeek: 500, comparable: false, delta: null, topCategories: [{ category: "Groceries", amount: 500 }] },
+        }}
+      />,
+    );
+    expect(screen.getByText(/We'll compare this to last week once there's a bit more history/)).toBeTruthy();
+    expect(screen.queryByText(/than last week/)).toBeNull();
+  });
+
+  it("spending omitted: no section when there's nothing to show", () => {
+    render(<RecapCard view={{ ...STEADY, spending: null }} />);
+    expect(screen.queryByText("Where your money went")).toBeNull();
   });
 
   it("behind: plain framing + the adjust action (no failure language)", () => {

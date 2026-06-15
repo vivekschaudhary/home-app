@@ -12,8 +12,11 @@ import {
   type Movement,
   type NetWorthSnapshot,
   type PromptedAction,
+  type SpendingComparison,
+  type SpendingTxn,
   type TargetProgress,
   computeNetWorthMovement,
+  computeSpendingComparison,
   computeTargetProgress,
   personalizeNetWorth,
   selectPromptedAction,
@@ -30,6 +33,7 @@ export type RecapView =
       movement: Movement | null; // null = cold-start (< 2 snapshots)
       progress: TargetProgress; // target is set (else not visible)
       action: PromptedAction | null;
+      spending: SpendingComparison | null; // WLT-17; null = omit (no spend / no data)
     };
 
 /** ISO-8601 week key, e.g. '2026-W24' — the recap action's weekly idempotency scope. */
@@ -89,6 +93,10 @@ export async function getRecap(userId: string): Promise<RecapView> {
   if (!progress) return { visible: false };
   const action = selectPromptedAction(progress);
 
+  // Spending vs. last week (WLT-17) — a display signal, computed from the last
+  // 14 days of owner-scoped transactions. null = omit (no spend / no prior data).
+  const spending = computeSpendingComparison(await readRecentSpending(userId), todayUtc());
+
   // A returning visit — the Day-7 return signal. Service-role emit (same pattern
   // as workflow_assembled in the engine); distinct-user-per-week metric is
   // robust to multiple emits within a request/week.
@@ -97,7 +105,36 @@ export async function getRecap(userId: string): Promise<RecapView> {
     await emitFunnel(FUNNEL_EVENTS.RECAP_ACTION_PROMPTED, userId, { action_type: action.type });
   }
 
-  return { visible: true, workflowId: wf.id, netWorth: liveConfig.netWorth, movement, progress, action };
+  return { visible: true, workflowId: wf.id, netWorth: liveConfig.netWorth, movement, progress, action, spending };
+}
+
+/** UTC calendar day — the `asOf` anchor for the spending windows. */
+function todayUtc(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * The user's last-14-days transactions for the spending comparison — owner-SELECT
+ * under the user's RLS session (the policy already hides superseded/removed rows).
+ * Amounts/category/direction/date only — no merchant or description (no PII).
+ */
+async function readRecentSpending(userId: string): Promise<SpendingTxn[]> {
+  const supabase = await createServerSupabase();
+  const since = new Date(Date.now() - 14 * 86_400_000).toISOString().slice(0, 10);
+  const { data } = await supabase
+    .from("transactions")
+    .select("direction, category, amount, occurred_on")
+    .eq("user_id", userId)
+    .gte("occurred_on", since);
+  return (data ?? []).map((r) => {
+    const row = r as { direction: string; category: string | null; amount: number | string; occurred_on: string };
+    return {
+      direction: row.direction,
+      category: row.category,
+      amount: Number(row.amount), // numeric → string via PostgREST; normalize
+      occurredOn: row.occurred_on,
+    };
+  });
 }
 
 export type RecapActionResult =

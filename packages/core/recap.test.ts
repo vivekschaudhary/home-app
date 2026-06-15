@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   type NetWorthSnapshot,
+  type SpendingTxn,
   computeNetWorthMovement,
+  computeSpendingComparison,
   computeTargetProgress,
+  humanizeCategory,
   selectPromptedAction,
 } from "./recap";
 
@@ -99,5 +102,94 @@ describe("selectPromptedAction", () => {
   it("ahead → raise_target", () => {
     const a = selectPromptedAction({ current: 40000, target: 36000, percent: 111, status: "ahead" });
     expect(a?.type).toBe("raise_target");
+  });
+});
+
+describe("humanizeCategory", () => {
+  it("null/empty → 'Other'", () => {
+    expect(humanizeCategory(null)).toBe("Other");
+    expect(humanizeCategory("")).toBe("Other");
+    expect(humanizeCategory(undefined)).toBe("Other");
+  });
+  it("title-cases Plaid primary categories", () => {
+    expect(humanizeCategory("FOOD_AND_DRINK")).toBe("Food And Drink");
+    expect(humanizeCategory("GENERAL_MERCHANDISE")).toBe("General Merchandise");
+    expect(humanizeCategory("groceries")).toBe("Groceries");
+  });
+});
+
+describe("computeSpendingComparison", () => {
+  const ASOF = "2026-06-15";
+  // windows: this-week (2026-06-08, 06-15]; prior-week (2026-06-01, 06-08]
+  function tx(occurredOn: string, amount: number, direction = "debit", category: string | null = "GROCERIES"): SpendingTxn {
+    return { occurredOn, amount, direction, category };
+  }
+
+  it("returns null when nothing was spent this week (omit the section, AC3)", () => {
+    expect(computeSpendingComparison([], ASOF)).toBeNull();
+    // only credits this week → no spend
+    expect(computeSpendingComparison([tx("2026-06-10", 500, "credit")], ASOF)).toBeNull();
+    // only prior-week debits → nothing spent THIS week
+    expect(computeSpendingComparison([tx("2026-06-03", 100)], ASOF)).toBeNull();
+  });
+
+  it("compares this week vs last when the prior week had activity", () => {
+    const s = computeSpendingComparison(
+      [
+        tx("2026-06-10", 420, "debit", "GROCERIES"),
+        tx("2026-06-12", 310, "debit", "FOOD_AND_DRINK"),
+        tx("2026-06-03", 600, "debit", "GROCERIES"), // prior week
+      ],
+      ASOF,
+    );
+    expect(s?.thisWeek).toBe(730);
+    expect(s?.comparable).toBe(true);
+    expect(s?.delta).toEqual({ direction: "more", amount: 130 }); // 730 vs 600
+    expect(s?.topCategories).toEqual([
+      { category: "Groceries", amount: 420 },
+      { category: "Food And Drink", amount: 310 },
+    ]);
+  });
+
+  it("'less' when this week is below last week", () => {
+    const s = computeSpendingComparison([tx("2026-06-10", 400), tx("2026-06-03", 600)], ASOF);
+    expect(s?.delta).toEqual({ direction: "less", amount: 200 });
+  });
+
+  it("'same' when equal", () => {
+    const s = computeSpendingComparison([tx("2026-06-10", 500), tx("2026-06-03", 500)], ASOF);
+    expect(s?.delta).toEqual({ direction: "same", amount: 0 });
+  });
+
+  it("first-week (no prior-week activity) → comparable:false, this-week-only, no fabricated delta (AC3)", () => {
+    const s = computeSpendingComparison([tx("2026-06-10", 420), tx("2026-06-13", 80)], ASOF);
+    expect(s?.thisWeek).toBe(500);
+    expect(s?.comparable).toBe(false);
+    expect(s?.delta).toBeNull();
+  });
+
+  it("a quiet-but-present prior week (a credit, no debits) is a real comparison vs $0", () => {
+    const s = computeSpendingComparison([tx("2026-06-10", 300), tx("2026-06-03", 900, "credit")], ASOF);
+    expect(s?.comparable).toBe(true);
+    expect(s?.delta).toEqual({ direction: "more", amount: 300 }); // 300 this week vs 0 debits last
+  });
+
+  it("rolls up + sorts top categories desc, capped at 3", () => {
+    const s = computeSpendingComparison(
+      [
+        tx("2026-06-09", 50, "debit", "TRANSPORT"),
+        tx("2026-06-10", 420, "debit", "GROCERIES"),
+        tx("2026-06-11", 100, "debit", "GROCERIES"),
+        tx("2026-06-12", 310, "debit", "FOOD_AND_DRINK"),
+        tx("2026-06-13", 90, "debit", "ENTERTAINMENT"),
+        tx("2026-06-03", 10, "debit"), // prior week → comparability
+      ],
+      ASOF,
+    );
+    expect(s?.topCategories).toEqual([
+      { category: "Groceries", amount: 520 },
+      { category: "Food And Drink", amount: 310 },
+      { category: "Entertainment", amount: 90 },
+    ]); // top 3 by amount desc; Transport (50) drops off
   });
 });
