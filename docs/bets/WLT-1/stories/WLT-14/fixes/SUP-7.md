@@ -5,7 +5,7 @@ bet: WLT-1
 story: WLT-14
 hygiene: false
 severity: P1
-status: shipped            # v2 merged + deployed (PR #54); awaiting reporter's live confirmation
+status: shipped            # v2 merged + deployed (PR #54); CONFIRMED live by the reporter 2026-06-15
 reporter: dogfood (operator)
 created: 2026-06-15
 author: Support
@@ -77,3 +77,7 @@ PR #52 (v1) shipped the error-discrimination, but the **inferred trigger was wro
 ### Re-open decisions
 - [2026-06-15] [Engineer] **v1 inferred the wrong code; v2 fixes the real cause (insufficient_aal)** — rationale: a password reset on an MFA account legitimately requires the second factor; build the TOTP step rather than weaken Supabase's AAL requirement (which would let an email link bypass MFA) — area: security — reversibility: medium
 - [2026-06-15] [Engineer] **Elevate + update on the SAME client instance** — rationale: same-request cookie writes aren't readable back in the same request (#36); the in-memory AAL2 session is what `updateUser` must use — area: auth — reversibility: n/a
+
+### Resolution
+- [2026-06-15] **CLOSED — confirmed live by the reporter.** Recovery on the MFA account now reveals the authenticator-code field → entering the TOTP code completes the reset. The end-to-end AAL1→AAL2 elevation works against the real stack (the gated `forgot-password.spec` E2E extension for the live TOTP step remains a deferred follow-up; manual confirmation stands in for now, as with the original WLT-14 recovery E2E).
+- [2026-06-15] **Process lesson:** two misses on this item, both from acting on an *inferred* error code rather than the *observed* one. The loop that worked was reading the prod log; the durable fix is the **SUP-8** auth-handler discrimination audit.
