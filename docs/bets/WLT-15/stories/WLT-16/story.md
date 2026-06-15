@@ -2,7 +2,7 @@
 id: WLT-16
 bet: WLT-15
 type: story
-status: in-review
+status: shipped
 priority: P1
 created: 2026-06-14
 author: PM
@@ -55,7 +55,7 @@ Build strictly within the approved bet architecture (`docs/bets/WLT-15/architect
 
 ## PRs
 
-- PR #47 — implementation (recap surface + snapshot job + 0008 migration + return metrics) — in-review
+- PR #47 — implementation (recap surface + snapshot job + 0008 migration + return metrics) — **merged + shipped** 2026-06-15 (squash 308bfa8); main CI green; prod health 200. Cross-model Codex review **clear**. Ships dark behind `RECAP_ENABLED`.
 
 ## Tests
 
