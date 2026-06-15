@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026-06-15 — **WLT-15 engagement bet underway: first story WLT-16 (the "since last time" recap) shipped** (PR #47, live in prod behind `RECAP_ENABLED`). Brief + bet architecture `approved`; the return mechanic + WAWU generation are built end-to-end. **Ops to light it up:** set `RECAP_ENABLED=true` in Vercel (Production) after the daily snapshot job has ≥1 cycle (so net-worth movement has an anchor). Next slices: WLT-17 (spending vs last week), then the anomaly engine (Slice 2)._
+_Last updated: 2026-06-15 — **WLT-15 engagement bet underway: WLT-16 (the recap) shipped + `RECAP_ENABLED` on in prod.** Brief + bet architecture `approved`. **Ops finding ([OPS-1](ops/OPS-1.md)):** prod Inngest never auto-synced since 6/8 → 4 durable functions (WLT-10 refresh + 6h cron, #39 settle-sweep, WLT-16 snapshot) were registered in code but **never ran in prod**; resynced 6/15 (1 → 7 functions). **Open:** wire Inngest auto-sync on deploy (OPS-1 step 3). Next slices: WLT-17 (spending, `ready`), then the anomaly engine (Slice 2)._
 
 ## In flight
 
