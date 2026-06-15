@@ -48,7 +48,7 @@ _The MVP portfolio is delivered — these are **follow-on tracks**, the team's c
 
 ## Awaiting human approval
 
-_None._ WLT-15 brief + architecture both approved (2026-06-14); WLT-16 is `ready` (under `hitl_level: milestones`, story creation auto-advances). Next gate is the WLT-16 build/PR.
+**WLT-19 — The app shell (full-screen, navigable, responsive home) — brief `proposed` (2026-06-15).** A new `feature` bet: a full-screen app shell with a persistent left nav (Dashboard · Budget & Spending · Goals · Debt payoff · Investments · Subscriptions · Accounts), responsive across phone/iPad/desktop (fixed sidebar → hamburger drawer on mobile), wiring the two existing surfaces (Dashboard, Accounts) and honest **"Coming soon"** stubs for the rest. The **navigational frame the week's six feature bets mount into** (build-the-frame-once). Elicited: **Headless UI + Tailwind** (a11y primitives, no design-system migration) + **collapsible hamburger drawer** on mobile. `architecture_required: auto`. **Awaiting your approval** → then `/create-bet-architecture WLT-19` (if the auto step elects) → `/create-story WLT-19`.
 
 ## Recently shipped
 
