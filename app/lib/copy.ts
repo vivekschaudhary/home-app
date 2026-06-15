@@ -335,6 +335,7 @@ export const COPY = {
   anomaly: {
     heading: "Worth a look",
     largeCharge: "A larger-than-usual charge: {amount} in {category} on {date}.",
+    recurring: "A bill looks due soon: about {amount} for {category}.",
     lowBalance: "One of your accounts is running low: {amount}.",
     reviewCta: "Review it",
     dismissCta: "Dismiss",

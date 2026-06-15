@@ -24,6 +24,11 @@ function anomalyLine(a: RecapAnomaly): string {
       .replace("{category}", a.summary.category ?? "Other")
       .replace("{date}", a.summary.date ?? "");
   }
+  if (a.kind === "recurring_due") {
+    return COPY.anomaly.recurring
+      .replace("{amount}", money(a.summary.amount))
+      .replace("{category}", a.summary.category ?? "Other");
+  }
   return COPY.anomaly.lowBalance.replace("{amount}", money(a.summary.amount));
 }
 

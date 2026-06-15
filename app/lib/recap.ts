@@ -27,7 +27,7 @@ import { readAccountBalances } from "./aggregation-read";
 /** The top open/surfaced anomaly to show (WLT-18). amount/category/date only — no PII. */
 export interface RecapAnomaly {
   id: string;
-  kind: "large_charge" | "low_balance";
+  kind: "large_charge" | "recurring_due" | "low_balance";
   summary: { amount: number; category?: string; date?: string };
 }
 

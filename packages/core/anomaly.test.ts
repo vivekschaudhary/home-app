@@ -80,6 +80,75 @@ describe("detectAnomalies — large_charge", () => {
   });
 });
 
+describe("detectAnomalies — recurring_due", () => {
+  // A clean monthly bill: Mar 18 / Apr 18 / May 18 → predicted ~Jun 18 (due soon).
+  function monthlyBill(amount = 50): AnomalyTxn[] {
+    return [
+      tx("u1", "2026-03-18", amount, "UTILITIES"),
+      tx("u2", "2026-04-18", amount, "UTILITIES"),
+      tx("u3", "2026-05-18", amount, "UTILITIES"),
+    ];
+  }
+
+  it("fires on a tightly-regular monthly charge predicted due in the next week", () => {
+    const found = detectAnomalies({ transactions: monthlyBill(), accounts: [], asOf: ASOF });
+    const rd = found.filter((a) => a.kind === "recurring_due");
+    expect(rd).toHaveLength(1);
+    expect(rd[0].severity).toBe("info"); // a heads-up, outranked by attention-level
+    expect(rd[0].summary.category).toBe("Utilities");
+    expect(rd[0].summary.amount).toBe(50);
+    expect(rd[0].summary.date).toBe("2026-06-18"); // predicted next
+    expect(rd[0].dedupKey).toBe("recurring_due:UTILITIES:50:2026-06");
+    expect(rd[0].summary).not.toHaveProperty("merchant"); // no PII
+  });
+
+  it("does NOT fire when the next charge isn't due soon (no false alarm)", () => {
+    // Jan/Feb/Mar → predicted ~Apr; far from the June asOf.
+    const found = detectAnomalies({
+      transactions: [
+        tx("u1", "2026-01-18", 50, "UTILITIES"),
+        tx("u2", "2026-02-18", 50, "UTILITIES"),
+        tx("u3", "2026-03-18", 50, "UTILITIES"),
+      ],
+      accounts: [],
+      asOf: ASOF,
+    });
+    expect(found.filter((a) => a.kind === "recurring_due")).toHaveLength(0);
+  });
+
+  it("does NOT fire on irregular spacing (one off-cadence gap breaks it)", () => {
+    const found = detectAnomalies({
+      transactions: [
+        tx("u1", "2026-04-18", 50, "UTILITIES"),
+        tx("u2", "2026-05-18", 50, "UTILITIES"),
+        tx("u3", "2026-05-25", 50, "UTILITIES"), // 7-day gap → not monthly
+      ],
+      accounts: [],
+      asOf: ASOF,
+    });
+    expect(found.filter((a) => a.kind === "recurring_due")).toHaveLength(0);
+  });
+
+  it("does NOT fire with fewer than 3 occurrences, or varying amounts (different groups)", () => {
+    expect(
+      detectAnomalies({ transactions: monthlyBill().slice(0, 2), accounts: [], asOf: ASOF }).filter(
+        (a) => a.kind === "recurring_due",
+      ),
+    ).toHaveLength(0);
+    // 50/50/80 split into separate (category, rounded-amount) groups → none reaches 3.
+    const varying = detectAnomalies({
+      transactions: [
+        tx("u1", "2026-03-18", 50, "UTILITIES"),
+        tx("u2", "2026-04-18", 50, "UTILITIES"),
+        tx("u3", "2026-05-18", 80, "UTILITIES"),
+      ],
+      accounts: [],
+      asOf: ASOF,
+    });
+    expect(varying.filter((a) => a.kind === "recurring_due")).toHaveLength(0);
+  });
+});
+
 describe("detectAnomalies — low_balance", () => {
   const accounts: AnomalyAccount[] = [
     { id: "chk", kind: "depository", balanceCurrent: 40 }, // low
