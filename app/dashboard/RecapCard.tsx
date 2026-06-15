@@ -10,11 +10,21 @@
 import { useEffect, useRef, useState } from "react";
 import { Banner, Button } from "@wealth/ui";
 import type { Movement, SpendingComparison } from "@wealth/core";
-import type { RecapView } from "@/app/lib/recap";
+import type { RecapAnomaly, RecapView } from "@/app/lib/recap";
 import { COPY } from "@/app/lib/copy";
 
 function money(n: number): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
+}
+
+function anomalyLine(a: RecapAnomaly): string {
+  if (a.kind === "large_charge") {
+    return COPY.anomaly.largeCharge
+      .replace("{amount}", money(a.summary.amount))
+      .replace("{category}", a.summary.category ?? "Other")
+      .replace("{date}", a.summary.date ?? "");
+  }
+  return COPY.anomaly.lowBalance.replace("{amount}", money(a.summary.amount));
 }
 
 type ErrorKind = "network" | "save" | "server" | null;
@@ -51,16 +61,44 @@ export function RecapCard({ view }: { view: RecapView }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<ErrorKind>(null);
   const [acked, setAcked] = useState(false);
+  // WLT-18: the anomaly callout's own outcome (null = still open).
+  const [anomalyOutcome, setAnomalyOutcome] = useState<null | "acted" | "dismissed">(null);
+  const [anomalySaving, setAnomalySaving] = useState(false);
+  const [anomalyError, setAnomalyError] = useState<ErrorKind>(null);
   const ackedRef = useRef<HTMLParagraphElement>(null);
 
   // Focus lands on the outcome after completing the action (accessibility).
   useEffect(() => {
-    if (acked) ackedRef.current?.focus();
-  }, [acked]);
+    if (acked || anomalyOutcome === "acted") ackedRef.current?.focus();
+  }, [acked, anomalyOutcome]);
 
   if (!view.visible) return null;
 
-  const { workflowId, netWorth, movement, progress, action, spending } = view;
+  const { workflowId, netWorth, movement, progress, action, spending, anomaly } = view;
+  // The anomaly is THE one action while open; it outranks the target action.
+  const anomalyActive = anomaly !== null && anomalyOutcome === null;
+
+  async function resolveAnomaly(status: "acted" | "dismissed") {
+    if (!anomaly) return;
+    setAnomalySaving(true);
+    setAnomalyError(null);
+    try {
+      const res = await fetch(`/api/anomaly/${anomaly.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(status === "acted" ? { status, workflowId } : { status }),
+      });
+      if (!res.ok) {
+        setAnomalyError(res.status >= 500 ? "server" : "save");
+        return;
+      }
+      setAnomalyOutcome(status);
+    } catch {
+      setAnomalyError("network");
+    } finally {
+      setAnomalySaving(false);
+    }
+  }
 
   async function save(target: number, kind: string) {
     setSaving(true);
@@ -95,6 +133,23 @@ export function RecapCard({ view }: { view: RecapView }) {
         </p>
         <p aria-live="polite" className="sr-only">
           {COPY.recapA11y.acked}
+        </p>
+      </section>
+    );
+  }
+
+  // ── anomaly reviewed: the quiet "noted" confirmation (focus lands here) ──
+  if (anomalyOutcome === "acted") {
+    return (
+      <section className="mt-6 rounded-lg border border-gray-200 bg-white p-6" aria-labelledby="recap-anomaly-acked-title">
+        <h3 id="recap-anomaly-acked-title" className="text-base font-semibold text-gray-900">
+          {COPY.recap.heading}
+        </h3>
+        <p ref={ackedRef} tabIndex={-1} role="status" className="mt-3 text-sm font-medium text-gray-900 outline-none">
+          {COPY.anomaly.acked}
+        </p>
+        <p aria-live="polite" className="sr-only">
+          {COPY.anomalyA11y.acked}
         </p>
       </section>
     );
@@ -189,6 +244,36 @@ export function RecapCard({ view }: { view: RecapView }) {
         </div>
       ) : null}
 
+      {/* anomaly — "worth a look" (WLT-18); plain, dismissible, THE one action while open */}
+      {anomalyActive && anomaly ? (
+        <div
+          className="mt-4 rounded-md border border-gray-200 bg-gray-50 p-4"
+          role="group"
+          aria-label={COPY.anomalyA11y.callout.replace("{summary}", anomalyLine(anomaly))}
+        >
+          <p className="text-sm font-medium text-gray-900">{COPY.anomaly.heading}</p>
+          <p className="mt-1 text-sm text-gray-700">{anomalyLine(anomaly)}</p>
+          {anomalyError ? (
+            <div className="mt-3">
+              <Banner variant="error">{errorCopy(anomalyError)}</Banner>
+            </div>
+          ) : null}
+          <div className="mt-3 flex items-center gap-3">
+            <div className="max-w-xs">
+              <Button onClick={() => void resolveAnomaly("acted")} loading={anomalySaving} loadingLabel={COPY.anomaly.reviewing}>
+                {COPY.anomaly.reviewCta}
+              </Button>
+            </div>
+            <Button variant="secondary" onClick={() => void resolveAnomaly("dismissed")} disabled={anomalySaving}>
+              {COPY.anomaly.dismissCta}
+            </Button>
+          </div>
+          <p aria-live="polite" role="status" className="sr-only">
+            {anomalySaving ? COPY.anomaly.reviewing : ""}
+          </p>
+        </div>
+      ) : null}
+
       <div aria-label={a11yLabel} role="group" className="mt-4">
         {/* movement, real or cold-start — in WORDS, never color-only */}
         <p className="text-base font-medium text-gray-900">
@@ -244,7 +329,8 @@ export function RecapCard({ view }: { view: RecapView }) {
         </p>
       </div>
 
-      {action ? (
+      {/* the target action — suppressed while an anomaly is the active one action (at-most-one) */}
+      {action && !anomalyActive ? (
         <div className="mt-5 max-w-xs">
           <Button onClick={() => setStep("target")}>
             {action.type === "adjust_target" ? COPY.recap.actionAdjust : COPY.recap.actionRaise}

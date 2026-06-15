@@ -230,6 +230,7 @@ export const COPY = {
     wawuHeading: "WAWU — weekly active wealth-building users",
     wawuWeekOf: "Week of {date}",
     returnHeading: "Return — weekly recap viewers (Day-7 return)",
+    anomalyHeading: "Anomalies — detected / surfaced / acted / dismissed (precision watch)",
     funnelHeading: "Funnel — per-stage users + conversion",
     funnelColStage: "Stage",
     funnelColUsers: "Users",
@@ -329,5 +330,25 @@ export const COPY = {
     same: "About the same as last week",
     noComparison: "We'll compare this to last week once there's a bit more history.",
     topLabel: "Top",
+  },
+  // WLT-18 — anomalies ("worth a look"). copy.md verbatim. Plain, never alarming.
+  anomaly: {
+    heading: "Worth a look",
+    largeCharge: "A larger-than-usual charge: {amount} in {category} on {date}.",
+    lowBalance: "One of your accounts is running low: {amount}.",
+    reviewCta: "Review it",
+    dismissCta: "Dismiss",
+    reviewing: "Saving…",
+    acked: "Thanks — noted.",
+    dismissed: "Dismissed.",
+  },
+  anomalyErrors: {
+    network: "Connection lost — check your internet and try again.",
+    save: "Couldn't save that just now — try again.",
+    server: "Something went wrong on our side — your information is safe. Try again in a minute.",
+  },
+  anomalyA11y: {
+    callout: "Worth a look: {summary}",
+    acked: "Noted. We'll keep an eye out.",
   },
 } as const;

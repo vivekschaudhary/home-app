@@ -23,6 +23,12 @@ const STEADY: Extract<RecapView, { visible: true }> = {
       { category: "Dining", amount: 310 },
     ],
   },
+  anomaly: null,
+};
+
+const WITH_ANOMALY: Extract<RecapView, { visible: true }> = {
+  ...STEADY,
+  anomaly: { id: "an1", kind: "large_charge", summary: { amount: 480, category: "Groceries", date: "2026-06-14" } },
 };
 
 afterEach(() => {
@@ -124,5 +130,37 @@ describe("RecapCard", () => {
     );
     // not acked — still in the target step
     expect(screen.queryByText("Got it — we'll keep tracking.")).toBeNull();
+  });
+
+  // ── WLT-18: anomaly callout ──
+  it("anomaly: shows the 'worth a look' callout + outranks the target action (still one prompted action)", () => {
+    render(<RecapCard view={WITH_ANOMALY} />);
+    expect(screen.getByText("Worth a look")).toBeTruthy();
+    expect(screen.getByText("A larger-than-usual charge: $480 in Groceries on 2026-06-14.")).toBeTruthy();
+    // Review it + Dismiss; the target action ("Aim higher?") is suppressed.
+    expect(screen.getByRole("button", { name: "Review it" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Dismiss" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Aim higher?" })).toBeNull();
+  });
+
+  it("anomaly Review it: PATCHes acted + workflowId → 'noted' (the WAWU action)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true, noop: false }) });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<RecapCard view={WITH_ANOMALY} />);
+    fireEvent.click(screen.getByRole("button", { name: "Review it" }));
+    await waitFor(() => expect(screen.getByText("Thanks — noted.")).toBeTruthy());
+    expect(fetchMock).toHaveBeenCalledWith("/api/anomaly/an1", expect.objectContaining({ method: "PATCH" }));
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ status: "acted", workflowId: "wf1" });
+  });
+
+  it("anomaly Dismiss: PATCHes dismissed (no workflowId) → callout gone, target action returns", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true, noop: false }) });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<RecapCard view={WITH_ANOMALY} />);
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    await waitFor(() => expect(screen.queryByText("Worth a look")).toBeNull());
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ status: "dismissed" });
+    // the target action is available again now the anomaly is gone
+    expect(screen.getByRole("button", { name: "Aim higher?" })).toBeTruthy();
   });
 });

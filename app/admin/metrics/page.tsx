@@ -46,7 +46,7 @@ export default async function AdminMetricsPage() {
     );
   }
 
-  const { ttfv, wawu, returns, funnel } = data;
+  const { ttfv, wawu, returns, anomalies, funnel } = data;
   const totalN = funnel.reduce((max, s) => Math.max(max, s.users), 0);
   const p80 = ttfv.p80TtfvSeconds;
 
@@ -137,7 +137,46 @@ export default async function AdminMetricsPage() {
         )}
       </section>
 
-      {/* 4 · Funnel */}
+      {/* 4 · Anomalies (WLT-18) — precision watch (dismiss-rate) */}
+      <section className="mt-8" aria-labelledby="m-anomaly">
+        <h2 id="m-anomaly" className="text-base font-semibold text-gray-900">
+          {COPY.metrics.anomalyHeading}
+        </h2>
+        {anomalies.length === 0 ? (
+          <p className="mt-3 text-sm text-gray-500">{COPY.metrics.empty}</p>
+        ) : (
+          <table className="mt-3 w-full max-w-md text-sm">
+            <caption className="sr-only">{COPY.metrics.anomalyHeading}</caption>
+            <thead>
+              <tr className="border-b border-gray-200 text-left text-gray-600">
+                <th scope="col" className="py-1.5 font-medium">Week</th>
+                <th scope="col" className="py-1.5 text-right font-medium">Detected</th>
+                <th scope="col" className="py-1.5 text-right font-medium">Acted</th>
+                <th scope="col" className="py-1.5 text-right font-medium">Dismissed</th>
+              </tr>
+            </thead>
+            <tbody>
+              {anomalies.map((a) => (
+                <tr key={a.weekStart} className="border-b border-gray-100">
+                  <th scope="row" className="py-1.5 text-left font-normal text-gray-600">
+                    {COPY.metrics.wawuWeekOf.replace("{date}", a.weekStart)}
+                  </th>
+                  <td className="py-1.5 text-right font-semibold text-gray-900">{a.detected}</td>
+                  <td className="py-1.5 text-right text-gray-700">{a.acted}</td>
+                  <td className="py-1.5 text-right text-gray-700">
+                    {a.dismissed}
+                    {a.surfaced > 0 ? (
+                      <span className="ml-1 text-gray-400">({Math.round((a.dismissed / a.surfaced) * 100)}%)</span>
+                    ) : null}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      {/* 5 · Funnel */}
       <section className="mt-8" aria-labelledby="m-funnel">
         <h2 id="m-funnel" className="text-base font-semibold text-gray-900">
           {COPY.metrics.funnelHeading}

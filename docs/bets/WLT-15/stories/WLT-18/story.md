@@ -2,7 +2,7 @@
 id: WLT-18
 bet: WLT-15
 type: story
-status: ready
+status: in-review
 priority: P1
 created: 2026-06-15
 author: PM
@@ -75,6 +75,11 @@ _If post-merge bugs are found, story is re-opened and fixes live under `fixes/`.
 ## DRI Log
 
 ### Decisions
+- [2026-06-15] [Engineer] **v1 ships TWO rules — `large_charge` + `low_balance`; `recurring_due` DEFERRED** — rationale: a weak recurring-payment detector is the exact false-positive risk the precision guardrail forbids (a wrong "bill due" erodes trust). The rule set is pluggable (`detectAnomalies` composes rules), so it's a clean high-integrity fast-follow, not a shaky third rule. AC2's rule *set* is the flagged Engineer escalation (I2) — area: trust/scope — alternatives: ship a naive recurring detector (rejected — precision over recall) — reversibility: easy
+- [2026-06-15] [Engineer] **status-only UPDATE enforced by a trigger, not column GRANTs** — rationale: the CI shim grants UPDATE on all columns (and re-grants after migrations), so a column-grant boundary wouldn't hold; the `anomalies_status_only` BEFORE-UPDATE trigger raises if any non-status column changes, regardless of grants — testable in live-PG — area: security — reversibility: easy
+- [2026-06-15] [Engineer] **Review = atomic `complete_anomaly_review` (SECURITY INVOKER), one run per anomaly via the 0008 `period` index** — rationale: mirrors `complete_recap_action`; the status flip + the WAWU run commit together; period = anomaly id → exactly one `recap_review_anomaly` run per anomaly — area: data — reversibility: medium
+- [2026-06-15] [Engineer] **anomaly outranks the target action in the surface (not in a shared ranker)** — rationale: `getRecap` returns both `anomaly` + `action`; the RecapCard shows the anomaly callout as the one action and suppresses the target button while it's open (at-most-one-prompted-action holds) — area: frontend — reversibility: easy
+- [2026-06-15] [Engineer] **anomaly_surfaced emitted once per anomaly (open→surfaced transition in getRecap)** — rationale: makes the dismiss-rate metric per-anomaly (read off the table, not per-view events) — area: metrics — reversibility: easy
 - [2026-06-15] [PM] **Final WLT-15 slice = the anomaly engine (detect → surface → review action)** — rationale: closes the four signals + the bet; the architecture's Slice 2 as one coherent unit — area: scope — alternatives: split detect-only from the action (rejected — the brief's value is anomaly→action; a display-only anomaly is half a feature) — reversibility: medium
 - [2026-06-15] [PM] **Rules-based, high-precision, dismissible; statistical deferred** — rationale: a false alert on a financial app erodes the trust moat; precision over recall (brief guardrail) — area: trust — reversibility: medium
 - [2026-06-15] [PM] **Review = WAWU action; Dismiss = quiet status change (no run)** — rationale: engaging is a real financial action, dismissing isn't; keeps WAWU honest + the at-most-one-prompted-action guardrail intact — area: metrics/trust — reversibility: easy

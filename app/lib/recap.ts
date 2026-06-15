@@ -24,6 +24,13 @@ import {
 import { emitAudit, emitFunnel } from "@wealth/db/emit";
 import { readAccountBalances } from "./aggregation-read";
 
+/** The top open/surfaced anomaly to show (WLT-18). amount/category/date only — no PII. */
+export interface RecapAnomaly {
+  id: string;
+  kind: "large_charge" | "low_balance";
+  summary: { amount: number; category?: string; date?: string };
+}
+
 export type RecapView =
   | { visible: false }
   | {
@@ -34,6 +41,7 @@ export type RecapView =
       progress: TargetProgress; // target is set (else not visible)
       action: PromptedAction | null;
       spending: SpendingComparison | null; // WLT-17; null = omit (no spend / no data)
+      anomaly: RecapAnomaly | null; // WLT-18; the top open one — outranks the action when present
     };
 
 /** ISO-8601 week key, e.g. '2026-W24' — the recap action's weekly idempotency scope. */
@@ -97,6 +105,10 @@ export async function getRecap(userId: string): Promise<RecapView> {
   // 14 days of owner-scoped transactions. null = omit (no spend / no prior data).
   const spending = computeSpendingComparison(await readRecentSpending(userId), todayUtc());
 
+  // The top unresolved anomaly (WLT-18) — owner-SELECT, highest severity first.
+  // Transitions open→surfaced (once) + emits anomaly_surfaced the first time shown.
+  const anomaly = await readTopAnomaly(userId, supabase);
+
   // A returning visit — the Day-7 return signal. Service-role emit (same pattern
   // as workflow_assembled in the engine); distinct-user-per-week metric is
   // robust to multiple emits within a request/week.
@@ -105,7 +117,42 @@ export async function getRecap(userId: string): Promise<RecapView> {
     await emitFunnel(FUNNEL_EVENTS.RECAP_ACTION_PROMPTED, userId, { action_type: action.type });
   }
 
-  return { visible: true, workflowId: wf.id, netWorth: liveConfig.netWorth, movement, progress, action, spending };
+  return { visible: true, workflowId: wf.id, netWorth: liveConfig.netWorth, movement, progress, action, spending, anomaly };
+}
+
+type Supa = Awaited<ReturnType<typeof createServerSupabase>>;
+
+/**
+ * The single highest-priority unresolved anomaly to surface (attention before
+ * info, newest first). On first surface (status 'open'), transitions it to
+ * 'surfaced' + emits anomaly_surfaced once (owner-scoped; the status-only trigger
+ * permits it). Returns amount/category/date only — never merchant/description.
+ */
+async function readTopAnomaly(userId: string, supabase: Supa): Promise<RecapAnomaly | null> {
+  const { data } = await supabase
+    .from("anomalies")
+    .select("id, kind, severity, status, summary")
+    .eq("user_id", userId)
+    .in("status", ["open", "surfaced"])
+    .order("severity", { ascending: true }) // 'attention' < 'info' alphabetically → attention first
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const row = data?.[0] as
+    | { id: string; kind: string; severity: string; status: string; summary: Record<string, unknown> }
+    | undefined;
+  if (!row) return null;
+
+  if (row.status === "open") {
+    // First surface: flip open→surfaced (idempotent) + record it once.
+    await supabase.from("anomalies").update({ status: "surfaced" }).eq("id", row.id).eq("status", "open");
+    await emitFunnel(FUNNEL_EVENTS.ANOMALY_SURFACED, userId, { anomaly_kind: row.kind });
+  }
+  const s = row.summary as { amount?: number; category?: string; date?: string };
+  return {
+    id: row.id,
+    kind: row.kind as RecapAnomaly["kind"],
+    summary: { amount: Number(s.amount ?? 0), category: s.category, date: s.date },
+  };
 }
 
 /** UTC calendar day — the `asOf` anchor for the spending windows. */
@@ -184,4 +231,59 @@ export async function completeRecapAction(input: {
     });
   }
   return { ok: true, target, noop: Boolean(res.noop) };
+}
+
+export type AnomalyActionResult = { ok: true; noop: boolean } | { ok: false; error: "invalid" | "save_failed" };
+
+/**
+ * Review an anomaly — the WAWU action (WLT-18). Atomic at the DB
+ * (complete_anomaly_review, SECURITY INVOKER → owner RLS): the anomaly status flip
+ * (→ acted) + a `recap_review_anomaly` WorkflowRun (one per anomaly via 0008's
+ * period index) commit together. Emits action_completed on a genuinely new run.
+ */
+export async function reviewAnomaly(input: {
+  userId: string;
+  anomalyId: string;
+  workflowId: string;
+}): Promise<AnomalyActionResult> {
+  const supabase = await createServerSupabase();
+  const { data, error } = await supabase.rpc("complete_anomaly_review", {
+    p_anomaly_id: input.anomalyId,
+    p_workflow_id: input.workflowId,
+  });
+  if (error) return { ok: false, error: "save_failed" };
+  const res = data as { ok: boolean; noop?: boolean; archetype?: string; goal_kind?: string } | null;
+  if (!res?.ok) return { ok: false, error: "invalid" };
+  if (!res.noop) {
+    await emitFunnel(FUNNEL_EVENTS.ACTION_COMPLETED, input.userId, {
+      archetype: res.archetype ?? "",
+      goal_kind: res.goal_kind ?? "",
+      source: "anomaly_review",
+    });
+    await emitAudit(AUDIT_ACTIONS.WORKFLOW_ACTION, input.userId, {
+      workflow_id: input.workflowId,
+      action_kind: "recap_review_anomaly",
+    });
+  }
+  return { ok: true, noop: Boolean(res.noop) };
+}
+
+/**
+ * Dismiss an anomaly — a quiet status change (NOT a WAWU action; dismissing isn't
+ * a financial action). Owner + status-only (the trigger enforces it). Idempotent.
+ */
+export async function dismissAnomaly(input: { userId: string; anomalyId: string }): Promise<AnomalyActionResult> {
+  const supabase = await createServerSupabase();
+  const { data, error } = await supabase
+    .from("anomalies")
+    .update({ status: "dismissed" })
+    .eq("id", input.anomalyId)
+    .in("status", ["open", "surfaced"]) // idempotent: only an unresolved one
+    .select("id, kind");
+  if (error) return { ok: false, error: "save_failed" };
+  const row = data?.[0] as { id: string; kind: string } | undefined;
+  if (row) {
+    await emitFunnel(FUNNEL_EVENTS.ANOMALY_DISMISSED, input.userId, { anomaly_kind: row.kind });
+  }
+  return { ok: true, noop: !row };
 }
