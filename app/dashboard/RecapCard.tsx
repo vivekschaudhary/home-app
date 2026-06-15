@@ -9,7 +9,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Banner, Button } from "@wealth/ui";
-import type { Movement } from "@wealth/core";
+import type { Movement, SpendingComparison } from "@wealth/core";
 import type { RecapView } from "@/app/lib/recap";
 import { COPY } from "@/app/lib/copy";
 
@@ -33,6 +33,17 @@ function movementForA11y(m: Movement | null): string {
   return movementLine(m);
 }
 
+function spendComparisonLine(s: SpendingComparison): string {
+  if (!s.comparable || !s.delta) return COPY.recapSpend.noComparison;
+  if (s.delta.direction === "more") return COPY.recapSpend.more.replace("{amount}", money(s.delta.amount));
+  if (s.delta.direction === "less") return COPY.recapSpend.less.replace("{amount}", money(s.delta.amount));
+  return COPY.recapSpend.same;
+}
+
+function topCategoriesText(s: SpendingComparison): string {
+  return s.topCategories.map((c) => `${c.category} ${money(c.amount)}`).join(" · ");
+}
+
 export function RecapCard({ view }: { view: RecapView }) {
   const [step, setStep] = useState<"recap" | "target">("recap");
   const [ownTarget, setOwnTarget] = useState("");
@@ -49,7 +60,7 @@ export function RecapCard({ view }: { view: RecapView }) {
 
   if (!view.visible) return null;
 
-  const { workflowId, netWorth, movement, progress, action } = view;
+  const { workflowId, netWorth, movement, progress, action, spending } = view;
 
   async function save(target: number, kind: string) {
     setSaving(true);
@@ -184,6 +195,29 @@ export function RecapCard({ view }: { view: RecapView }) {
           {movement ? movementLine(movement) : COPY.recap.coldStart}
         </p>
         <p className="mt-1 text-sm text-gray-500">{COPY.recap.netWorthLine.replace("{netWorth}", money(netWorth))}</p>
+
+        {/* spending — "where your money went" (WLT-17); display only, no action */}
+        {spending ? (
+          <div
+            className="mt-4 border-t border-gray-100 pt-4"
+            aria-label={COPY.recapA11y.spend
+              .replace("{total}", money(spending.thisWeek))
+              .replace("{comparison}", spendComparisonLine(spending))
+              .replace("{categories}", topCategoriesText(spending) || "—")}
+            role="group"
+          >
+            <p className="text-sm font-medium text-gray-900">{COPY.recapSpend.heading}</p>
+            <p className="mt-1 text-sm text-gray-700">
+              {COPY.recapSpend.thisWeek.replace("{total}", money(spending.thisWeek))}{" "}
+              <span aria-hidden="true">·</span> {spendComparisonLine(spending)}
+            </p>
+            {spending.topCategories.length > 0 ? (
+              <p className="mt-1 text-sm text-gray-500">
+                {COPY.recapSpend.topLabel}: {topCategoriesText(spending)}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
         {/* progress toward target — the thing that now tracks */}
         <p className="mt-4 text-sm text-gray-600">{COPY.recap.progressLabel}</p>

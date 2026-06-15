@@ -318,5 +318,16 @@ export const COPY = {
     recap: "{movement}. Net worth {netWorth}. {percent}% toward your {target} target.",
     progressBar: "Progress toward target: {percent} percent",
     acked: "Saved. We'll keep tracking toward your target.",
+    spend: "Where your money went: spent {total} this week, {comparison}. Top categories: {categories}.",
+  },
+  // WLT-17 — "where your money went" (spending vs last week). copy.md verbatim.
+  recapSpend: {
+    heading: "Where your money went",
+    thisWeek: "Spent {total} this week",
+    less: "{amount} less than last week",
+    more: "{amount} more than last week",
+    same: "About the same as last week",
+    noComparison: "We'll compare this to last week once there's a bit more history.",
+    topLabel: "Top",
   },
 } as const;

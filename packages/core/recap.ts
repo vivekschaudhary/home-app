@@ -52,6 +52,116 @@ export interface RecapSignals {
   progress: TargetProgress | null;
 }
 
+// ── Spending (WLT-17): "where your money went" — a DISPLAY signal, no action ──
+
+/** A transaction for the spending comparison (amounts/enums only — no PII). */
+export interface SpendingTxn {
+  /** 'debit' (spend) | 'credit'. Only debits count toward spend. */
+  direction: string;
+  /** Plaid primary category (raw); null → "Other" after humanizing. */
+  category: string | null;
+  /** Positive amount of the transaction. */
+  amount: number;
+  /** 'YYYY-MM-DD' (provider posted date). */
+  occurredOn: string;
+}
+
+/** A humanized category + its summed spend this week. */
+export interface CategorySpend {
+  category: string; // already humanized for display
+  amount: number;
+}
+
+export interface SpendingComparison {
+  /** Total debits in the last 7 days. */
+  thisWeek: number;
+  /**
+   * Whether a week-over-week comparison is honest. False at first-week (no
+   * activity in the prior-week window → we won't fabricate a delta).
+   */
+  comparable: boolean;
+  /** vs the prior week's debits; null when !comparable. Direction in WORDS. */
+  delta: { direction: "more" | "less" | "same"; amount: number } | null;
+  /** The top (up to 3) spending categories this week, humanized, desc. */
+  topCategories: CategorySpend[];
+}
+
+const DAY_MS = 86_400_000;
+
+/** Title-case a Plaid primary category for display; null/empty → "Other". */
+export function humanizeCategory(raw: string | null | undefined): string {
+  if (!raw) return "Other";
+  return raw
+    .toLowerCase()
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+/**
+ * Spending this week vs last, from REAL transactions. Windows (relative to
+ * `asOf`, a 'YYYY-MM-DD' day): this-week = (asOf-7d, asOf]; prior-week =
+ * (asOf-14d, asOf-7d]. Debits only.
+ *
+ * Honesty rules (AC1/AC3):
+ *   - Returns null when there are NO debits this week → the section is omitted
+ *     (never a "$0 spent" pseudo-insight).
+ *   - `comparable` is true only when the prior-week window had activity (any
+ *     transaction) — so a genuinely-quiet prior week reads as a real comparison,
+ *     but a brand-new connection with no prior-week data shows this-week-only
+ *     (no fabricated delta).
+ */
+export function computeSpendingComparison(
+  txns: readonly SpendingTxn[],
+  asOf: string,
+): SpendingComparison | null {
+  const asOfMs = Date.parse(`${asOf}T00:00:00Z`);
+  if (Number.isNaN(asOfMs)) return null;
+  const sevenDaysAgoMs = asOfMs - 7 * DAY_MS;
+  const fourteenDaysAgoMs = asOfMs - 14 * DAY_MS;
+
+  let thisWeekSpend = 0;
+  let priorWeekSpend = 0;
+  let priorWeekHadActivity = false;
+  const byCategory = new Map<string, number>();
+
+  for (const t of txns) {
+    const tMs = Date.parse(`${t.occurredOn}T00:00:00Z`);
+    if (Number.isNaN(tMs)) continue;
+    const inThisWeek = tMs > sevenDaysAgoMs && tMs <= asOfMs;
+    const inPriorWeek = tMs > fourteenDaysAgoMs && tMs <= sevenDaysAgoMs;
+    if (inPriorWeek) priorWeekHadActivity = true; // any direction = the account was active then
+    if (t.direction !== "debit") continue;
+    if (inThisWeek) {
+      thisWeekSpend = round2(thisWeekSpend + t.amount);
+      const cat = humanizeCategory(t.category);
+      byCategory.set(cat, round2((byCategory.get(cat) ?? 0) + t.amount));
+    } else if (inPriorWeek) {
+      priorWeekSpend = round2(priorWeekSpend + t.amount);
+    }
+  }
+
+  if (thisWeekSpend === 0) return null; // nothing spent → omit the section
+
+  const topCategories = [...byCategory.entries()]
+    .map(([category, amount]) => ({ category, amount }))
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 3);
+
+  if (!priorWeekHadActivity) {
+    return { thisWeek: thisWeekSpend, comparable: false, delta: null, topCategories };
+  }
+  const diff = round2(thisWeekSpend - priorWeekSpend);
+  const delta =
+    diff === 0
+      ? ({ direction: "same", amount: 0 } as const)
+      : diff > 0
+        ? ({ direction: "more", amount: diff } as const)
+        : ({ direction: "less", amount: Math.abs(diff) } as const);
+  return { thisWeek: thisWeekSpend, comparable: true, delta, topCategories };
+}
+
 /**
  * Net-worth movement from the daily samples. Needs ≥ 2 snapshots — returns null
  * at cold-start (the honest "we're still watching" state; AC2). Compares the
