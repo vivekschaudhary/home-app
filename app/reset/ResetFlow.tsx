@@ -67,13 +67,15 @@ export function ResetFlow({ hasSession }: { hasSession: boolean }) {
       setError(
         res.error === "validation_password"
           ? COPY.passwordErrors.weak
-          : res.error === "reset_link_invalid"
-            ? COPY.reset.expiredBody
-            : res.error === "rate_limited"
-              ? COPY.passwordErrors.rateLimited
-              : res.error === "network"
-                ? COPY.passwordErrors.network
-                : COPY.passwordErrors.server,
+          : res.error === "same_password"
+            ? COPY.passwordErrors.samePassword
+            : res.error === "reset_link_invalid"
+              ? COPY.reset.expiredBody
+              : res.error === "rate_limited"
+                ? COPY.passwordErrors.rateLimited
+                : res.error === "network"
+                  ? COPY.passwordErrors.network
+                  : COPY.passwordErrors.server,
       );
       return;
     }

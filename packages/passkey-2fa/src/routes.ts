@@ -5,6 +5,7 @@
 import type { AuthenticationResponseJSON, RegistrationResponseJSON } from "@simplewebauthn/server";
 import { emailSchema, passwordSchema, signInSchema, signUpSchema } from "./validation";
 import { mapSignInError } from "./signin-error";
+import { mapUpdatePasswordError } from "./update-password-error";
 import { createServerSupabase } from "./supabase";
 import { appUrl } from "./config";
 import { clearAal2Cookie, getAal2UserId, getSessionUser, setAal2Cookie } from "./guard";
@@ -192,8 +193,14 @@ export function createPasskeyAuthHandlers(opts: PasskeyAuthOptions = {}): Passke
       if (!user) return json({ ok: false, error: "reset_link_invalid" }, 401); // link expired/used/absent
       const { error } = await supabase.auth.updateUser({ password: parsed.data });
       if (error) {
-        console.warn("[updatePassword] supabase error", { code: (error as { code?: string }).code });
-        return json({ ok: false, error: "server" }, 502);
+        // SUP-7 (#40 class): discriminate — a client-actionable rejection (same
+        // password, weak/breached, rate limit) must NOT surface as an opaque 502.
+        console.warn("[updatePassword] supabase error", {
+          code: (error as { code?: string }).code,
+          status: (error as { status?: number }).status,
+        });
+        const mapped = mapUpdatePasswordError(error as { code?: string; status?: number });
+        return json({ ok: false, error: mapped }, mapped === "server" ? 502 : 400);
       }
       await emit({ type: "password_reset_completed", userId: user.id });
       await supabase.auth.signOut(); // clear the recovery session → re-auth (passkey) fresh

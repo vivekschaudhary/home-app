@@ -44,4 +44,14 @@ describe("ResetFlow (WLT-14)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Set new password" }));
     await waitFor(() => expect(screen.getByText(/Reset links can only be used once/)).toBeTruthy());
   });
+
+  it("SUP-7: reusing the current password shows the inline 'choose a new one' message, NOT the generic server error", async () => {
+    updatePassword.mockResolvedValue({ ok: false, error: "same_password" });
+    render(<ResetFlow hasSession={true} />);
+    fireEvent.change(screen.getByLabelText("New password"), { target: { value: "correct horse battery staple" } });
+    fireEvent.click(screen.getByRole("button", { name: "Set new password" }));
+    await waitFor(() => expect(screen.getByText("That's already your password — choose a new one.")).toBeTruthy());
+    // the discriminated branch must NOT fall through to the generic server line
+    expect(screen.queryByText(/something went wrong on our side/i)).toBeNull();
+  });
 });
