@@ -280,6 +280,7 @@ export const COPY = {
     network: "You appear to be offline. Check your connection and try again.",
     server: "Something went wrong on our side — your information is safe. Try again in a minute.",
     rateLimited: "Too many attempts. Wait a minute, then try again.",
+    samePassword: "That's already your password — choose a new one.",
   },
   resetA11y: {
     requested: "If an account exists, a reset link is on its way.",

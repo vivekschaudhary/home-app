@@ -5,7 +5,7 @@ bet: WLT-1
 story: WLT-14
 hygiene: false
 severity: P1
-status: triaged
+status: in-fix
 reporter: dogfood (operator)
 created: 2026-06-15
 author: Support

@@ -8,6 +8,7 @@ export type ApiErrorCode =
   | "invalid_credentials"
   | "email_confirmation_required"
   | "reset_link_invalid"
+  | "same_password"
   | "network"
   | "server"
   | "unknown"
