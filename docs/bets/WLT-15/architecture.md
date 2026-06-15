@@ -1,7 +1,7 @@
 ---
 id: WLT-15-ARCH
 bet: WLT-15
-status: proposed
+status: approved
 created: 2026-06-14
 authors: [Architect, Enterprise/Solution Architect]
 area_tags: [frontend, backend, data, jobs, metrics]
@@ -177,4 +177,4 @@ Escalate to Architect (don't improvise):
 
 ---
 
-_Approved by: <pending HITL> on <date>_
+_Approved by: Vivek (DRI) on 2026-06-14_
