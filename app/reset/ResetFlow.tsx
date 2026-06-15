@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { AuthCard, Banner, Button, PasswordField, StepHeading } from "@wealth/ui";
+import { AuthCard, Banner, Button, CodeInput, PasswordField, StepHeading } from "@wealth/ui";
 import { updatePassword } from "@vc1023/passkey-2fa/client";
 import { COPY } from "@/app/lib/copy";
 
@@ -14,11 +14,21 @@ export function ResetFlow({ hasSession }: { hasSession: boolean }) {
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // SUP-7 — an MFA account must enter its authenticator code to finish the reset.
+  const [needsTotp, setNeedsTotp] = useState(false);
+  const [totpCode, setTotpCode] = useState("");
+  const [codeError, setCodeError] = useState<string | null>(null);
   const doneRef = useRef<HTMLHeadingElement>(null);
+  const codeRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (done) doneRef.current?.focus();
   }, [done]);
+
+  // When the second factor is first requested, move focus to the code field.
+  useEffect(() => {
+    if (needsTotp) codeRef.current?.focus();
+  }, [needsTotp]);
 
   if (!hasSession && !done) {
     return (
@@ -61,9 +71,22 @@ export function ResetFlow({ hasSession }: { hasSession: boolean }) {
     }
     setLoading(true);
     setError(null);
-    const res = await updatePassword(password);
+    setCodeError(null);
+    const res = await updatePassword(password, needsTotp ? totpCode : undefined);
     setLoading(false);
     if (!res.ok) {
+      // The account has MFA → reveal the authenticator field and ask for the code
+      // (not an error — a required next step).
+      if (res.error === "mfa_required") {
+        setNeedsTotp(true);
+        setError(null);
+        return;
+      }
+      // A wrong/expired code shows ON the code field, keeping the user in place.
+      if (res.error === "invalid_code" || res.error === "expired_code") {
+        setCodeError(res.error === "expired_code" ? COPY.reset.codeExpired : COPY.reset.codeInvalid);
+        return;
+      }
       setError(
         res.error === "validation_password"
           ? COPY.passwordErrors.weak
@@ -97,6 +120,19 @@ export function ResetFlow({ hasSession }: { hasSession: boolean }) {
           hideLabel={COPY.a11y.passwordHide}
           capsLockLabel={COPY.a11y.capslock}
         />
+        {needsTotp ? (
+          <div className="space-y-2">
+            <p className="text-sm text-gray-600">{COPY.reset.mfaPrompt}</p>
+            <CodeInput
+              ref={codeRef}
+              label={COPY.totpChallenge.codeLabel}
+              hint={COPY.a11y.codeHint}
+              value={totpCode}
+              onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ""))}
+              error={codeError ?? undefined}
+            />
+          </div>
+        ) : null}
         <Button type="submit" loading={loading} loadingLabel={COPY.reset.saving}>
           {COPY.reset.submit}
         </Button>

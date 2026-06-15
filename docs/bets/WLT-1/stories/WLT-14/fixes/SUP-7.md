@@ -5,7 +5,7 @@ bet: WLT-1
 story: WLT-14
 hygiene: false
 severity: P1
-status: shipped
+status: re-opened
 reporter: dogfood (operator)
 created: 2026-06-15
 author: Support
@@ -64,4 +64,16 @@ Escalate to **Engineer** — a code fix in the WLT-14 handler (discriminate the 
 - [2026-06-15] [Support] **The specific `updateUser` code is inferred** (logs show it server-side) — likelihood: n/a — impact: low — mitigation: the fix discriminates ALL known codes + keeps the `console.warn`, so whichever it is now surfaces correctly — area: diagnosis
 
 ### Issues
-- [2026-06-15] [Support] **Recurrence of the "blanket error code" anti-pattern** across auth handlers (signIn #40, now updatePassword) — severity: low — owner: Engineer — status: open — area: auth — consider an audit of the remaining handlers for the same collapse.
+- [2026-06-15] [Support] **Recurrence of the "blanket error code" anti-pattern** across auth handlers (signIn #40, now updatePassword) — severity: low — owner: Engineer — status: open (→ SUP-8) — area: auth — consider an audit of the remaining handlers for the same collapse.
+
+## Re-open (2026-06-15) — the real root cause
+
+PR #52 (v1) shipped the error-discrimination, but the **inferred trigger was wrong**. Prod logs after deploy: `[updatePassword] supabase error { code: 'insufficient_aal', status: 401 }` — NOT `same_password`. v1 mapped `insufficient_aal` to the `server` default → **still a 502** for the reporter. (The triage note's own Risk — "the specific code is inferred" — materialized.)
+
+**Real root cause:** the account has a **Supabase-native TOTP factor** (enrolled in WLT-7). Supabase requires **AAL2** to change a password (a reset must not bypass MFA), but the recovery link only establishes an **AAL1** session — so `updateUser({ password })` returns `insufficient_aal`. WLT-14 never built a step to satisfy the second factor during recovery, so the flow dead-ends for any TOTP-enrolled user.
+
+**The fix (v2, this PR):** add the authenticator step to recovery. On `insufficient_aal` the handler returns `mfa_required`; the reset page reveals an authenticator-code field; the user's code is verified **on the same Supabase client** (`verifyTotpChallengeOn` — `challengeAndVerify` upgrades that client's in-memory session to AAL2; a fresh client in the same request would read the old AAL1 cookies — the #36 lesson) → `updateUser` then succeeds. Wrong/expired codes are discriminated (`invalid_code`/`expired_code`); the v1 discrimination (`same_password`/weak/rate) is retained.
+
+### Re-open decisions
+- [2026-06-15] [Engineer] **v1 inferred the wrong code; v2 fixes the real cause (insufficient_aal)** — rationale: a password reset on an MFA account legitimately requires the second factor; build the TOTP step rather than weaken Supabase's AAL requirement (which would let an email link bypass MFA) — area: security — reversibility: medium
+- [2026-06-15] [Engineer] **Elevate + update on the SAME client instance** — rationale: same-request cookie writes aren't readable back in the same request (#36); the in-memory AAL2 session is what `updateUser` must use — area: auth — reversibility: n/a

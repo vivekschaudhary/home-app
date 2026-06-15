@@ -37,6 +37,9 @@ Calm, plain, reassuring — the user is locked out and a little stressed. Short 
 | `reset.expiredTitle` | This link's expired | Routine, not alarming |
 | `reset.expiredBody` | Reset links can only be used once, and they don't last long. Request a new one and we'll send it over. | Explains why (single-use + short-lived) |
 | `reset.expiredCta` | Request a new link | → /forgot |
+| `reset.mfaPrompt` | For your security, enter your authenticator code to finish resetting your password. | SUP-7: an account with an authenticator (TOTP) must prove the second factor before the reset — a reset must not bypass MFA. Revealed when the server returns `mfa_required`. |
+| `reset.codeInvalid` | That code didn't match — enter the current one from your app. | Discriminated: wrong authenticator code (shown on the code field) |
+| `reset.codeExpired` | That code expired — enter the current one from your app. | Discriminated: the code rotated before submit |
 | `passwordErrors.weak` | Your password needs at least 12 characters. | Matches sign-up validation |
 | `passwordErrors.network` | You appear to be offline. Check your connection and try again. | Discriminated: network (reused) |
 | `passwordErrors.server` | Something went wrong on our side — your information is safe. Try again in a minute. | Discriminated: server (reused) |

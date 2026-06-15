@@ -89,16 +89,29 @@ export async function verifyTotpEnrollment(
   return { verified: true };
 }
 
-/** Sign-in fallback: verify a code against the user's verified TOTP factor (AAL1). */
-export async function verifyTotpChallenge(
+/**
+ * Verify a TOTP code against the user's verified factor ON A GIVEN client —
+ * challengeAndVerify upgrades that client's in-memory session to AAL2. Recovery
+ * (WLT-14/SUP-7) must elevate + change the password on the SAME client instance:
+ * the upgraded session is written to RESPONSE cookies, but a fresh client in the
+ * same request would still read the OLD (AAL1) request cookies (the #36 lesson).
+ */
+export async function verifyTotpChallengeOn(
+  supabase: SupabaseLike,
   code: string,
 ): Promise<{ verified: boolean; reason?: VerifyReason }> {
-  const supabase = await createServerSupabase();
   const factor = (await verifiedTotpFactors(supabase))[0];
   if (!factor) return { verified: false, reason: "no_factor" };
   const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: factor.id, code });
   if (error) return { verified: false, reason: classifyVerifyError(error) };
   return { verified: true };
+}
+
+/** Sign-in fallback: verify a code against the user's verified TOTP factor (AAL1). */
+export async function verifyTotpChallenge(
+  code: string,
+): Promise<{ verified: boolean; reason?: VerifyReason }> {
+  return verifyTotpChallengeOn(await createServerSupabase(), code);
 }
 
 /** Which second factors the user has (passkey from our table + verified TOTP). */

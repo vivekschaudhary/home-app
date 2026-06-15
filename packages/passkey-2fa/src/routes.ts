@@ -20,6 +20,7 @@ import {
   getFactorStatus,
   unenrollTotp,
   verifyTotpChallenge,
+  verifyTotpChallengeOn,
   verifyTotpEnrollment,
 } from "./totp";
 import { clientIp, inMemoryRateLimit, tooManyRequests, type RateLimiter } from "./rate-limit";
@@ -183,7 +184,7 @@ export function createPasskeyAuthHandlers(opts: PasskeyAuthOptions = {}): Passke
     async updatePassword(req) {
       const limit = await limiter(`pwupdate:${clientIp(req)}`, 10, 5 * 60 * 1000);
       if (!limit.ok) return tooManyRequests(limit.retryAfterSeconds);
-      const body = (await req.json().catch(() => null)) as { password?: unknown } | null;
+      const body = (await req.json().catch(() => null)) as { password?: unknown; totpCode?: unknown } | null;
       const parsed = passwordSchema.safeParse(body?.password);
       if (!parsed.success) return json({ ok: false, error: "validation_password" }, 400);
       const supabase = await createServerSupabase();
@@ -191,14 +192,33 @@ export function createPasskeyAuthHandlers(opts: PasskeyAuthOptions = {}): Passke
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) return json({ ok: false, error: "reset_link_invalid" }, 401); // link expired/used/absent
+
+      // SUP-7: an account with a TOTP factor needs AAL2 to change its password
+      // (Supabase: a reset must not bypass MFA). The recovery link only gives
+      // AAL1 — so if the user supplied their authenticator code, satisfy the
+      // second factor first (on THIS client → its in-memory session becomes AAL2).
+      const totpCode = typeof body?.totpCode === "string" ? body.totpCode.trim() : "";
+      if (totpCode) {
+        const elevated = await verifyTotpChallengeOn(supabase, totpCode);
+        if (!elevated.verified) {
+          await emit({ type: "mfa_challenge_failure", userId: user.id });
+          return json({ ok: false, error: elevated.reason ?? "invalid_code" }, 401);
+        }
+      }
+
       const { error } = await supabase.auth.updateUser({ password: parsed.data });
       if (error) {
-        // SUP-7 (#40 class): discriminate — a client-actionable rejection (same
-        // password, weak/breached, rate limit) must NOT surface as an opaque 502.
         console.warn("[updatePassword] supabase error", {
           code: (error as { code?: string }).code,
           status: (error as { status?: number }).status,
         });
+        // The account has MFA and the session is still AAL1 → prompt for the code
+        // (the UI reveals the authenticator field), don't 502.
+        if ((error as { code?: string }).code === "insufficient_aal") {
+          return json({ ok: false, error: "mfa_required" }, 401);
+        }
+        // Otherwise discriminate (SUP-7 / #40 class) — a client-actionable
+        // rejection (same password, weak/breached, rate limit) must NOT 502.
         const mapped = mapUpdatePasswordError(error as { code?: string; status?: number });
         return json({ ok: false, error: mapped }, mapped === "server" ? 502 : 400);
       }

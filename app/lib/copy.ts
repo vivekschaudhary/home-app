@@ -274,6 +274,11 @@ export const COPY = {
     expiredBody:
       "Reset links can only be used once, and they don't last long. Request a new one and we'll send it over.",
     expiredCta: "Request a new link",
+    // SUP-7 — accounts with an authenticator must prove the second factor before
+    // a reset (a reset must not bypass MFA). Revealed when the server asks for it.
+    mfaPrompt: "For your security, enter your authenticator code to finish resetting your password.",
+    codeInvalid: "That code didn't match — enter the current one from your app.",
+    codeExpired: "That code expired — enter the current one from your app.",
   },
   passwordErrors: {
     weak: "Your password needs at least 12 characters.",

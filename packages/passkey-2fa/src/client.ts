@@ -53,8 +53,11 @@ export function requestPasswordReset(email: string): Promise<ApiResult> {
   return postJSON(`${BASE}/password/reset-request`, { email });
 }
 
-export function updatePassword(password: string): Promise<ApiResult> {
-  return postJSON(`${BASE}/password/update`, { password });
+/** Set a new password during recovery. `totpCode` is sent only when the account
+ *  has MFA and the server asked for it (mfa_required) — it satisfies AAL2 so the
+ *  reset can complete (a reset must not bypass the second factor). */
+export function updatePassword(password: string, totpCode?: string): Promise<ApiResult> {
+  return postJSON(`${BASE}/password/update`, totpCode ? { password, totpCode } : { password });
 }
 
 /** Enroll a passkey (sign-up step 2). Runs the registration ceremony + verify. */
