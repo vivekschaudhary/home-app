@@ -5,6 +5,7 @@
 import type { AuthenticationResponseJSON, RegistrationResponseJSON } from "@simplewebauthn/server";
 import { emailSchema, passwordSchema, signInSchema, signUpSchema } from "./validation";
 import { mapSignInError } from "./signin-error";
+import { mapSignUpError } from "./signup-error";
 import { mapUpdatePasswordError } from "./update-password-error";
 import { createServerSupabase } from "./supabase";
 import { appUrl } from "./config";
@@ -97,7 +98,17 @@ export function createPasskeyAuthHandlers(opts: PasskeyAuthOptions = {}): Passke
         email: parsed.data.email,
         password: parsed.data.password,
       });
-      if (error || !data.user) return json({ ok: false, error: "server" }, 400);
+      if (error || !data.user) {
+        // SUP-8: discriminate + LOG the real code (never infer — the SUP-7 lesson).
+        // Anti-enum: an existing-email error stays opaque (see mapSignUpError).
+        if (error) {
+          console.warn("[signUp] auth error", {
+            code: (error as { code?: string }).code,
+            status: (error as { status?: number }).status,
+          });
+        }
+        return json({ ok: false, error: error ? mapSignUpError(error as { code?: string; status?: number }) : "server" }, 400);
+      }
       if (!data.session) {
         return json({ ok: false, error: "email_confirmation_required" }, 400);
       }
