@@ -72,6 +72,6 @@ Within-stack (`architecture_required: false`) — Supabase Auth's built-in passw
 - [2026-06-14] [Engineer] Package bumped 0.3.0→0.4.0 (new feature, workspace-linked); audit trail via `password_reset_*` events.
 
 ### Issues
-- [2026-06-14] [Engineer] **Real-path E2E deferred** — the full recovery round-trip (Supabase admin `generateLink` → callback → /reset → set password) is the one remaining `[real-path-integration-coverage]` test; component tests + manual prod verification cover it for now — severity: low — owner: Engineer — status: open
+- [2026-06-14] [Engineer] **Real-path E2E deferred** — the full recovery round-trip (Supabase admin `generateLink` → callback → /reset → set password) is the one remaining `[real-path-integration-coverage]` test; component tests + manual prod verification cover it for now — severity: low — owner: Engineer — status: **resolved** [2026-06-15] — `e2e/forgot-password.spec.ts` (Codex) lands the full real-path round-trip: sign-up + passkey → sign-out → admin `generateLink` recovery → `/reset` set new password → old password fails, new succeeds + passkey AAL2. Gated by `E2E_PASSKEY=1`. `e2e/global-setup.ts` adds the `/forgot` `/reset` + password API smoke-checks.
 
 _Shipped 2026-06-14 (PR #45; cross-model Codex Approve + Security clean; 1 round — AC2 redirectTo)._

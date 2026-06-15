@@ -4,11 +4,23 @@
 
 import { purgeE2EUsers } from "./purge-e2e-users";
 
-const PAGES = ["/", "/sign-up", "/sign-in", "/unsupported", "/dashboard", "/settings/security"];
+const PAGES = [
+  "/",
+  "/sign-up",
+  "/sign-in",
+  "/forgot",
+  "/reset",
+  "/unsupported",
+  "/dashboard",
+  "/settings/security",
+];
 const API = [
   "/api/auth/sign-up",
   "/api/auth/sign-in",
   "/api/auth/sign-out",
+  "/api/auth/callback",
+  "/api/auth/password/reset-request",
+  "/api/auth/password/update",
   "/api/auth/webauthn/register/options",
   "/api/auth/webauthn/register/verify",
   "/api/auth/webauthn/authenticate/options",
