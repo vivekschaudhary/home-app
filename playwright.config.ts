@@ -41,6 +41,11 @@ export default defineConfig({
         url: "http://localhost:3000",
         timeout: 180_000,
         reuseExistingServer: !process.env.CI,
+        // WLT-16/17: the "since last time" recap ships dark behind RECAP_ENABLED.
+        // Turn it on for the e2e server so the recap's real-path spec can exercise
+        // its owner-scoped reads (net_worth_snapshots + transactions) through a
+        // real session → createServerSupabase → RLS → rendered rows.
+        env: { ...process.env, RECAP_ENABLED: "true" },
       },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
 });

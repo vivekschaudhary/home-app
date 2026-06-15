@@ -77,6 +77,7 @@ _If post-merge bugs are found, story is re-opened and fixes live under `fixes/`.
 
 ### Issues
 - [2026-06-15] [PM] **Category humanization is best-effort** — severity: low — owner: Engineer — status: open — area: data — title-case the Plaid primary; don't build a category taxonomy this slice.
+- [2026-06-15] [Reviewer→Engineer] **BLOCKER (PR #49): missing real-path recap E2E for the owner-scoped `readRecentSpending` read** — severity: high — owner: Engineer — status: **resolved** — area: testing — added `e2e/recap.spec.ts` (the [real-path-integration-coverage] mandate / #36 class): a real session → `/dashboard` RSC → `createServerSupabase` → RLS → rendered rows, asserting movement (net_worth_snapshots) + progress + **spending (transactions)** from seeded-but-really-read data; `RECAP_ENABLED` enabled for the e2e webServer (playwright.config). Gated like `workflow-flow.spec` (E2E_PASSKEY=1 + a real Supabase). Re-request Codex review.
 
 ---
 
