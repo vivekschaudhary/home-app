@@ -5,7 +5,7 @@ bet: WLT-1
 story: null
 hygiene: false
 severity: P3
-status: in-fix
+status: shipped
 reporter: engineering (surfaced by the SUP-7 triage)
 created: 2026-06-15
 author: Support

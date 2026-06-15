@@ -24,6 +24,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 - **Password recovery now works when you have an authenticator (SUP-7):** if your account has an authenticator app set up, resetting your password used to fail with an opaque error — because a reset isn't allowed to skip your second factor. Now the reset page asks for your **authenticator code** to confirm it's you, then sets your new password. Reused (or otherwise unacceptable) passwords also get a clear inline reason instead of a generic failure. _(Adds the second-factor step to recovery — AAL1→AAL2 — and discriminated `updateUser` errors; `@vc1023/passkey-2fa@0.4.2`.)_
+- **Clearer sign-up errors (SUP-8):** if you hit the rate limit (or pick a password the system can't accept) while creating an account, you now get a specific, actionable message instead of a generic "something went wrong." _(Discriminated `signUp` errors — kept deliberately quiet on whether an email is already registered, to avoid leaking who has an account; `@vc1023/passkey-2fa@0.4.3`.)_
 
 ### Deprecated
 -
@@ -32,7 +33,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 -
 
 ### Security
--
+- **Patched a dependency advisory (SUP-9):** updated a transitive library (`form-data`) to a fixed version after a HIGH-severity CRLF-injection advisory was published (GHSA-hmw2-7cc7-3qxx). Caught automatically by the CI dependency gate the day it landed. _(pnpm override → `form-data >=4.0.6`.)_
 
 <!--
 When a brief ships:

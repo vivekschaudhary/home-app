@@ -44,9 +44,10 @@ Owner: **Support role** (`compass/roles/support.md`). Per `[user-first-intent-fi
 | SUP-5 | 2026-06-14 | dogfood | "nothing left to do after setting a target" — the loop goes static | enhancement | P1 | closed | `/create-brief` → WLT-15 (the engagement bet; shipped) |
 | SUP-6 | 2026-06-15 | ops/dogfood | recap showed only 1 Inngest function → durable jobs never ran in prod since 6/8 | incident | P1 | closed | `/ops` → OPS-1 (auto-sync wired; proven live) |
 | SUP-7 | 2026-06-15 | dogfood | "change password page… enter the password and save, gives a 502 on the post" | bug | P1 | closed | `/fix` → #52 (error discrimination) **then** the real cause from prod logs: `insufficient_aal` (MFA account needs AAL2) → v2 adds the authenticator step to recovery (PR #54). **Confirmed live by the reporter.** |
-| SUP-8 | 2026-06-15 | engineering | the "blanket error code" anti-pattern has now hit 2 auth handlers (signIn #40, updatePassword SUP-7) — audit the rest for the same collapse | enhancement | P3 | in-review | `/fix` → audit ([SUP-8.md](../bets/WLT-1/fixes/SUP-8.md)): pattern contained; one residual (`signUp` collapsed + unlogged) hardened (PR #55) |
+| SUP-8 | 2026-06-15 | engineering | the "blanket error code" anti-pattern has now hit 2 auth handlers (signIn #40, updatePassword SUP-7) — audit the rest for the same collapse | enhancement | P3 | closed | `/fix` → audit ([SUP-8.md](../bets/WLT-1/fixes/SUP-8.md)): pattern **contained**; the one residual (`signUp` collapsed + unlogged) hardened + `rate_limited` surfaced to the user (PR #55) |
+| SUP-9 | 2026-06-15 | ci/scanner | dependency-advisory gate flagged a HIGH transitive CVE (`form-data` CRLF, GHSA-hmw2-7cc7-3qxx) the moment it published — gating every PR | bug (security) | P2 | closed | `/ops` → `pnpm` override → `form-data >=4.0.6` (PR #56); surfaced *by the gate*, not a user |
 
-_SUP-1…6 are the dogfood trail (MVP loose-ends + WLT-14/WLT-15/OPS-1), captured retroactively for precedent. SUP-7 was the first live item through the inbox end-to-end (capture → triage → `/fix` → shipped). SUP-8 is the follow-up the SUP-7 triage surfaced._
+_SUP-1…6 are the dogfood trail (MVP loose-ends + WLT-14/WLT-15/OPS-1), captured retroactively for precedent. SUP-7 was the first live item through the inbox end-to-end. SUP-8 (the audit) + SUP-9 (a CVE the CI gate caught) both came out of running SUP-8 — the inbox and the tooling each surfacing their own work._
 
 ## DRI Log
 
