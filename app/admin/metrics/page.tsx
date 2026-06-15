@@ -46,7 +46,7 @@ export default async function AdminMetricsPage() {
     );
   }
 
-  const { ttfv, wawu, funnel } = data;
+  const { ttfv, wawu, returns, funnel } = data;
   const totalN = funnel.reduce((max, s) => Math.max(max, s.users), 0);
   const p80 = ttfv.p80TtfvSeconds;
 
@@ -113,7 +113,31 @@ export default async function AdminMetricsPage() {
         )}
       </section>
 
-      {/* 3 · Funnel */}
+      {/* 3 · Return (WLT-16) — weekly recap viewers */}
+      <section className="mt-8" aria-labelledby="m-return">
+        <h2 id="m-return" className="text-base font-semibold text-gray-900">
+          {COPY.metrics.returnHeading}
+        </h2>
+        {returns.length === 0 ? (
+          <p className="mt-3 text-sm text-gray-500">{COPY.metrics.empty}</p>
+        ) : (
+          <table className="mt-3 w-full max-w-sm text-sm">
+            <caption className="sr-only">{COPY.metrics.returnHeading}</caption>
+            <tbody>
+              {returns.map((r) => (
+                <tr key={r.weekStart} className="border-b border-gray-100">
+                  <th scope="row" className="py-1.5 text-left font-normal text-gray-600">
+                    {COPY.metrics.wawuWeekOf.replace("{date}", r.weekStart)}
+                  </th>
+                  <td className="py-1.5 text-right font-semibold text-gray-900">{r.returners}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      {/* 4 · Funnel */}
       <section className="mt-8" aria-labelledby="m-funnel">
         <h2 id="m-funnel" className="text-base font-semibold text-gray-900">
           {COPY.metrics.funnelHeading}

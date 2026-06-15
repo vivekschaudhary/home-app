@@ -2,7 +2,7 @@
 id: WLT-16
 bet: WLT-15
 type: story
-status: ready
+status: in-build
 priority: P1
 created: 2026-06-14
 author: PM
@@ -72,6 +72,10 @@ _If post-merge bugs are found, story is re-opened and fixes live under `fixes/`.
 ## DRI Log
 
 ### Decisions
+- [2026-06-14] [Engineer] **Recap action committed via a new atomic `complete_recap_action` (SECURITY INVOKER), mirroring `complete_workflow_action`** — rationale: the WLT-12 reviewer's deepest catch was a non-atomic action commit; the recap run-insert + config-update must commit together. A `period` column + partial unique indexes split the once-ever guard (period null → `target_set`) from the weekly-repeatable recap guard (period non-null) without touching onboarding — area: data — alternatives: relax the global once-guard (rejected — would un-guard onboarding) — reversibility: medium
+- [2026-06-14] [Engineer] **Current net worth read LIVE from balances; movement from the daily snapshot series** — rationale: freshest figure for progress; movement needs the sampled time-series (balances aren't derivable). `getRecap` reads live on every dashboard load (reconcile-on-load, the #36 lesson) — area: frontend/data — reversibility: easy
+- [2026-06-14] [Engineer] **`recap_viewed` emitted server-side (service-role) during the RSC read, same pattern as `workflow_assembled`** — rationale: distinct-user-per-week return metric is robust to multiple emits; no cookie write (the #36 constraint is about cookie persistence, which this isn't) — area: metrics — reversibility: easy
+- [2026-06-14] [Engineer] **Conservative v1 progress status (ahead/behind/on_track) without invented pace math** — rationale: "behind" fires only when an unmet target's net worth actually fell (a real signal); threshold tuning stays the escalation (I2) — area: backend — reversibility: easy
 - [2026-06-14] [PM] **First WLT-15 story = movement + target progress + one action** (spending → WLT-17, anomalies → Slice 2) — rationale: smallest independent slice that builds the core new infra (snapshot time-series), closes the dead-end (target now tracks), and proves the return + WAWU mechanic end-to-end — area: scope — alternatives: bundle all three signals (rejected — too big for one story, against one-at-a-time discipline); spending-first (rejected — doesn't close the dead-end or wire target tracking) — reversibility: easy
 - [2026-06-14] [PM] **The one action must be honest (adjust/raise/affirm the real target), not a vanity tap** — rationale: the no-dark-patterns + real-data-only guardrails; WAWU must reflect genuine decisions — area: trust/metrics — reversibility: easy
 - [2026-06-14] [PM] **Ship behind `RECAP_ENABLED` (default off)** — rationale: movement is empty until ≥2 snapshots; flip on after ≥1 cycle so the surface has an anchor — area: rollout — reversibility: easy

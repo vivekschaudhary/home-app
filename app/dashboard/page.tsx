@@ -3,11 +3,17 @@ import { Suspense } from "react";
 import { getSessionUser, requireAal2 } from "@vc1023/passkey-2fa";
 import { SignOutButton } from "@/app/components/SignOutButton";
 import { COPY } from "@/app/lib/copy";
+import { getRecap } from "@/app/lib/recap";
 import { getOrCreateWorkflow } from "@/app/lib/workflow";
 import { DashboardNudge } from "./DashboardNudge";
+import { RecapCard } from "./RecapCard";
 import { WorkflowCard } from "./WorkflowCard";
 
 export const dynamic = "force-dynamic";
+
+// WLT-16 flag: the recap ships dark until the daily snapshot job has a cycle of
+// history to anchor movement. Default off; flip RECAP_ENABLED=true to surface it.
+const RECAP_ENABLED = process.env.RECAP_ENABLED === "true";
 
 // WLT-12: lazy idempotent assembly — select/advance the user's workflow from
 // their declared goal; personalizes once real balances exist (two-phase). An
@@ -16,6 +22,14 @@ export const dynamic = "force-dynamic";
 async function WorkflowSection({ userId }: { userId: string }) {
   const workflow = await getOrCreateWorkflow(userId);
   return <WorkflowCard view={workflow} />;
+}
+
+// WLT-16: the "since last time" recap — reconcile-on-load (reads live each
+// request; force-dynamic above). Renders nothing until the user has a running
+// workflow (a target set) — WorkflowCard owns the screen before that.
+async function RecapSection({ userId }: { userId: string }) {
+  const recap = await getRecap(userId);
+  return <RecapCard view={recap} />;
 }
 
 function WorkflowAssembling() {
@@ -56,6 +70,11 @@ export default async function DashboardPage() {
           Your account is protected with a passkey. Signed in as{" "}
           <span className="font-medium text-gray-900">{user?.email}</span>.
         </p>
+        {user && RECAP_ENABLED ? (
+          <Suspense fallback={null}>
+            <RecapSection userId={user.id} />
+          </Suspense>
+        ) : null}
         {user ? (
           <Suspense fallback={<WorkflowAssembling />}>
             <WorkflowSection userId={user.id} />

@@ -111,6 +111,13 @@ if (!isSet("ADMIN_EMAILS")) {
   console.warn("⚠ Env preflight: ADMIN_EMAILS unset — /admin/metrics is inaccessible (deny-by-default).");
 }
 
+// WLT-16: the "since last time" recap ships dark behind RECAP_ENABLED. Default
+// off is intentional (movement needs a snapshot cycle to anchor); surface the
+// flip-on step so it's discoverable.
+if (process.env.RECAP_ENABLED !== "true") {
+  console.warn("⚠ Env preflight: RECAP_ENABLED not 'true' — the dashboard recap (WLT-16) is hidden (set after ≥1 snapshot cycle).");
+}
+
 if (errors.length) {
   console.error(`\n✗ Env preflight FAILED for VERCEL_ENV=${target}:`);
   for (const e of errors) console.error(`  - ${e}`);

@@ -31,6 +31,12 @@ Calm, plain, encouraging — the same voice as WLT-12. This is the reason to ret
 | `recap.behind` | A bit behind your target — here's a move. | Plain, forward; no shame, no red |
 | `action.adjust` | Adjust your target | The one action when behind |
 | `action.raise` | Aim higher? | The one action when on-track/ahead — a real choice |
+| `target.suggestion` | A good target: {amount} | One-tap suggested value in the target step (not "first" — they've been here before) |
+| `target.suggestionAccept` | Use this target | Primary, one tap |
+| `target.ownCta` | Choose my own | Reveals the input |
+| `target.ownLabel` | Your target | Input label |
+| `target.save` | Save target | Primary save |
+| `target.cancel` | Cancel | Secondary |
 | `action.saving` | Saving… | aria-live during the write |
 | `acked.line` | Got it — we'll keep tracking. | Quiet confirmation; focus lands here |
 | `errors.network` | Connection lost — check your internet and try again. | Discriminated: network (reused) |

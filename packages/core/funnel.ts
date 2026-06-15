@@ -21,6 +21,11 @@ export const FUNNEL_EVENTS = {
   // Workflow engine (WLT-4) — ADDITIVE; intent→workflow→action funnel (WLT-5).
   WORKFLOW_ASSEMBLED: "workflow_assembled",
   ACTION_COMPLETED: "action_completed", // one WorkflowRun = the WAWU unit
+  // Recap (WLT-15/WLT-16) — ADDITIVE; the return mechanic. recap_viewed = a
+  // returning visit (Day-7 return metric); the recap action reuses
+  // action_completed (so WAWU counts it, weekly-repeatable).
+  RECAP_VIEWED: "recap_viewed",
+  RECAP_ACTION_PROMPTED: "recap_action_prompted",
 } as const;
 
 export type FunnelEvent = (typeof FUNNEL_EVENTS)[keyof typeof FUNNEL_EVENTS];
