@@ -23,7 +23,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 -
 
 ### Fixed
--
+- **Password reset now tells you what's wrong (SUP-7):** if you try to set a new password that's the same as your current one (or one we can't accept), the reset page now shows a clear inline message — "That's already your password — choose a new one." — instead of a generic "something went wrong" error. Recovering your account no longer dead-ends on an opaque failure. _(Discriminated `updateUser` errors in the auth package; `@vc1023/passkey-2fa@0.4.1`.)_
 
 ### Deprecated
 -
