@@ -2,7 +2,7 @@
 id: WLT-18
 bet: WLT-15
 type: story
-status: in-review
+status: shipped
 priority: P1
 created: 2026-06-15
 author: PM
@@ -58,7 +58,7 @@ Build within the WLT-15 architecture — **no foundational-stack deviation** (th
 
 ## PRs
 
-_Auto-populated as PRs open._
+- PR #51 — implementation (anomaly engine: table + 3 rules + scan + recap callout + review/dismiss + metrics) — **merged + shipped** 2026-06-15 (squash f6e831d). 3 review rounds (scope drift → recurring_due implemented strictly; missing real-path E2E → added; missing AC6 event assertions → added). Cross-model Codex **Approve** + Security **clean**. Prod deploy auto-registered `anomaly-scan-daily` in Inngest (OPS-1 auto-sync, proven live).
 
 ## Tests
 
