@@ -1,0 +1,46 @@
+# Auto-sync Inngest functions after every production deploy (OPS-1 step 3).
+#
+# Why this exists: prod Inngest is registered via a "Serve" sync, not the Vercel
+# marketplace integration, so new/changed durable functions don't register on
+# deploy — they sit served-but-unregistered and silently never run (the 6/8→6/15
+# drift OPS-1 documents). This closes it WITHOUT the marketplace integration:
+# when Vercel reports the PRODUCTION deployment succeeded, we PUT the serve
+# endpoint, which makes the freshly-deployed app re-register its current
+# functions with Inngest Cloud (verified: `PUT /api/inngest` →
+# {"message":"Successfully registered","modified":true}). Idempotent.
+#
+# Triggered by Vercel's GitHub deployment status (its git integration posts these
+# on every deploy). We act only on a successful PRODUCTION deployment.
+name: Inngest sync (post-deploy)
+
+on:
+  deployment_status: {}
+
+# Must live on the default branch to fire (GitHub runs deployment_status workflows
+# from the default branch only).
+jobs:
+  sync:
+    # Only when the PRODUCTION deployment SUCCEEDED (skip previews + in-progress).
+    if: >-
+      github.event.deployment_status.state == 'success' &&
+      contains(github.event.deployment_status.environment, 'Production')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Re-register Inngest functions (production serve endpoint)
+        env:
+          INNGEST_URL: https://home-app.kindtree.us/api/inngest
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5; do
+            code=$(curl -sS -o /tmp/resp.json -w "%{http_code}" -X PUT "$INNGEST_URL" || echo 000)
+            echo "attempt ${attempt}: HTTP ${code}"
+            cat /tmp/resp.json 2>/dev/null || true; echo
+            if [ "$code" = "200" ]; then
+              echo "✓ Inngest sync registered the deployed functions."
+              exit 0
+            fi
+            echo "…retrying in 15s (deployment may still be propagating)"
+            sleep 15
+          done
+          echo "✗ Inngest sync failed after 5 attempts — functions may be unregistered. Resync manually: curl -X PUT $INNGEST_URL"
+          exit 1
