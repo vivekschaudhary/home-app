@@ -8,7 +8,7 @@ portfolio_stub: false
 depends_on: [WLT-19]
 parallel_with: []
 architecture_required: auto
-architecture_status: pending
+architecture_status: approved
 created: 2026-06-16
 author: PM
 sources:
