@@ -1,5 +1,5 @@
 import { expect, test, type CDPSession } from "@playwright/test";
-import { passIntentToDashboard } from "./helpers";
+import { expectSignedInShell, gotoSecurityViaShell, passIntentToDashboard, signOutViaShell } from "./helpers";
 import * as OTPAuth from "otpauth";
 
 // Authenticator-app (TOTP) backup factor (WLT-7): enroll a TOTP factor, then
@@ -56,9 +56,8 @@ test.describe("authenticator-app (TOTP) backup (AC1, AC3)", () => {
     await page.getByRole("button", { name: "Create passkey" }).click();
     await passIntentToDashboard(page);
 
-    // Go to Security → add authenticator app.
-    await page.getByRole("link", { name: "Security" }).click();
-    await expect(page).toHaveURL(/\/settings\/security/);
+    // Go to Security (via the shell's account menu) → add authenticator app.
+    await gotoSecurityViaShell(page);
     await page.getByRole("button", { name: "Add authenticator app" }).click();
 
     // Read the manual key (the QR's text equivalent) and verify with a real code.
@@ -89,8 +88,7 @@ test.describe("authenticator-app (TOTP) backup (AC1, AC3)", () => {
 
     // Sign out, then make the passkey unavailable so the fallback is required.
     await page.goto("/dashboard");
-    await page.getByRole("button", { name: "Sign out" }).click();
-    await expect(page).toHaveURL(/\/sign-in/);
+    await signOutViaShell(page);
     await client.send("WebAuthn.removeVirtualAuthenticator", { authenticatorId });
 
     // Sign in (password) → passkey challenge → use the authenticator instead.
@@ -105,6 +103,6 @@ test.describe("authenticator-app (TOTP) backup (AC1, AC3)", () => {
     await page.getByRole("button", { name: "Verify", exact: true }).click();
 
     await passIntentToDashboard(page);
-    await expect(page.getByText("You're signed in.")).toBeVisible();
+    await expectSignedInShell(page);
   });
 });

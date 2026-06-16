@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { expect, test, type CDPSession } from "@playwright/test";
-import { passIntentToDashboard } from "./helpers";
+import { expectSignedInShell, passIntentToDashboard, signOutViaShell } from "./helpers";
 
 const RUN =
   process.env.E2E_PASSKEY === "1" &&
@@ -46,10 +46,9 @@ test.describe("forgot password recovery (WLT-14)", () => {
     await page.getByRole("button", { name: "Create account" }).click();
     await page.getByRole("button", { name: "Create passkey" }).click();
     await passIntentToDashboard(page);
-    await expect(page.getByText("You're signed in.")).toBeVisible();
+    await expectSignedInShell(page);
 
-    await page.getByRole("button", { name: "Sign out" }).click();
-    await expect(page).toHaveURL(/\/sign-in/);
+    await signOutViaShell(page);
 
     const admin = createAdminSupabase();
     const { data, error } = await admin.auth.admin.generateLink({
@@ -85,6 +84,6 @@ test.describe("forgot password recovery (WLT-14)", () => {
     await expect(page.getByRole("heading", { name: "Confirm it's you" })).toBeVisible();
 
     await passIntentToDashboard(page);
-    await expect(page.getByText("You're signed in.")).toBeVisible();
+    await expectSignedInShell(page);
   });
 });

@@ -1,4 +1,5 @@
 import { type CDPSession, expect, test } from "@playwright/test";
+import { signOutViaShell } from "./helpers";
 
 // WLT-11 — intent-first front door. Sign up → land on the intent front door
 // (intent-first, before connect) → declare an intent → "putting your plan
@@ -52,8 +53,7 @@ test.describe("intent-first front door (WLT-11)", () => {
     // (NOT /onboarding/intent), because hasDeclaredIntent is now true.
     await page.getByRole("button", { name: "I'll do that later" }).click();
     await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
-    await page.getByRole("button", { name: "Sign out" }).click();
-    await expect(page).toHaveURL(/\/sign-in/);
+    await signOutViaShell(page);
 
     await page.getByLabel("Email").fill(email);
     await page.getByLabel("Password").fill(password);

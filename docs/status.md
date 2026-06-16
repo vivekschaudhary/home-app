@@ -48,7 +48,7 @@ _The MVP portfolio is delivered — these are **follow-on tracks**, the team's c
 
 ## Awaiting human approval
 
-_None._ WLT-15 brief + architecture both approved (2026-06-14); WLT-16 is `ready` (under `hitl_level: milestones`, story creation auto-advances). Next gate is the WLT-16 build/PR.
+_None._ **WLT-19 — the app shell — brief + architecture both `approved` (2026-06-15); first story WLT-20 `ready`** for `/build`. The navigational frame the week's six feature bets mount into: a `(app)` route group with one shared layout that renders the responsive shell (fixed sidebar → hamburger drawer on mobile, account menu) + enforces **AAL2 once for every shell route**, driven by a `NAV_SECTIONS` config (the mounting contract: flip `coming_soon→live` + add a page = zero shell rework). Elicited: **Headless UI + Tailwind** + **collapsible drawer**. The five not-yet-built sections render honest `<ComingSoon>`. Build-gate caution baked into WLT-20 AC3: **no shell route may render without AAL2** (real-path E2E across every route). Next: `/build WLT-20`.
 
 ## Recently shipped
 
