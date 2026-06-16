@@ -26,7 +26,12 @@ describe("NAV_SECTIONS / SHELL_PATHS integrity", () => {
       "subscriptions",
       "accounts",
     ]);
-    expect(NAV_SECTIONS.filter((s) => s.status === "live").map((s) => s.key)).toEqual(["dashboard", "accounts"]);
+    // WLT-21-1 flipped budget → live (the first section feature to mount).
+    expect(NAV_SECTIONS.filter((s) => s.status === "live").map((s) => s.key)).toEqual([
+      "dashboard",
+      "budget",
+      "accounts",
+    ]);
   });
 
   it("EVERY nav href is covered by SHELL_PATHS (no route left unprotected at the edge)", () => {

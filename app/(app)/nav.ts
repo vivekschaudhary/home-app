@@ -26,7 +26,7 @@ export interface NavSection {
 
 export const NAV_SECTIONS: readonly NavSection[] = [
   { key: "dashboard", label: COPY.nav.dashboard, href: "/dashboard", icon: HomeIcon, status: "live" },
-  { key: "budget", label: COPY.nav.budget, href: "/budget", icon: ChartPieIcon, status: "coming_soon" },
+  { key: "budget", label: COPY.nav.budget, href: "/budget", icon: ChartPieIcon, status: "live" },
   { key: "goals", label: COPY.nav.goals, href: "/goals", icon: FlagIcon, status: "coming_soon" },
   { key: "debt", label: COPY.nav.debt, href: "/debt", icon: ScaleIcon, status: "coming_soon" },
   { key: "investments", label: COPY.nav.investments, href: "/investments", icon: ArrowTrendingUpIcon, status: "coming_soon" },

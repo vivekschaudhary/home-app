@@ -458,3 +458,91 @@ suite("workflow RLS (WLT-12): owner CRUD + immutable runs + composite FKs", () =
     }
   }, 30_000);
 });
+
+// Budgets posture (WLT-21): owner CRUD (like intents/goals — USER-declared
+// config), NOT the financial-table service-role posture. The first user-WRITABLE
+// financial-adjacent table → cross-tenant isolation is load-bearing (story AC12).
+suite("budgets RLS (WLT-21): owner CRUD + cross-tenant deny", () => {
+  let client: Client;
+  beforeAll(async () => {
+    client = new Client({ connectionString: DB_URL });
+    await client.connect();
+  });
+  afterAll(async () => {
+    await client?.end();
+  });
+  async function asUser(uid: string, sql: string, params: unknown[] = []) {
+    await client.query("select set_config('request.jwt.claims', $1, true)", [
+      JSON.stringify({ sub: uid, role: "authenticated" }),
+    ]);
+    await client.query("set local role authenticated");
+    const res = await client.query(sql, params);
+    await client.query("reset role");
+    return res;
+  }
+
+  it("owner sets + reads + updates + clears own budget; cross-tenant denied; soft-delete hidden", async () => {
+    await client.query("begin");
+    try {
+      await client.query("insert into auth.users (id) values ($1),($2) on conflict do nothing", [USER_A, USER_B]);
+
+      const ins = await asUser(
+        USER_A,
+        "insert into budgets (user_id, category, limit_amount) values ($1,'FOOD_AND_DRINK',500) returning id",
+        [USER_A],
+      );
+      const id = ins.rows[0].id;
+
+      const owner = await asUser(USER_A, "select count(*)::int as n from budgets where id=$1", [id]);
+      expect(owner.rows[0].n).toBe(1);
+      const other = await asUser(USER_B, "select count(*)::int as n from budgets where id=$1", [id]);
+      expect(other.rows[0].n).toBe(0);
+
+      const upd = await asUser(USER_A, "update budgets set limit_amount=400 where id=$1", [id]);
+      expect(upd.rowCount).toBe(1);
+      const crossUpd = await asUser(USER_B, "update budgets set limit_amount=1 where id=$1", [id]);
+      expect(crossUpd.rowCount).toBe(0);
+
+      const del = await asUser(USER_A, "update budgets set deleted_at=now() where id=$1", [id]);
+      expect(del.rowCount).toBe(1);
+      const afterClear = await asUser(USER_A, "select count(*)::int as n from budgets where id=$1", [id]);
+      expect(afterClear.rows[0].n).toBe(0);
+
+      // LAST — a failed statement aborts the tx: cross-tenant insert (WITH CHECK) denied.
+      await expect(
+        asUser(USER_B, "insert into budgets (user_id, category, limit_amount) values ($1,'TRAVEL',100)", [USER_A]),
+      ).rejects.toThrow();
+    } finally {
+      await client.query("rollback");
+    }
+  }, 30_000);
+
+  it("enforces exactly-one-limit + active-per-category uniqueness", async () => {
+    await client.query("begin");
+    try {
+      await client.query("insert into auth.users (id) values ($1) on conflict do nothing", [USER_A]);
+
+      // both limits set → the CHECK ((amount is not null) <> (percent is not null)) rejects
+      await expect(
+        asUser(USER_A, "insert into budgets (user_id, category, limit_amount, limit_percent) values ($1,'TRAVEL',100,10)", [
+          USER_A,
+        ]),
+      ).rejects.toThrow();
+    } finally {
+      await client.query("rollback");
+    }
+  }, 30_000);
+
+  it("a second active budget for the same category is rejected (partial unique index)", async () => {
+    await client.query("begin");
+    try {
+      await client.query("insert into auth.users (id) values ($1) on conflict do nothing", [USER_A]);
+      await asUser(USER_A, "insert into budgets (user_id, category, limit_amount) values ($1,'GROCERIES',300)", [USER_A]);
+      await expect(
+        asUser(USER_A, "insert into budgets (user_id, category, limit_percent) values ($1,'GROCERIES',20)", [USER_A]),
+      ).rejects.toThrow();
+    } finally {
+      await client.query("rollback");
+    }
+  }, 30_000);
+});
