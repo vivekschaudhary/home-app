@@ -2,8 +2,10 @@
 id: WLT-20
 bet: WLT-19
 type: story
-status: ready
+status: shipped
 priority: P1
+shipped: 2026-06-15
+shipped_pr: 57
 created: 2026-06-15
 author: PM
 design_link: docs/bets/WLT-19/stories/WLT-20/design.md

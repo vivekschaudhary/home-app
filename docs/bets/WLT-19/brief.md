@@ -1,8 +1,9 @@
 ---
 id: WLT-19
 type: feature
-status: Approved
+status: shipped
 priority: P1
+shipped: 2026-06-15
 parent: FOUNDATION-PRODUCT
 portfolio_stub: false
 depends_on: []
