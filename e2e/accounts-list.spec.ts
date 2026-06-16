@@ -3,7 +3,7 @@ import { Client } from "pg";
 
 // WLT-9/#36 regression — the REAL session→RLS→render path for the accounts list.
 // The prior suite seeded CONNECTIONLESS financial_accounts and asserted the
-// DASHBOARD; it never created an account_connection nor visited /settings/accounts,
+// DASHBOARD; it never created an account_connection nor visited /accounts,
 // so `connectionsList` (the read that showed empty in prod, issue #36) was never
 // exercised end-to-end with a real authenticated session. This is that test.
 // Gated like the other real-stack specs.
@@ -13,7 +13,7 @@ const DB_URL = process.env.SUPABASE_DB_URL;
 test.describe("accounts list renders connected accounts (#36 regression)", () => {
   test.skip(!RUN || !DB_URL, "Set E2E_PASSKEY=1 + SUPABASE_DB_URL + a real Supabase project to run.");
 
-  test("a connected bank + its accounts RENDER on /settings/accounts (not the empty state)", async ({
+  test("a connected bank + its accounts RENDER on /accounts (not the empty state)", async ({
     page,
     context,
   }) => {
@@ -64,7 +64,7 @@ test.describe("accounts list renders connected accounts (#36 regression)", () =>
       );
 
       // The real read path: authenticated RSC → connectionsList → AccountsClient.
-      await page.goto("/settings/accounts");
+      await page.goto("/accounts");
       // It must RENDER the connection + accounts, NOT the empty state (#36).
       await expect(page.getByText("No accounts connected yet")).toHaveCount(0);
       await expect(page.getByText("Test Credit Union").first()).toBeVisible({ timeout: 15_000 });
@@ -73,7 +73,7 @@ test.describe("accounts list renders connected accounts (#36 regression)", () =>
 
       // And it survives a navigate-away-and-back (the exact prod repro for #36).
       await page.goto("/dashboard");
-      await page.goto("/settings/accounts");
+      await page.goto("/accounts");
       await expect(page.getByText("No accounts connected yet")).toHaveCount(0);
       await expect(page.getByText("Test Credit Union").first()).toBeVisible({ timeout: 15_000 });
     } finally {

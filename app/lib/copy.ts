@@ -162,6 +162,10 @@ export const COPY = {
     copyKeyDone: "Key copied",
     intentGroup: "{cluster} — choose one", // {cluster} = the cluster header
     intentDeclared: "Saved. Putting your plan together.",
+    // WLT-20 — the app shell nav
+    openNav: "Open navigation menu",
+    closeNav: "Close navigation menu",
+    accountMenu: "Your account",
   },
   // WLT-11 intent front door (the cluster headers + starter-intent labels live in
   // @wealth/core INTENT_CLUSTERS — they're the taxonomy contract). Screen copy:
@@ -357,5 +361,32 @@ export const COPY = {
   anomalyA11y: {
     callout: "Worth a look: {summary}",
     acked: "Noted. We'll keep an eye out.",
+  },
+  // WLT-20 — the app shell. docs/bets/WLT-19/stories/WLT-20/copy.md verbatim.
+  shell: {
+    brand: "Wealth at Your Fingertips",
+    navLabel: "Main",
+    skipToContent: "Skip to content",
+  },
+  nav: {
+    dashboard: "Dashboard",
+    budget: "Budget & Spending",
+    goals: "Goals",
+    debt: "Debt payoff",
+    investments: "Investments",
+    subscriptions: "Subscriptions",
+    accounts: "Accounts",
+  },
+  account: {
+    security: "Security",
+    signOut: "Sign out",
+  },
+  comingSoon: {
+    badge: "Coming soon",
+    budget: "See where your money goes and set limits that fit your life.",
+    goals: "Set targets for what matters and watch your progress add up.",
+    debt: "A clear plan to pay down what you owe, faster.",
+    investments: "See all your investments in one place, without the spreadsheet.",
+    subscriptions: "Spot every recurring charge and cancel the ones you don't use.",
   },
 } as const;

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePlaidLink } from "react-plaid-link";
 import { AccountCard, Banner, Button, ConfirmDialog, Toast } from "@wealth/ui";
@@ -137,15 +136,11 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
   const hasAccounts = connections.some((c) => c.accounts.length > 0) || connections.length > 0;
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col px-6 py-10">
-      <header className="flex items-center justify-between border-b border-gray-200 pb-4">
-        <h1 ref={headingRef} tabIndex={-1} className="text-lg font-semibold text-gray-900">
-          {COPY.accounts.title}
-        </h1>
-        <Link href="/dashboard" className="text-sm font-medium text-gray-600 underline">
-          Back
-        </Link>
-      </header>
+    <div>
+      {/* WLT-20: rendered inside the app shell — the shell provides nav/chrome. */}
+      <h1 ref={headingRef} tabIndex={-1} className="text-xl font-semibold text-gray-900 outline-none">
+        {COPY.accounts.title}
+      </h1>
 
       <section className="mt-6 space-y-4">
         {error ? <Banner variant="error">{error}</Banner> : null}
@@ -228,7 +223,7 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
       />
 
       {toast ? <Toast message={toast} /> : null}
-    </main>
+    </div>
   );
 }
 

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRef, useState } from "react";
 import {
   removeTotp,
@@ -99,14 +98,10 @@ export function SecurityClient({ initialTotpEnrolled }: { initialTotpEnrolled: b
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-xl flex-col px-6 py-10">
-      <header className="border-b border-gray-200 pb-4">
-        <h1 className="text-lg font-semibold text-gray-900">{COPY.security.title}</h1>
-        <p className="mt-1 text-sm text-gray-600">{COPY.security.subtitle}</p>
-        <Link href="/dashboard" className="mt-2 inline-block text-sm font-medium text-gray-600 underline">
-          ← Dashboard
-        </Link>
-      </header>
+    <div>
+      {/* WLT-20: rendered inside the app shell — nav/back is the shell's job. */}
+      <h1 className="text-xl font-semibold text-gray-900">{COPY.security.title}</h1>
+      <p className="mt-1 text-sm text-gray-600">{COPY.security.subtitle}</p>
 
       {mode === "idle" ? (
         <section className="mt-8 space-y-3">
@@ -204,6 +199,6 @@ export function SecurityClient({ initialTotpEnrolled }: { initialTotpEnrolled: b
         loading={busy}
       />
       {toast ? <Toast message={toast} /> : null}
-    </main>
+    </div>
   );
 }

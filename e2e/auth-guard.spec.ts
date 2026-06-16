@@ -4,10 +4,34 @@ import { expect, test } from "@playwright/test";
 // is enough because these exercise routing, server-side redirects, and the
 // non-revealing error path.
 
-test("unauthenticated /dashboard redirects to /sign-in (server-side AAL2 guard, AC2)", async ({
+// WLT-20 AC3 (load-bearing): NO shell route may render without AAL2. Every
+// route in the (app) group + the moved Accounts URL is asserted here, in normal
+// CI — a regression that drops the gate (or middleware) fails the build.
+const SHELL_ROUTES = [
+  "/dashboard",
+  "/accounts",
+  "/settings/security",
+  "/budget",
+  "/goals",
+  "/debt",
+  "/investments",
+  "/subscriptions",
+];
+
+for (const route of SHELL_ROUTES) {
+  test(`unauthenticated ${route} redirects to /sign-in (shell AAL2 gate, AC3)`, async ({ page }) => {
+    await page.goto(route);
+    await expect(page).toHaveURL(/\/sign-in/);
+  });
+}
+
+test("the old /settings/accounts URL redirects to /accounts (deep-link preserved, AC3)", async ({
   page,
 }) => {
-  await page.goto("/dashboard");
+  // Unauthenticated, so the destination then bounces to /sign-in — the point is
+  // the path rewrite survived the move (it does not 404).
+  await page.goto("/settings/accounts");
+  await expect(page).not.toHaveURL(/\/settings\/accounts/);
   await expect(page).toHaveURL(/\/sign-in/);
 });
 
