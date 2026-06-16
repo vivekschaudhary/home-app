@@ -82,7 +82,8 @@ _If post-merge bugs are found, story is re-opened and fixes live under `fixes/`.
 
 ### Issues
 - [2026-06-15] [PM] **Middleware protectedPaths drift** — severity: low — owner: Engineer — status: open — area: auth — prefer a prefix/helper so a new section is auto-protected (arch Issue).
+- [2026-06-16] [Engineer] **The authenticated-E2E commit (`e3c09d3`) merged without a fresh Codex pass** — severity: low (test-only diff: `e2e/shell-flow.spec.ts` + the four reframe-broken specs re-pointed at new shell helpers; no app/runtime code) — status: **resolved** — area: process — cause: merged on "codex is clear", which had cleared the *prior* commit (`4507e1b`); the follow-up commit answering the review BLOCKER was never re-reviewed. Caught by the user the next morning. **Fix:** Codex reviewed `e3c09d3` post-merge → **approved**. **Lesson:** when a review BLOCKER is answered by a *new* commit, the clear must name that commit — don't merge until the re-review covers the actual HEAD.
 
 ---
 
-_Story closed: <date>, brief link: docs/bets/WLT-19/brief.md_
+_Story closed: 2026-06-16, brief link: docs/bets/WLT-19/brief.md_
