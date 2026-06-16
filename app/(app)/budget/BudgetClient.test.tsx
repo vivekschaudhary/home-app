@@ -99,6 +99,12 @@ describe("BudgetClient", () => {
     expect((screen.getByLabelText("Monthly budget for Travel") as HTMLInputElement).value).toBe("0");
   });
 
+  it("'Use this' prefills the amount editor with the recommendation", () => {
+    render(<BudgetClient initial={VIEW} />);
+    fireEvent.click(screen.getByRole("button", { name: "Use this" })); // Food (recommended 500)
+    expect((screen.getByLabelText("Monthly budget for Food And Drink") as HTMLInputElement).value).toBe("500");
+  });
+
   it("the add-category picker adds a budgetable row", () => {
     render(<BudgetClient initial={VIEW} />);
     fireEvent.click(screen.getByRole("button", { name: "Add a category to budget" }));

@@ -85,6 +85,16 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
     setRowError(null);
   }
 
+  // "Use this" — one tap to adopt the recommendation: open the editor with the
+  // recommended dollar amount prefilled (design.md / copy.md useThis).
+  function useRecommended(row: BudgetRow) {
+    if (row.recommended == null) return;
+    setEditing(row.category);
+    setDraftType("amount");
+    setDraftValue(String(row.recommended));
+    setRowError(null);
+  }
+
   async function save(category: string) {
     const num = Number(draftValue.trim());
     if (!draftValue.trim() || Number.isNaN(num)) {
@@ -184,7 +194,22 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
               </td>
               <td className="block py-0.5 text-gray-600 md:table-cell md:py-3 md:pr-4">
                 <span className="mr-2 text-xs text-gray-500 md:hidden">{C.colRecommended}</span>
-                {row.recommended != null ? money(row.recommended) : <span title={C.coldStartNote}>{C.coldStartDash}</span>}
+                {row.recommended != null ? (
+                  <span className="inline-flex items-center gap-2">
+                    {money(row.recommended)}
+                    {editing !== row.category ? (
+                      <button
+                        type="button"
+                        onClick={() => useRecommended(row)}
+                        className="text-xs font-medium text-gray-500 underline"
+                      >
+                        {C.useThis}
+                      </button>
+                    ) : null}
+                  </span>
+                ) : (
+                  <span title={C.coldStartNote}>{C.coldStartDash}</span>
+                )}
               </td>
               <td className="block py-0.5 text-gray-900 md:table-cell md:py-3 md:pr-4">
                 <span className="mr-2 text-xs text-gray-500 md:hidden">{C.colActual}</span>

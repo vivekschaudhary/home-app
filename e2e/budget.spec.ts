@@ -100,9 +100,26 @@ test.describe("budget & spending — recommended/actual render + set + persist (
       await expect(page.getByText("Budget saved.")).toBeVisible({ timeout: 15_000 });
       await expect(page.getByText(/\$20\.00 over/)).toBeVisible();
 
-      // Reload → the budget PERSISTED (real route → RLS write → re-read).
+      // Reload → the dollar budget PERSISTED (real route → RLS write → re-read).
       await page.goto("/budget");
       await expect(page.getByText(/\$20\.00 over/)).toBeVisible({ timeout: 15_000 });
+
+      // Switch the SAME row to a PERCENT budget: 50% of the typical monthly spend
+      // (median of trailing totals 400 + 600 = $500) → a $250 cap → over by $270.
+      await page.getByRole("button", { name: "Edit" }).click();
+      await page.getByRole("button", { name: "%" }).click();
+      const pct = page.getByLabel("Monthly budget for Food And Drink");
+      await pct.fill("50");
+      // the inline resolved cap (effective-cap path)
+      await expect(page.getByText(/50% of your typical monthly spending ≈ \$250\.00\/mo/)).toBeVisible();
+      await page.getByRole("button", { name: "Save" }).click();
+      await expect(page.getByText("Budget saved.")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText(/\$270\.00 over/)).toBeVisible(); // 520 vs the $250 cap
+
+      // Reload → the PERCENT-backed state persists through session → route → RLS → re-read.
+      await page.goto("/budget");
+      await expect(page.getByText("50%")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText(/\$270\.00 over/)).toBeVisible();
     } finally {
       await db.end();
     }
