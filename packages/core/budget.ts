@@ -29,20 +29,32 @@ export const PLAID_PRIMARY_CATEGORIES = [
   "RENT_AND_UTILITIES",
 ] as const;
 
+// Documented / legacy category names that ALSO appear in stored data: the Plaid
+// mapper falls back to the legacy `category[0]` taxonomy when the personal-finance
+// category is absent (packages/aggregation/plaid/map.ts), and the product's own
+// fixtures + the user's enumerated list use these. So the real taxonomy is a
+// union — budget against both.
+const DOCUMENTED_EXTRA_CATEGORIES = ["GROCERIES", "INSURANCE"] as const;
+
 // What the "add a category" picker offers: spendable categories only — income +
-// transfers aren't spending, so they're never budgetable.
-export const BUDGETABLE_CATEGORIES: readonly string[] = PLAID_PRIMARY_CATEGORIES.filter(
-  (c) => c !== "INCOME" && c !== "TRANSFER_IN" && c !== "TRANSFER_OUT",
-);
+// transfers aren't spending — across BOTH the Plaid primary taxonomy and the
+// documented/legacy names (so GROCERIES + INSURANCE are offerable).
+export const BUDGETABLE_CATEGORIES: readonly string[] = [
+  ...PLAID_PRIMARY_CATEGORIES.filter((c) => c !== "INCOME" && c !== "TRANSFER_IN" && c !== "TRANSFER_OUT"),
+  ...DOCUMENTED_EXTRA_CATEGORIES,
+];
 
 // Essentials get their typical spend as the recommendation; discretionary
-// categories get a modest trim (recommend spending a little less). Keyed on the
-// real Plaid primaries (Engineer-tunable — see story DRI).
+// categories get a modest trim (recommend spending a little less). Covers BOTH
+// taxonomies so groceries — whether stored as FOOD_AND_DRINK or GROCERIES — and
+// insurance are never wrongly trimmed as discretionary.
 const ESSENTIAL_CATEGORIES = new Set([
   "RENT_AND_UTILITIES",
   "LOAN_PAYMENTS",
   "MEDICAL",
   "FOOD_AND_DRINK",
+  "GROCERIES",
+  "INSURANCE",
   "TRANSPORTATION",
 ]);
 

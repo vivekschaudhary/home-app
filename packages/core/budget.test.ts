@@ -61,6 +61,22 @@ describe("computeRecommendedBudgets — median of trailing monthly totals", () =
     const r = computeRecommendedBudgets([tx("2026-06-05", 500, "TRAVEL")], ASOF);
     expect(r.has("TRAVEL")).toBe(false);
   });
+
+  it("treats the documented GROCERIES + INSURANCE categories as untrimmed essentials", () => {
+    const r = computeRecommendedBudgets(
+      [
+        // GROCERIES (documented essential — legacy taxonomy): 300/300 → median 300, untrimmed
+        tx("2026-04-04", 300, "GROCERIES"),
+        tx("2026-05-04", 300, "GROCERIES"),
+        // INSURANCE (documented essential): 100/100 → median 100, untrimmed
+        tx("2026-04-06", 100, "INSURANCE"),
+        tx("2026-05-06", 100, "INSURANCE"),
+      ],
+      ASOF,
+    );
+    expect(r.get("GROCERIES")).toBe(300); // NOT 270 — essential, not trimmed
+    expect(r.get("INSURANCE")).toBe(100);
+  });
 });
 
 describe("resolvePercentCap + computeTypicalMonthlyTotal", () => {
@@ -133,5 +149,10 @@ describe("BUDGETABLE_CATEGORIES", () => {
     expect(BUDGETABLE_CATEGORIES).not.toContain("INCOME");
     expect(BUDGETABLE_CATEGORIES).not.toContain("TRANSFER_IN");
     expect(BUDGETABLE_CATEGORIES).not.toContain("TRANSFER_OUT");
+  });
+
+  it("offers the documented categories the picker must surface (GROCERIES, INSURANCE)", () => {
+    expect(BUDGETABLE_CATEGORIES).toContain("GROCERIES");
+    expect(BUDGETABLE_CATEGORIES).toContain("INSURANCE");
   });
 });
