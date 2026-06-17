@@ -162,6 +162,55 @@ describe("BudgetClient", () => {
     expect(screen.getAllByText("$520.00").length).toBeGreaterThanOrEqual(2);
   });
 
+  it("drill-down loading → empty state", async () => {
+    let resolve!: (v: { ok: true; items: unknown[]; total: number }) => void;
+    fetchCategoryTransactionsMock.mockReturnValue(new Promise((r) => { resolve = r; }));
+    render(<BudgetClient initial={VIEW} />);
+    fireEvent.click(screen.getByRole("button", { name: /Show the transactions in Food And Drink this month/ }));
+    expect(screen.getByText("Loading your transactions…")).toBeTruthy(); // loading state
+    resolve({ ok: true, items: [], total: 0 });
+    await waitFor(() => expect(screen.getByText("No transactions in Food And Drink this month.")).toBeTruthy()); // empty state
+  });
+
+  it("drill-down error state shows a banner + retry that refetches", async () => {
+    fetchCategoryTransactionsMock.mockResolvedValueOnce({ ok: false });
+    render(<BudgetClient initial={VIEW} />);
+    fireEvent.click(screen.getByRole("button", { name: /Show the transactions in Food And Drink this month/ }));
+    await waitFor(() => expect(screen.getByText("We couldn't load these just now — try again.")).toBeTruthy());
+    // retry refetches (this time succeeds)
+    fetchCategoryTransactionsMock.mockResolvedValueOnce({
+      ok: true,
+      items: [{ occurredOn: "2026-06-10", merchant: "Costco", description: "x", amount: 520 }],
+      total: 520,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(screen.getByText("Costco")).toBeTruthy());
+  });
+
+  it("no drill affordance for a category with no spend this month", () => {
+    const view: BudgetViewDTO = {
+      rows: [
+        {
+          category: "INSURANCE",
+          label: "Insurance",
+          recommended: null,
+          actualThisMonth: 0,
+          budget: { type: "amount", amount: 100 },
+          effectiveCap: 100,
+          status: "under",
+        },
+      ],
+      asOfMonth: "2026-06",
+      typicalMonthlyTotal: null,
+      hasData: true,
+      series: {},
+      seriesMonths: [],
+    };
+    render(<BudgetClient initial={view} />);
+    expect(screen.queryByRole("button", { name: /Show the transactions in Insurance/ })).toBeNull();
+    expect(screen.getByText("$0.00")).toBeTruthy(); // the amount is plain text, not a button
+  });
+
   it("the add-category picker adds a budgetable row", () => {
     render(<BudgetClient initial={VIEW} />);
     fireEvent.click(screen.getByRole("button", { name: "Add a category to budget" }));
