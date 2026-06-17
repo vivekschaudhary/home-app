@@ -68,6 +68,7 @@ jobs:
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/0007_metrics.sql
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/0008_recap.sql
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/0009_anomalies.sql
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/0010_budgets.sql
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
             -c "grant select, insert, update, delete on all tables in schema public to authenticated;"
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
@@ -92,7 +93,11 @@ jobs:
             "/api/auth/webauthn/register/verify/route",
             "/api/auth/webauthn/authenticate/options/route",
             "/api/auth/webauthn/authenticate/verify/route",
-            "/dashboard/page",
+            "/(app)/dashboard/page",
+            "/(app)/accounts/page",
+            "/(app)/settings/security/page",
+            "/(app)/budget/page",
+            "/api/budget/route",
             "/sign-in/page",
             "/sign-up/page",
             "/unsupported/page",

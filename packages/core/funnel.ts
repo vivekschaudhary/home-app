@@ -30,6 +30,12 @@ export const FUNNEL_EVENTS = {
   // the quiet escape. The "Review it" action reuses action_completed (WAWU).
   ANOMALY_SURFACED: "anomaly_surfaced",
   ANOMALY_DISMISSED: "anomaly_dismissed",
+  // Budget (WLT-21) — ADDITIVE; the budget surface's engagement signal.
+  // budget_viewed = a visit to /budget; budget_set / budget_cleared = the user
+  // setting or removing a category cap (the "active budget engagement" metric).
+  BUDGET_VIEWED: "budget_viewed",
+  BUDGET_SET: "budget_set",
+  BUDGET_CLEARED: "budget_cleared",
 } as const;
 
 export type FunnelEvent = (typeof FUNNEL_EVENTS)[keyof typeof FUNNEL_EVENTS];

@@ -32,12 +32,14 @@ beforeAll(() => {
       dispatchEvent: vi.fn(),
     }),
   });
-  // @ts-expect-error — minimal ResizeObserver polyfill
-  global.ResizeObserver = class {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  };
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
 });
 
 afterEach(() => {

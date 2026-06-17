@@ -1,0 +1,53 @@
+// WLT-21-1 — browser-side calls to the budget routes. try/catch, discriminated
+// returns, no exceptions thrown (the aggregation-client.ts pattern).
+
+import type { BudgetRow } from "@wealth/core";
+
+export interface BudgetViewDTO {
+  rows: BudgetRow[];
+  asOfMonth: string;
+  typicalMonthlyTotal: number | null;
+  hasData: boolean;
+}
+
+export type BudgetError = "invalid" | "server" | "network";
+
+/** Reconcile-on-mount read (the #36 discipline — never trust stale props forever). */
+export async function fetchBudget(): Promise<{ ok: true; view: BudgetViewDTO } | { ok: false }> {
+  try {
+    const res = await fetch("/api/budget", { headers: { accept: "application/json" } });
+    if (!res.ok) return { ok: false };
+    const view = (await res.json()) as BudgetViewDTO;
+    return { ok: true, view };
+  } catch {
+    return { ok: false };
+  }
+}
+
+export async function saveBudget(input: {
+  category: string;
+  limitAmount?: number;
+  limitPercent?: number;
+}): Promise<{ ok: true } | { ok: false; error: BudgetError }> {
+  try {
+    const res = await fetch("/api/budget", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) return { ok: false, error: res.status === 400 ? "invalid" : "server" };
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "network" };
+  }
+}
+
+export async function clearBudget(category: string): Promise<{ ok: true } | { ok: false; error: BudgetError }> {
+  try {
+    const res = await fetch(`/api/budget?category=${encodeURIComponent(category)}`, { method: "DELETE" });
+    if (!res.ok) return { ok: false, error: res.status === 400 ? "invalid" : "server" };
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "network" };
+  }
+}
