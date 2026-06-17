@@ -131,6 +131,44 @@ export function computeMonthlySpending(txns: readonly SpendingTxn[], asOf: strin
   return out;
 }
 
+/** The ordered 'YYYY-MM' keys for the year-spread chart: oldest → current (so far). */
+export function seriesMonthKeys(asOf: string, months = 12): string[] {
+  const cur = asOf.slice(0, 7);
+  // trailingMonths gives the months BEFORE cur, newest-first → reverse + append cur.
+  return [...trailingMonths(cur, months - 1)].reverse().concat(cur);
+}
+
+/**
+ * Per category, debit spend in each of the trailing `months` calendar months
+ * (index 0 = oldest … last = current month "so far"). Real zeros for gap/pre-
+ * history months — never fabricated. (WLT-21-2 year-spread.)
+ */
+export function computeMonthlySeries(
+  txns: readonly SpendingTxn[],
+  asOf: string,
+  months = 12,
+): Map<string, number[]> {
+  const keys = seriesMonthKeys(asOf, months);
+  const index = new Map(keys.map((k, i) => [k, i]));
+  const curMonth = asOf.slice(0, 7);
+  const out = new Map<string, number[]>();
+  for (const t of txns) {
+    if (t.direction !== "debit") continue;
+    const m = t.occurredOn.slice(0, 7);
+    const i = index.get(m);
+    if (i === undefined) continue;
+    if (m === curMonth && t.occurredOn > asOf) continue; // current month = so far
+    const key = t.category ?? "";
+    let arr = out.get(key);
+    if (!arr) {
+      arr = new Array(months).fill(0);
+      out.set(key, arr);
+    }
+    arr[i] = round2(arr[i] + t.amount);
+  }
+  return out;
+}
+
 /**
  * Recommended budget per raw category, from the user's OWN history: the median of
  * the category's monthly totals across the trailing window, trimmed 10% for

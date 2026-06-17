@@ -6,10 +6,12 @@ import type { BudgetViewDTO } from "@/app/lib/budget-client";
 const fetchBudgetMock = vi.fn();
 const saveBudgetMock = vi.fn();
 const clearBudgetMock = vi.fn();
+const recordSpreadViewedMock = vi.fn();
 vi.mock("@/app/lib/budget-client", () => ({
   fetchBudget: () => fetchBudgetMock(),
   saveBudget: (i: unknown) => saveBudgetMock(i),
   clearBudget: (c: unknown) => clearBudgetMock(c),
+  recordSpreadViewed: () => recordSpreadViewedMock(),
 }));
 
 import { BudgetClient } from "./BudgetClient";
@@ -38,6 +40,12 @@ const VIEW: BudgetViewDTO = {
   asOfMonth: "2026-06",
   typicalMonthlyTotal: 1500,
   hasData: true,
+  // FOOD has a 12-month series (expandable); TRAVEL has none (no toggle).
+  series: { FOOD_AND_DRINK: [100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 480, 520] },
+  seriesMonths: [
+    "2025-07", "2025-08", "2025-09", "2025-10", "2025-11", "2025-12",
+    "2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06",
+  ],
 };
 
 beforeEach(() => {
@@ -49,6 +57,7 @@ afterEach(() => {
   fetchBudgetMock.mockReset();
   saveBudgetMock.mockReset();
   clearBudgetMock.mockReset();
+  recordSpreadViewedMock.mockReset();
 });
 
 describe("BudgetClient", () => {
@@ -62,7 +71,11 @@ describe("BudgetClient", () => {
   });
 
   it("honest empty state when there's no data", () => {
-    render(<BudgetClient initial={{ rows: [], asOfMonth: "2026-06", typicalMonthlyTotal: null, hasData: false }} />);
+    render(
+      <BudgetClient
+        initial={{ rows: [], asOfMonth: "2026-06", typicalMonthlyTotal: null, hasData: false, series: {}, seriesMonths: [] }}
+      />,
+    );
     expect(screen.getByText("Nothing to budget yet")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Connect an account" })).toBeTruthy();
   });
@@ -103,6 +116,29 @@ describe("BudgetClient", () => {
     render(<BudgetClient initial={VIEW} />);
     fireEvent.click(screen.getByRole("button", { name: "Use this" })); // Food (recommended 500)
     expect((screen.getByLabelText("Monthly budget for Food And Drink") as HTMLInputElement).value).toBe("500");
+  });
+
+  it("expands a category's year spread (chart + sr data table); records the view; TRAVEL has no toggle", async () => {
+    render(<BudgetClient initial={VIEW} />);
+    // FOOD has a series → a "View the year" toggle; TRAVEL has none.
+    const toggles = screen.getAllByRole("button", { name: /Show the last 12 months/ });
+    expect(toggles).toHaveLength(1); // only FOOD
+    fireEvent.click(toggles[0]);
+    await waitFor(() => expect(recordSpreadViewedMock).toHaveBeenCalledTimes(1));
+    expect(screen.getByText("Monthly Food And Drink spend — last 12 months")).toBeTruthy();
+    // the screen-reader equivalent carries the real current-month value, "so far"
+    expect(screen.getByText("June (this month so far): $520.00")).toBeTruthy(); // sr-only data table
+    expect(screen.getAllByText("July: $100.00").length).toBeGreaterThanOrEqual(1); // sr table + the SVG <title>
+    // responsive month labels: single-initial (phone) + 3-letter (desktop) both present (AC2/AC6)
+    expect(screen.getAllByTestId("ys-initial")).toHaveLength(12);
+    expect(screen.getAllByTestId("ys-short")).toHaveLength(12);
+    expect(screen.getAllByTestId("ys-short").map((e) => e.textContent)).toContain("Jun"); // current month, 3-letter
+    expect(screen.getAllByTestId("ys-initial").map((e) => e.textContent)).toContain("J"); // single-initial
+    // collapse → the panel is gone; re-expanding does not re-fire the event
+    fireEvent.click(screen.getByRole("button", { name: /Hide the last 12 months/ }));
+    expect(screen.queryByText("Monthly Food And Drink spend — last 12 months")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Show the last 12 months/ }));
+    expect(recordSpreadViewedMock).toHaveBeenCalledTimes(1); // once per category per load
   });
 
   it("the add-category picker adds a budgetable row", () => {

@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   BUDGETABLE_CATEGORIES,
   buildBudgetRows,
+  computeMonthlySeries,
   computeMonthlySpending,
   computeRecommendedBudgets,
   computeTypicalMonthlyTotal,
   resolvePercentCap,
+  seriesMonthKeys,
   type SavedBudget,
 } from "./budget";
 import type { SpendingTxn } from "./recap";
@@ -36,6 +38,40 @@ describe("computeMonthlySpending — this month so far", () => {
   it("buckets a null category under '' (→ 'Other' at display)", () => {
     const m = computeMonthlySpending([tx("2026-06-02", 30, null)], ASOF);
     expect(m.get("")).toBe(30);
+  });
+});
+
+describe("seriesMonthKeys + computeMonthlySeries — the year spread", () => {
+  it("seriesMonthKeys is 12 ordered months ending at the current one", () => {
+    const keys = seriesMonthKeys(ASOF); // ASOF = 2026-06-15 → current 2026-06
+    expect(keys).toHaveLength(12);
+    expect(keys[0]).toBe("2025-07"); // 11 months before
+    expect(keys[11]).toBe("2026-06"); // current month last
+  });
+
+  it("buckets debits into the right month; current month is the last index, 'so far'", () => {
+    const s = computeMonthlySeries(
+      [
+        tx("2025-07-10", 100, "FOOD_AND_DRINK"), // oldest (index 0)
+        tx("2026-05-10", 200, "FOOD_AND_DRINK"), // index 10
+        tx("2026-06-03", 50, "FOOD_AND_DRINK"), // current (index 11), counted
+        tx("2026-06-20", 999, "FOOD_AND_DRINK"), // after asOf → excluded (so far)
+        tx("2026-06-04", 300, "FOOD_AND_DRINK", "credit"), // credit → excluded
+      ],
+      ASOF,
+    );
+    const arr = s.get("FOOD_AND_DRINK")!;
+    expect(arr).toHaveLength(12);
+    expect(arr[0]).toBe(100);
+    expect(arr[10]).toBe(200);
+    expect(arr[11]).toBe(50); // current month so far — the 999 is excluded
+    // gap months are REAL zeros, never fabricated
+    expect(arr[5]).toBe(0);
+  });
+
+  it("a category outside the 12-month window produces no series entry", () => {
+    const s = computeMonthlySeries([tx("2024-01-10", 500, "TRAVEL")], ASOF);
+    expect(s.has("TRAVEL")).toBe(false);
   });
 });
 

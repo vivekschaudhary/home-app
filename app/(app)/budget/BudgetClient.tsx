@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { BUDGETABLE_CATEGORIES, type BudgetRow, humanizeCategory } from "@wealth/core";
 import { Banner, Button, TextField, Toast } from "@wealth/ui";
 import { COPY } from "@/app/lib/copy";
-import { type BudgetViewDTO, clearBudget, fetchBudget, saveBudget } from "@/app/lib/budget-client";
+import { type BudgetViewDTO, clearBudget, fetchBudget, recordSpreadViewed, saveBudget } from "@/app/lib/budget-client";
+import { YearSpread } from "./YearSpread";
 
 const C = COPY.budget;
 
@@ -33,6 +34,8 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
   const [toast, setToast] = useState<string | null>(null);
   const [added, setAdded] = useState<string[]>([]); // ephemeral picker-added (until saved)
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [openYears, setOpenYears] = useState<Set<string>>(new Set()); // expanded year-spreads (WLT-21-2)
+  const spreadViewed = useRef<Set<string>>(new Set()); // fire budget_spread_viewed once per category per load
 
   // Reconcile with live server state on mount (#36 — force-dynamic page can hand a
   // stale prefetch; trusting initial props forever is the bug).
@@ -146,6 +149,26 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
     setRowError(null);
   }
 
+  // WLT-21-2 — expand/collapse a category's 12-month spread; record the view once.
+  function toggleYear(category: string) {
+    setOpenYears((prev) => {
+      const next = new Set(prev);
+      if (next.has(category)) {
+        next.delete(category);
+      } else {
+        next.add(category);
+        if (!spreadViewed.current.has(category)) {
+          spreadViewed.current.add(category);
+          recordSpreadViewed();
+        }
+      }
+      return next;
+    });
+  }
+
+  const C_Y = COPY.budgetYear;
+  const A_Y = COPY.budgetYearA11y;
+
   function statusBadge(row: BudgetRow) {
     if (row.status === "none" || row.effectiveCap == null) return null;
     const remaining = round2(row.effectiveCap - row.actualThisMonth);
@@ -187,10 +210,28 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={row.category} className="block border-b border-gray-200 py-3 md:table-row md:py-0">
+          {rows.map((row) => {
+            const series = view.series[row.category];
+            const hasSeries = Array.isArray(series) && series.some((v) => v > 0);
+            const yearOpen = openYears.has(row.category);
+            const panelId = `year-${row.category}`;
+            return (
+            <Fragment key={row.category}>
+            <tr className="block border-b border-gray-200 py-3 md:table-row md:py-0">
               <td className="block py-0.5 text-base font-medium text-gray-900 md:table-cell md:py-3 md:pr-4 md:text-sm md:font-normal">
                 {row.label}
+                {hasSeries ? (
+                  <button
+                    type="button"
+                    onClick={() => toggleYear(row.category)}
+                    aria-expanded={yearOpen}
+                    aria-controls={panelId}
+                    aria-label={fill(yearOpen ? A_Y.toggleCollapse : A_Y.toggle, { category: row.label })}
+                    className="ml-2 align-middle text-xs font-normal text-gray-500 underline"
+                  >
+                    {yearOpen ? C_Y.hideYear : C_Y.viewYear}
+                  </button>
+                ) : null}
               </td>
               <td className="block py-0.5 text-gray-600 md:table-cell md:py-3 md:pr-4">
                 <span className="mr-2 text-xs text-gray-500 md:hidden">{C.colRecommended}</span>
@@ -308,7 +349,21 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
                 )}
               </td>
             </tr>
-          ))}
+            {hasSeries && yearOpen ? (
+              <tr className="block md:table-row">
+                <td id={panelId} colSpan={4} className="block pb-3 md:table-cell">
+                  <YearSpread
+                    label={row.label}
+                    points={series}
+                    months={view.seriesMonths}
+                    cap={row.effectiveCap}
+                  />
+                </td>
+              </tr>
+            ) : null}
+            </Fragment>
+            );
+          })}
         </tbody>
       </table>
 

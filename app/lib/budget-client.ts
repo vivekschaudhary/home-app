@@ -8,6 +8,8 @@ export interface BudgetViewDTO {
   asOfMonth: string;
   typicalMonthlyTotal: number | null;
   hasData: boolean;
+  series: Record<string, number[]>;
+  seriesMonths: string[];
 }
 
 export type BudgetError = "invalid" | "server" | "network";
@@ -39,6 +41,15 @@ export async function saveBudget(input: {
     return { ok: true };
   } catch {
     return { ok: false, error: "network" };
+  }
+}
+
+/** Fire-and-forget: record that the user expanded a category's year spread (WLT-21-2). */
+export function recordSpreadViewed(): void {
+  try {
+    void fetch("/api/budget/spread-viewed", { method: "POST", keepalive: true }).catch(() => {});
+  } catch {
+    /* non-blocking — instrumentation must never break the UI */
   }
 }
 

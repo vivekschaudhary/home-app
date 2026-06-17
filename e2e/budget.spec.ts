@@ -120,6 +120,14 @@ test.describe("budget & spending — recommended/actual render + set + persist (
       await page.goto("/budget");
       await expect(page.getByText("50%")).toBeVisible({ timeout: 15_000 });
       await expect(page.getByText(/\$270\.00 over/)).toBeVisible();
+
+      // WLT-21-2: expand the category's year spread → the 12-month panel renders
+      // from the REAL series (it only appears when the owner-scoped read produced
+      // ≥1 month of spend — the RSC→RLS→render path).
+      await page.getByRole("button", { name: /Show the last 12 months/ }).first().click();
+      await expect(page.getByText("Monthly Food And Drink spend — last 12 months")).toBeVisible();
+      // the visible "Most: $X" label proves the panel drew the REAL series (max of 400/600/520)
+      await expect(page.getByText("Most: $600.00")).toBeVisible();
     } finally {
       await db.end();
     }

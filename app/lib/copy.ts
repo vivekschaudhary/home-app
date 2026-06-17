@@ -442,4 +442,21 @@ export const COPY = {
     addCategory: "Add a category to budget",
     saveStatus: "Budget saving status",
   },
+  // WLT-21-2 — the year-spread view. docs/bets/WLT-21/stories/WLT-21-2/copy.md verbatim.
+  budgetYear: {
+    viewYear: "View the year",
+    hideYear: "Hide",
+    caption: "Monthly {category} spend — last 12 months",
+    soFar: "so far",
+    maxLabel: "Most: {amount}",
+    capLegend: "Your budget: {amount}/mo",
+    noHistory: "Not enough history yet to show the year.",
+  },
+  budgetYearA11y: {
+    toggle: "Show the last 12 months of {category} spend",
+    toggleCollapse: "Hide the last 12 months of {category} spend",
+    seriesCaption: "{category} — monthly spend, last 12 months",
+    monthAmount: "{month}: {amount}",
+    currentMonth: "{month} (this month so far): {amount}",
+  },
 } as const;
