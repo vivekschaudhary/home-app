@@ -2,7 +2,7 @@
 id: WLT-22-2
 bet: WLT-22
 type: story
-status: ready
+status: Approved
 priority: P1
 created: 2026-06-17
 author: PM
@@ -10,7 +10,7 @@ design_link: docs/bets/WLT-22/stories/WLT-22-2/design.md
 copy_link: docs/bets/WLT-22/stories/WLT-22-2/copy.md
 area_tags: [frontend, spending, budgets, data, security]
 dependencies:
-  - WLT-22-1   # shipped — the drill-down this correction flow lives inside
+  - WLT-22-1 # shipped — the drill-down this correction flow lives inside
 ---
 
 # WLT-22-2 — Recategorize a transaction (correct the number, and it sticks)
@@ -62,6 +62,7 @@ _Auto-populated as PRs open._
 _Engineer: **unit** (the `effectiveCategory` resolver — saved wins; untouched → Plaid; `null` → "Other"; `kind` read by the recommendation), **integration (read layer)** (budget/recap/anomaly all reflect a saved assignment consistently — the AC4 reconcile: source drops, destination rises, drill total still equals the row), **component (jsdom)** (recategorize → POST `{dedupKey, categoryId}` + the item updates; create-category → validation empty/duplicate + POST; saving/success/discriminated-error states; focus into/out of the picker; `transaction_recategorized` + `category_created` once each), **migration** (budgets `category` → `category_id` maps; seed from distinct provider categories). Codex: the **RLS suite** (`supabase/tests/rls.test.ts` — both tables: owner CRUD, cross-tenant denied, composite-FK blocks a forged cross-tenant `category_id`, hard-delete) + the **gated real-path E2E** (`E2E_PASSKEY=1`): seed transactions → recategorize one (incl. creating a category to split a group) → reload → budget + drill reflect the saved category through session→RLS→render; **re-insert a CDC revision** of that transaction → the assignment **survives** (AC2); and a **second user cannot read/affect** the first's categories/assignments (AC8)._
 
 Tags applied to test files:
+
 - `regression: false`
 - `e2e: true`
 
@@ -72,18 +73,21 @@ _If post-merge bugs are found, story is re-opened and fixes live under `fixes/`.
 ## DRI Log
 
 ### Decisions
+
 - [2026-06-17] [PM] **Slice WLT-22-2 = recategorize + custom categories (the spine); DEFER merchant rules to WLT-22-3** — rationale: this is the smallest increment that fully solves the headline complaint (split a coarse group) AND lands the load-bearing spine (saved-`dedup_key` assignment + the one shared resolver + budget migration); merchant-rule automation is a clean, lower-risk follow-on on top of the same spine — area: scope — alternatives: minimal recategorize-into-existing-only (rejected — can't split Rent/Utilities, the literal complaint), full correction layer incl. rules in one story (rejected by one-smallest-slice discipline + review/merge risk; product owner agreed to split per recommendation) — reversibility: easy
 - [2026-06-17] [PM] **Custom-category creation is IN this slice; category management (rename/delete/merge) is OUT** — rationale: creating a category is what enables the split (core value); managing them is secondary and delete-semantics is still an open architecture question — create + assign now, manage later — area: scope — reversibility: easy
 - [2026-06-17] [PM] **The budget→`category_id` migration ships in this slice** — rationale: once budget reads through the resolver, the old provider-string budgets must map or they break; it's load-bearing for "WLT-21 budgets carry over" (AC9), not deferrable — area: data — reversibility: medium
 - [2026-06-17] [PM] **`category_rules` table NOT created this slice** — rationale: keep the migration to the two tables this story needs; the rules table + its write paths are WLT-22-3, and `transaction_categories` is already shaped to accept rule-written rows later — area: scope/data — reversibility: easy
 
 ### Risks
+
 - [2026-06-17] [PM] **A category read bypasses the shared resolver → surfaces disagree** — likelihood: medium — impact: high — mitigation: the single `effectiveCategory` helper wired into all three readers + a guard test that no grouping consumer reads `transactions.category` raw (the brief's #1 guardrail) — area: correctness
 - [2026-06-17] [PM] **The budget migration mis-maps a WLT-21 budget → a user loses a budget they set** — likelihood: low — impact: medium — mitigation: seed categories from the exact distinct provider strings present, map `budgets.category` 1:1 to the seeded row, migration test asserts every existing budget resolves to a category — area: data
 - [2026-06-17] [PM] **A correction ripples confusingly across recap/anomaly (past numbers shift)** — likelihood: medium — impact: medium — mitigation: the shift is intended + consistent (one resolver, no cached category); the design's live reconcile makes it legible; stored anomalies keep their point-in-time snapshot (accepted edge per architecture) — area: ux/correctness
 - [2026-06-17] [PM] **Scope creep toward rules/management** — likelihood: medium — impact: medium — mitigation: the design + copy explicitly avoid implying auto-apply; management deferred; the "don't over-build" brief guardrail — area: scope
 
 ### Issues
+
 - [2026-06-17] [PM] **Delete-a-category / delete-an-assignment semantics** — severity: low — owner: PM/Designer — status: deferred — area: product — not in this slice (create + assign only); resolve when category management is storied.
 - [2026-06-17] [PM] **Seeded-category essentials mapping** — severity: low — owner: Engineer — status: open — area: product — seed `category.kind` from the WLT-21 essential allowlist so `computeRecommendedBudgets` keeps working on the resolved categories.
 
