@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BudgetViewDTO } from "@/app/lib/budget-client";
 
@@ -7,12 +7,14 @@ const fetchBudgetMock = vi.fn();
 const saveBudgetMock = vi.fn();
 const clearBudgetMock = vi.fn();
 const recordSpreadViewedMock = vi.fn();
+const recordDrilldownViewedMock = vi.fn();
 const fetchCategoryTransactionsMock = vi.fn();
 vi.mock("@/app/lib/budget-client", () => ({
   fetchBudget: () => fetchBudgetMock(),
   saveBudget: (i: unknown) => saveBudgetMock(i),
   clearBudget: (c: unknown) => clearBudgetMock(c),
   recordSpreadViewed: () => recordSpreadViewedMock(),
+  recordDrilldownViewed: () => recordDrilldownViewedMock(),
   fetchCategoryTransactions: (cat: string, month: string) => fetchCategoryTransactionsMock(cat, month),
 }));
 
@@ -60,6 +62,7 @@ afterEach(() => {
   saveBudgetMock.mockReset();
   clearBudgetMock.mockReset();
   recordSpreadViewedMock.mockReset();
+  recordDrilldownViewedMock.mockReset();
   fetchCategoryTransactionsMock.mockReset();
 });
 
@@ -160,6 +163,38 @@ describe("BudgetClient", () => {
     expect(screen.getByText("Safeway")).toBeTruthy(); // null merchant fell back to description
     // the panel Total ($520.00) reconciles to the row's "This month so far" ($520.00) → ≥2 on screen
     expect(screen.getAllByText("$520.00").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("the opened drill-down is a labelled region with semantic column headers", async () => {
+    fetchCategoryTransactionsMock.mockResolvedValue({
+      ok: true,
+      items: [{ occurredOn: "2026-06-14", merchant: "Trader Joe's", description: "x", amount: 520 }],
+      total: 520,
+    });
+    render(<BudgetClient initial={VIEW} />);
+    fireEvent.click(screen.getByRole("button", { name: /Show the transactions in Food And Drink this month/ }));
+    // labelled region (design: "the panel is a labelled region")
+    const region = await screen.findByRole("region", { name: "Transactions in Food And Drink this month" });
+    expect(region).toBeTruthy();
+    // semantic column headers associate each amount with its date + merchant (design a11y contract)
+    expect(within(region).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["Date", "Merchant", "Amount"]);
+  });
+
+  it("category_drilldown_viewed fires once per category per load — not on retry, refetch, or reopen", async () => {
+    fetchCategoryTransactionsMock.mockResolvedValueOnce({ ok: false }); // open #1 errors
+    render(<BudgetClient initial={VIEW} />);
+    const toggle = () =>
+      screen.getByRole("button", { name: /(Show|Hide) the transactions in Food And Drink this month/ });
+    fireEvent.click(toggle()); // open → counts the view + fetches (errors)
+    await waitFor(() => expect(screen.getByText("We couldn't load these just now — try again.")).toBeTruthy());
+    expect(recordDrilldownViewedMock).toHaveBeenCalledTimes(1);
+    // retry refetches but must NOT re-count the open
+    fetchCategoryTransactionsMock.mockResolvedValueOnce({ ok: true, items: [], total: 0 });
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(screen.getByText("No transactions in Food And Drink this month.")).toBeTruthy());
+    fireEvent.click(toggle()); // close
+    fireEvent.click(toggle()); // reopen → still counted only once this load
+    expect(recordDrilldownViewedMock).toHaveBeenCalledTimes(1);
   });
 
   it("drill-down loading → empty state", async () => {

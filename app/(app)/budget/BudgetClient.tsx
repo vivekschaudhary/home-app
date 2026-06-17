@@ -10,6 +10,7 @@ import {
   clearBudget,
   fetchBudget,
   fetchCategoryTransactions,
+  recordDrilldownViewed,
   recordSpreadViewed,
   saveBudget,
 } from "@/app/lib/budget-client";
@@ -46,6 +47,7 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
   const spreadViewed = useRef<Set<string>>(new Set()); // fire budget_spread_viewed once per category per load
   const [openDrill, setOpenDrill] = useState<Set<string>>(new Set()); // expanded line-item drill-downs (WLT-22-1)
   const [drillCache, setDrillCache] = useState<Record<string, DrillState>>({}); // fetch once per category per load
+  const drillViewed = useRef<Set<string>>(new Set()); // categories already counted for category_drilldown_viewed this load (AC6)
 
   // Reconcile with live server state on mount (#36 — force-dynamic page can hand a
   // stale prefetch; trusting initial props forever is the bug).
@@ -195,17 +197,23 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
   );
 
   function toggleDrill(category: string) {
-    setOpenDrill((prev) => {
-      const next = new Set(prev);
-      if (next.has(category)) {
+    if (openDrill.has(category)) {
+      setOpenDrill((prev) => {
+        const next = new Set(prev);
         next.delete(category);
-      } else {
-        next.add(category);
-        const cached = drillCache[category];
-        if (!cached || cached.status === "error") void loadDrill(category);
-      }
-      return next;
-    });
+        return next;
+      });
+      return;
+    }
+    setOpenDrill((prev) => new Set(prev).add(category));
+    const cached = drillCache[category];
+    if (!cached || cached.status === "error") void loadDrill(category);
+    // Count the OPEN once per category per load — independent of fetch outcome,
+    // so an error+retry (which refetches) never double-counts the event (AC6).
+    if (!drillViewed.current.has(category)) {
+      drillViewed.current.add(category);
+      recordDrilldownViewed();
+    }
   }
 
   function statusBadge(row: BudgetRow) {

@@ -158,10 +158,9 @@ export interface CategoryTransaction {
   description: string;
   amount: number;
 }
-export interface CategoryTransactionsResult {
-  items: CategoryTransaction[];
-  total: number;
-}
+export type CategoryTransactionsResult =
+  | { ok: true; items: CategoryTransaction[]; total: number }
+  | { ok: false }; // a DB/RLS error — the caller must surface the error state, never a blank panel
 
 /**
  * The transactions that make up a category's current-month total — owner-SELECT
@@ -191,11 +190,12 @@ export async function readCategoryTransactions(
     .lte("occurred_on", asOf)
     .order("occurred_on", { ascending: false });
   q = category === "" ? q.is("category", null) : q.eq("category", category);
-  const { data } = await q;
+  const { data, error } = await q;
+  if (error) return { ok: false }; // a query/RLS/db failure must NOT masquerade as "no transactions" (AC3)
   const items: CategoryTransaction[] = (data ?? []).map((r) => {
     const row = r as { occurred_on: string; merchant: string | null; description: string; amount: number | string };
     return { occurredOn: row.occurred_on, merchant: row.merchant, description: row.description, amount: Number(row.amount) };
   });
   const total = Math.round(items.reduce((s, i) => s + i.amount, 0) * 100) / 100;
-  return { items, total };
+  return { ok: true, items, total };
 }

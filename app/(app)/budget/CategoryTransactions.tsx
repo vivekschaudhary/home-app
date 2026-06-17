@@ -41,7 +41,11 @@ export function CategoryTransactions({
   onRetry: () => void;
 }) {
   return (
-    <div className="mt-2 rounded-md border border-gray-200 bg-gray-50 p-3">
+    <div
+      role="region"
+      aria-label={fill(DA.list, { category: label })}
+      className="mt-2 rounded-md border border-gray-200 bg-gray-50 p-3"
+    >
       <p className="text-xs font-medium text-gray-700">{fill(D.panelHeading, { category: label })}</p>
 
       {state.status === "loading" ? (
@@ -59,6 +63,13 @@ export function CategoryTransactions({
         <p className="mt-2 text-sm text-gray-500">{fill(D.empty, { category: label })}</p>
       ) : (
         <table className="mt-2 w-full text-sm" aria-label={fill(DA.list, { category: label })}>
+          <thead className="sr-only">
+            <tr>
+              <th scope="col">{DA.colDate}</th>
+              <th scope="col">{DA.colMerchant}</th>
+              <th scope="col">{DA.colAmount}</th>
+            </tr>
+          </thead>
           <tbody>
             {state.items.map((it, i) => (
               <tr key={i} className="border-b border-gray-100 last:border-0">

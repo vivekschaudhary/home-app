@@ -473,5 +473,8 @@ export const COPY = {
     closeItems: "Hide the transactions in {category} this month",
     list: "Transactions in {category} this month",
     itemLabel: "{date}, {merchant}, {amount}",
+    colDate: "Date",
+    colMerchant: "Merchant",
+    colAmount: "Amount",
   },
 } as const;

@@ -1,11 +1,12 @@
 import { getAal2UserId } from "@vc1023/passkey-2fa";
-import { FUNNEL_EVENTS } from "@wealth/core";
-import { emitFunnel } from "@wealth/db/emit";
 import { readCategoryTransactions } from "@/app/lib/budget";
 
 // WLT-22-1 — the line items behind a category's "this month so far" number.
 // AAL2-gated + owner-scoped (RLS session inside the read). `category` may be ""
-// (the null-category "Other" bucket); a missing param is invalid.
+// (the null-category "Other" bucket); a missing param is invalid. The
+// `category_drilldown_viewed` funnel event is emitted client-side on FIRST open
+// per load (POST /api/budget/drilldown-viewed) — NOT here, so retries/refetches
+// of this data route don't double-count it (AC6).
 export const runtime = "nodejs";
 
 export async function GET(req: Request) {
@@ -20,6 +21,6 @@ export async function GET(req: Request) {
   }
 
   const result = await readCategoryTransactions(userId, category, month);
-  await emitFunnel(FUNNEL_EVENTS.CATEGORY_DRILLDOWN_VIEWED, userId, {});
-  return Response.json(result);
+  if (!result.ok) return Response.json({ error: "server" }, { status: 500 }); // → client renders the inline error (AC3)
+  return Response.json({ items: result.items, total: result.total });
 }

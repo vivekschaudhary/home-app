@@ -78,6 +78,15 @@ export function recordSpreadViewed(): void {
   }
 }
 
+/** Fire-and-forget: record that the user opened a category's drill-down (WLT-22-1). */
+export function recordDrilldownViewed(): void {
+  try {
+    void fetch("/api/budget/drilldown-viewed", { method: "POST", keepalive: true }).catch(() => {});
+  } catch {
+    /* non-blocking — instrumentation must never break the UI */
+  }
+}
+
 export async function clearBudget(category: string): Promise<{ ok: true } | { ok: false; error: BudgetError }> {
   try {
     const res = await fetch(`/api/budget?category=${encodeURIComponent(category)}`, { method: "DELETE" });
