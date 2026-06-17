@@ -8,13 +8,13 @@ portfolio_stub: false
 depends_on: [WLT-21]
 parallel_with: []
 architecture_required: true
-architecture_status: pending
+architecture_status: approved
 created: 2026-06-16
 author: PM
 sources:
   - "user feedback (2026-06-16) on the shipped WLT-21 Budget & Spending: 'I don't know if the numbers are correct — I can't see the categorized numbers. Rent + Utilities are grouped, so unless I know what was considered rent I can't make a clear decision.'"
   - "elicited (2026-06-16): (1) drill into a category to see its line items; (2) recategorize — targets = Plaid's finer taxonomy as a template + custom categories the user adds; a change 'remembers the merchant' (a rule), applying to past + future."
-  - "design discussion (2026-06-17): the user's OWN categories are the source of truth — Plaid is a cold-start seed, never the authority. Data model: keep the provider category column + a STORED per-transaction user override (keyed by the stable dedup_key, so it survives Plaid's CDC re-syncs) + a STORED merchant-rules mapping → the effective category is resolved at read through one shared path."
+  - "design discussion (2026-06-17): the user's OWN categories are the source of truth — Plaid is a cold-start seed/indication, never the authority. What the user sets is SAVED. Data model: keep the provider category column + a SAVED per-transaction category assignment (keyed by the stable dedup_key, survives Plaid's CDC re-syncs) + a merchant-rules mapping that WRITES assignments on its matches (past + future); reads = saved ?? Plaid via one shared helper."
   - docs/bets/WLT-21/brief.md
   - docs/foundation/product.md
 key_metric:
@@ -70,7 +70,7 @@ If we make the user's **own categories the source of truth** — Plaid demoted f
 - **Drill-down (verify).** Tap a category (or its amount) → the **line items** that make up the number: date, merchant, amount, for the current month (and within the year-spread, the month tapped). The rolled-up total equals the sum shown. Uses data we already store — **no re-sync**. _This alone answers "is the number correct."_
 - **User-owned categories (Plaid is a seed).** The user's **own** categories are the source of truth. Plaid's coarse category is only the **default for a transaction the user hasn't touched** (the cold-start on-ramp, so a new user isn't staring at a blank slate). Users can define their **own** categories (e.g. split "Rent & Utilities" into Rent + Utilities). The budget table + recommendations operate on the user-resolved category.
 - **Recategorize (overrides + merchant rules).** Change a transaction's category; the change can **remember the merchant** (a rule) and apply to **past + future** transactions from that merchant. A per-transaction override handles one-offs/exceptions.
-- **The two-layer data model (the spine).** Keep `transactions.category` as the **immutable provider** value (Plaid's). Store the user's intent separately: a **per-transaction override keyed by the stable `dedup_key`** (so it survives Plaid's CDC re-syncs) + a **`category_rules` merchant→category mapping**. The **effective category is resolved at read** — override → rule → provider-default — through **one shared resolver** that budget, recap, and anomalies all call (so no surface disagrees). Persisted where the user's decisions live; derived where it's displayed.
+- **The data model (the spine).** Keep `transactions.category` as the **immutable provider** value (Plaid's — the indication). Store the user's intent separately + **persist what they set**: a **saved per-transaction assignment keyed by the stable `dedup_key`** (so it survives Plaid's CDC re-syncs) + a **`category_rules` merchant→category mapping** that **writes** assignments on its matches (past + future). Reads use the **saved** category, falling back to Plaid's only for transactions the user hasn't touched — through **one shared read helper** that budget, recap, and anomalies all call (so no surface disagrees). _Architecture formalizes this._
 - **Plaid `detailed` is now OPTIONAL.** Because the user defines their own splits, the finer Plaid `detailed` sub-category is a _nice cold-start seed_ for better defaults — **not a requirement**. Storing `detailed` + a backfill can be deferred or dropped; the bet no longer hinges on the heavy re-sync.
 
 ### Out of scope (explicit)
@@ -82,7 +82,7 @@ If we make the user's **own categories the source of truth** — Plaid demoted f
 
 ## Open questions for Architect
 
-- **(Lead decision) Store-the-decisions, resolve-the-display.** Confirm the spine: provider `transactions.category` (kept) + a **stored per-transaction user override keyed by `dedup_key`** + a stored **`category_rules`** mapping → the **effective category resolved at read** by one shared helper that budget/recap/anomaly all call. **Materializing** the resolved value onto a row is an _optional cache later_, not the source of truth — confirm (the staleness/consistency risk is why decisions are stored but the resolution is computed).
+- **(Lead decision — resolved in architecture) Save what the user sets.** The spine: provider `transactions.category` kept (the indication) + a **SAVED per-transaction assignment keyed by `dedup_key`** + a **`category_rules`** mapping that **writes** assignments on its matches (past on create, future at sync). Reads = **saved `??` Plaid** through one shared helper that budget/recap/anomaly all call. The user's category is a persisted fact, not recomputed each read.
 - **The one shared resolver:** where it lives (`packages/core`?), its precedence (override → merchant rule → provider default), and that every category read routes through it (no surface reads `transactions.category` raw).
 - **Custom-category model:** a user-defined category table (owner-scoped); seeding/defaults; how the WLT-21 recommendation + essentials logic extends to user categories.
 - **Retroactive ripple:** a correction changes past months → budget + recap + year-spread/anomalies shift. Confirm intended + consistent (it is the point) and that nothing caches a stale category.
@@ -105,7 +105,7 @@ If we make the user's **own categories the source of truth** — Plaid demoted f
 _Decomposed via `/create-story WLT-22` (nested numbering), suggested:_
 
 - **WLT-22-1 — Drill into a category** → see its real transactions (verify the number). No re-sync; ships fast; delivers the immediate trust win.
-- **WLT-22-2 — User-owned categories + correction** → user-defined categories + recategorize (per-transaction overrides + merchant rules), all resolved at read through the one shared category resolver across budget/recap/anomaly (the stored-decisions / resolve-at-read spine from architecture). Plaid stays the cold-start default; its `detailed` seed is optional.
+- **WLT-22-2 — User-owned categories + correction** → user-defined categories + recategorize (saved per-transaction assignments + merchant rules that write their matches), read via the one shared saved-`??`-Plaid helper across budget/recap/anomaly (the saved-category spine from architecture). Plaid stays the cold-start default; its `detailed` seed is optional.
 
 ## DRI Log
 
@@ -116,7 +116,7 @@ _Decomposed via `/create-story WLT-22` (nested numbering), suggested:_
 - [2026-06-16] [PM] **Slice drill-down FIRST, separately from correction** — rationale: drill-down alone answers "is the number correct" (the user's actual blocker), needs no re-sync, and ships fast; correction is the heavier, architecture-gated follow-on — area: scope — reversibility: easy
 - [2026-06-16] [PM] **Corrections are an override LAYER, never a destructive write to `transactions.category`** — rationale: Plaid re-syncs would otherwise clobber the user's intent; the override must survive (a guardrail) — area: architecture/data — reversibility: medium
 - [2026-06-17] [User] **The user's OWN categories are the source of truth; Plaid is a cold-start seed, never the authority** — rationale: a provider taxonomy is a fine abstraction for ingestion but wrong as the authority for how an individual budgets; ownership is the trust+control move — area: product — alternatives: Plaid-as-authority (rejected — the original problem) — reversibility: medium
-- [2026-06-17] [User + PM] **Data-model spine: provider category column (kept) + a STORED per-transaction override keyed by `dedup_key` + a STORED `category_rules` mapping → effective category RESOLVED AT READ via one shared helper** — rationale: store the user's _decisions_ (durable, changeable intent — keyed by the stable txn id so re-syncs/CDC never clobber them) but _derive_ the displayed value through one path (so budget/recap/anomaly can't disagree, and a rule change instantly corrects history); a materialized column is an optional cache, not the truth — area: architecture/data — alternatives: materialize the resolved value on `transactions` (rejected as source-of-truth — staleness + CDC clobber; fine as a later perf cache), a column on `transactions` (rejected — the row churns on re-sync) — reversibility: medium
+- [2026-06-17] [User + PM] **Data-model spine: provider category column kept (Plaid's, the indication) + the user's category SAVED per transaction (keyed by the stable `dedup_key`, survives CDC re-syncs) + a `category_rules` mapping that WRITES assignments on its matches; reads = saved `??` Plaid via one shared helper** — rationale: a category the user sets is a persisted fact, not recomputed each read; Plaid owns the entries, the user's category is saved on top; one read helper keeps budget/recap/anomaly consistent — area: architecture/data — alternatives: resolve-at-read / store-only-deltas (rejected by the product owner — wants saved), a column on `transactions` (rejected — churns on re-sync) — reversibility: medium
 - [2026-06-17] [PM] **Plaid `detailed` backfill demoted from required → optional** — rationale: with user-owned categories, users define their own splits, so the finer Plaid sub-category is only a nicer cold-start default, not load-bearing; drops the bet's heaviest/riskiest dependency — area: scope/data — reversibility: easy
 - [2026-06-16] [PM] **`architecture_required: true`** — rationale: a new data model (rules/overrides + finer taxonomy + custom categories), a re-sync/backfill, and a cross-cutting one-resolution-path constraint all need a design pass before stories — area: process — reversibility: n/a
 
