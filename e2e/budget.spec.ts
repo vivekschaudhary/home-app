@@ -1,4 +1,4 @@
-import { type CDPSession, expect, test } from "@playwright/test";
+import { type BrowserContext, type CDPSession, type Page, expect, test } from "@playwright/test";
 import { Client } from "pg";
 
 // WLT-21-1 — Budget & Spending, REAL-PATH (the [real-path-integration-coverage]
@@ -27,39 +27,49 @@ function todayUtc(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+async function addPasskeyAuthenticator(page: Page, context: BrowserContext): Promise<void> {
+  const client: CDPSession = await context.newCDPSession(page);
+  await client.send("WebAuthn.enable");
+  await client.send("WebAuthn.addVirtualAuthenticator", {
+    options: {
+      protocol: "ctap2",
+      transport: "internal",
+      hasResidentKey: true,
+      hasUserVerification: true,
+      isUserVerified: true,
+      automaticPresenceSimulation: true,
+    },
+  });
+}
+
+async function signUpWithPasskey(page: Page, context: BrowserContext, email: string, password: string): Promise<void> {
+  await addPasskeyAuthenticator(page, context);
+  await page.goto("/sign-up");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill(password);
+  await page.getByRole("button", { name: "Create account" }).click();
+  await expect(page.getByRole("heading", { name: "Secure your account with a passkey" })).toBeVisible();
+  await page.getByRole("button", { name: "Create passkey" }).click();
+  await expect(page).toHaveURL(/\/onboarding\/intent/, { timeout: 15_000 });
+}
+
 test.describe("budget & spending — recommended/actual render + set + persist (WLT-21-1)", () => {
   test.skip(!RUN || !DB_URL, "Set E2E_PASSKEY=1 + SUPABASE_DB_URL + a real Supabase project to run.");
 
   test("real session → recommended from history + this-month actual → set a budget → persists on reload", async ({
+    browser,
     page,
     context,
   }) => {
-    const client: CDPSession = await context.newCDPSession(page);
-    await client.send("WebAuthn.enable");
-    await client.send("WebAuthn.addVirtualAuthenticator", {
-      options: {
-        protocol: "ctap2",
-        transport: "internal",
-        hasResidentKey: true,
-        hasUserVerification: true,
-        isUserVerified: true,
-        automaticPresenceSimulation: true,
-      },
-    });
-
-    const email = `e2e-budget+${Date.now()}@example.com`;
+    const email = `e2e-budget-u1+${Date.now()}@example.com`;
+    const otherEmail = `e2e-budget-u2+${Date.now()}@example.com`;
     const password = "correct horse battery staple";
 
     // Sign up + passkey → AAL2 session.
-    await page.goto("/sign-up");
-    await page.getByLabel("Email").fill(email);
-    await page.getByLabel("Password").fill(password);
-    await page.getByRole("button", { name: "Create account" }).click();
-    await expect(page.getByRole("heading", { name: "Secure your account with a passkey" })).toBeVisible();
-    await page.getByRole("button", { name: "Create passkey" }).click();
-    await expect(page).toHaveURL(/\/onboarding\/intent/, { timeout: 15_000 });
+    await signUpWithPasskey(page, context, email, password);
 
     const db = new Client({ connectionString: DB_URL });
+    let otherContext: BrowserContext | null = null;
     await db.connect();
     try {
       const u = await db.query("select id from auth.users where email = $1", [email]);
@@ -78,11 +88,11 @@ test.describe("budget & spending — recommended/actual render + set + persist (
       // = the recommendation; this month so far 520 (the actual).
       await db.query(
         `insert into transactions
-           (user_id, account_id, source, dedup_key, content_hash, amount, direction, currency, description, category, occurred_on)
+           (user_id, account_id, source, dedup_key, content_hash, amount, direction, currency, description, merchant, category, occurred_on)
          values
-           ($1,$2,'plaid','e2e-b-1','h1',400,'debit','USD','x','FOOD_AND_DRINK',$3),
-           ($1,$2,'plaid','e2e-b-2','h2',600,'debit','USD','x','FOOD_AND_DRINK',$4),
-           ($1,$2,'plaid','e2e-b-3','h3',520,'debit','USD','x','FOOD_AND_DRINK',$5)`,
+           ($1,$2,'plaid','e2e-b-1','h1',400,'debit','USD','x','Past Grocer A','FOOD_AND_DRINK',$3),
+           ($1,$2,'plaid','e2e-b-2','h2',600,'debit','USD','x','Past Grocer B','FOOD_AND_DRINK',$4),
+           ($1,$2,'plaid','e2e-b-3','h3',520,'debit','USD','x','User One Market','FOOD_AND_DRINK',$5)`,
         [userId, accountId, monthDay(2), monthDay(1), todayUtc()],
       );
 
@@ -128,7 +138,52 @@ test.describe("budget & spending — recommended/actual render + set + persist (
       await expect(page.getByText("Monthly Food And Drink spend — last 12 months")).toBeVisible();
       // the visible "Most: $X" label proves the panel drew the REAL series (max of 400/600/520)
       await expect(page.getByText("Most: $600.00")).toBeVisible();
+
+      // WLT-22-1: drill into the category → its real line items for this month,
+      // through the real session → RLS → render path. The seeded current-month
+      // debit is $520; the drill Total reconciles to the row number.
+      await page.getByRole("button", { name: /Show the transactions in Food And Drink this month/ }).click();
+      await expect(page.getByText("What's in Food And Drink this month")).toBeVisible();
+      await expect(page.getByText("Total")).toBeVisible();
+      // $520.00 shows as the row amount, the line item, and the Total — all reconciling
+      await expect(page.getByText("$520.00").first()).toBeVisible();
+      await expect(page.getByText("User One Market")).toBeVisible();
+
+      // AC4 negative case: a SECOND authed user with the same category can only
+      // see their OWN drilled rows through the real session → RLS → render path,
+      // never user 1's line items.
+      otherContext = await browser.newContext();
+      const otherPage = await otherContext.newPage();
+      await signUpWithPasskey(otherPage, otherContext, otherEmail, password);
+
+      const otherUser = await db.query("select id from auth.users where email = $1", [otherEmail]);
+      expect(otherUser.rows).toHaveLength(1);
+      const otherUserId = otherUser.rows[0].id as string;
+      const otherAcct = await db.query(
+        `insert into financial_accounts (user_id, name, kind, currency, balance_current, balance_updated_at)
+         values ($1, 'Other E2E Checking', 'depository', 'USD', 2500, now()) returning id`,
+        [otherUserId],
+      );
+      const otherAccountId = otherAcct.rows[0].id as string;
+      await db.query(
+        `insert into transactions
+           (user_id, account_id, source, dedup_key, content_hash, amount, direction, currency, description, merchant, category, occurred_on)
+         values
+           ($1,$2,'plaid','e2e-b-4','h4',111.11,'debit','USD','x','User Two Cafe','FOOD_AND_DRINK',$3)`,
+        [otherUserId, otherAccountId, todayUtc()],
+      );
+
+      await otherPage.goto("/budget");
+      await expect(otherPage.getByRole("heading", { name: "Budget & Spending" })).toBeVisible({ timeout: 15_000 });
+      await expect(otherPage.getByText("$111.11")).toBeVisible();
+      await otherPage.getByRole("button", { name: /Show the transactions in Food And Drink this month/ }).click();
+      await expect(otherPage.getByText("What's in Food And Drink this month")).toBeVisible();
+      await expect(otherPage.getByText("User Two Cafe")).toBeVisible();
+      await expect(otherPage.getByText("$111.11").first()).toBeVisible();
+      await expect(otherPage.getByText("User One Market")).toHaveCount(0);
+      await expect(otherPage.getByText("$520.00")).toHaveCount(0);
     } finally {
+      await otherContext?.close();
       await db.end();
     }
   });

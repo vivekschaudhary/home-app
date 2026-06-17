@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BudgetViewDTO } from "@/app/lib/budget-client";
 
@@ -7,11 +7,15 @@ const fetchBudgetMock = vi.fn();
 const saveBudgetMock = vi.fn();
 const clearBudgetMock = vi.fn();
 const recordSpreadViewedMock = vi.fn();
+const recordDrilldownViewedMock = vi.fn();
+const fetchCategoryTransactionsMock = vi.fn();
 vi.mock("@/app/lib/budget-client", () => ({
   fetchBudget: () => fetchBudgetMock(),
   saveBudget: (i: unknown) => saveBudgetMock(i),
   clearBudget: (c: unknown) => clearBudgetMock(c),
   recordSpreadViewed: () => recordSpreadViewedMock(),
+  recordDrilldownViewed: () => recordDrilldownViewedMock(),
+  fetchCategoryTransactions: (cat: string, month: string) => fetchCategoryTransactionsMock(cat, month),
 }));
 
 import { BudgetClient } from "./BudgetClient";
@@ -58,6 +62,8 @@ afterEach(() => {
   saveBudgetMock.mockReset();
   clearBudgetMock.mockReset();
   recordSpreadViewedMock.mockReset();
+  recordDrilldownViewedMock.mockReset();
+  fetchCategoryTransactionsMock.mockReset();
 });
 
 describe("BudgetClient", () => {
@@ -139,6 +145,105 @@ describe("BudgetClient", () => {
     expect(screen.queryByText("Monthly Food And Drink spend — last 12 months")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /Show the last 12 months/ }));
     expect(recordSpreadViewedMock).toHaveBeenCalledTimes(1); // once per category per load
+  });
+
+  it("drilling into a category lists its line items; the Total reconciles to the row number", async () => {
+    fetchCategoryTransactionsMock.mockResolvedValue({
+      ok: true,
+      items: [
+        { occurredOn: "2026-06-14", merchant: "Trader Joe's", description: "x", amount: 320 },
+        { occurredOn: "2026-06-03", merchant: null, description: "Safeway", amount: 200 }, // merchant null → description
+      ],
+      total: 520,
+    });
+    render(<BudgetClient initial={VIEW} />);
+    fireEvent.click(screen.getByRole("button", { name: /Show the transactions in Food And Drink this month/ }));
+    await waitFor(() => expect(fetchCategoryTransactionsMock).toHaveBeenCalledWith("FOOD_AND_DRINK", "2026-06"));
+    expect(await screen.findByText("Trader Joe's")).toBeTruthy();
+    expect(screen.getByText("Safeway")).toBeTruthy(); // null merchant fell back to description
+    // the panel Total ($520.00) reconciles to the row's "This month so far" ($520.00) → ≥2 on screen
+    expect(screen.getAllByText("$520.00").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("the opened drill-down is a labelled region with semantic column headers", async () => {
+    fetchCategoryTransactionsMock.mockResolvedValue({
+      ok: true,
+      items: [{ occurredOn: "2026-06-14", merchant: "Trader Joe's", description: "x", amount: 520 }],
+      total: 520,
+    });
+    render(<BudgetClient initial={VIEW} />);
+    fireEvent.click(screen.getByRole("button", { name: /Show the transactions in Food And Drink this month/ }));
+    // labelled region (design: "the panel is a labelled region")
+    const region = await screen.findByRole("region", { name: "Transactions in Food And Drink this month" });
+    expect(region).toBeTruthy();
+    // semantic column headers associate each amount with its date + merchant (design a11y contract)
+    expect(within(region).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["Date", "Merchant", "Amount"]);
+  });
+
+  it("category_drilldown_viewed fires once per category per load — not on retry, refetch, or reopen", async () => {
+    fetchCategoryTransactionsMock.mockResolvedValueOnce({ ok: false }); // open #1 errors
+    render(<BudgetClient initial={VIEW} />);
+    const toggle = () =>
+      screen.getByRole("button", { name: /(Show|Hide) the transactions in Food And Drink this month/ });
+    fireEvent.click(toggle()); // open → counts the view + fetches (errors)
+    await waitFor(() => expect(screen.getByText("We couldn't load these just now — try again.")).toBeTruthy());
+    expect(recordDrilldownViewedMock).toHaveBeenCalledTimes(1);
+    // retry refetches but must NOT re-count the open
+    fetchCategoryTransactionsMock.mockResolvedValueOnce({ ok: true, items: [], total: 0 });
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(screen.getByText("No transactions in Food And Drink this month.")).toBeTruthy());
+    fireEvent.click(toggle()); // close
+    fireEvent.click(toggle()); // reopen → still counted only once this load
+    expect(recordDrilldownViewedMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("drill-down loading → empty state", async () => {
+    let resolve!: (v: { ok: true; items: unknown[]; total: number }) => void;
+    fetchCategoryTransactionsMock.mockReturnValue(new Promise((r) => { resolve = r; }));
+    render(<BudgetClient initial={VIEW} />);
+    fireEvent.click(screen.getByRole("button", { name: /Show the transactions in Food And Drink this month/ }));
+    expect(screen.getByText("Loading your transactions…")).toBeTruthy(); // loading state
+    resolve({ ok: true, items: [], total: 0 });
+    await waitFor(() => expect(screen.getByText("No transactions in Food And Drink this month.")).toBeTruthy()); // empty state
+  });
+
+  it("drill-down error state shows a banner + retry that refetches", async () => {
+    fetchCategoryTransactionsMock.mockResolvedValueOnce({ ok: false });
+    render(<BudgetClient initial={VIEW} />);
+    fireEvent.click(screen.getByRole("button", { name: /Show the transactions in Food And Drink this month/ }));
+    await waitFor(() => expect(screen.getByText("We couldn't load these just now — try again.")).toBeTruthy());
+    // retry refetches (this time succeeds)
+    fetchCategoryTransactionsMock.mockResolvedValueOnce({
+      ok: true,
+      items: [{ occurredOn: "2026-06-10", merchant: "Costco", description: "x", amount: 520 }],
+      total: 520,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(screen.getByText("Costco")).toBeTruthy());
+  });
+
+  it("no drill affordance for a category with no spend this month", () => {
+    const view: BudgetViewDTO = {
+      rows: [
+        {
+          category: "INSURANCE",
+          label: "Insurance",
+          recommended: null,
+          actualThisMonth: 0,
+          budget: { type: "amount", amount: 100 },
+          effectiveCap: 100,
+          status: "under",
+        },
+      ],
+      asOfMonth: "2026-06",
+      typicalMonthlyTotal: null,
+      hasData: true,
+      series: {},
+      seriesMonths: [],
+    };
+    render(<BudgetClient initial={view} />);
+    expect(screen.queryByRole("button", { name: /Show the transactions in Insurance/ })).toBeNull();
+    expect(screen.getByText("$0.00")).toBeTruthy(); // the amount is plain text, not a button
   });
 
   it("the add-category picker adds a budgetable row", () => {

@@ -37,6 +37,14 @@ function todayUtc(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/** The first day of the month AFTER `month` ('YYYY-MM') — the exclusive upper bound. */
+function nextMonthStart(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  const ny = m === 12 ? y + 1 : y;
+  const nm = m === 12 ? 1 : m + 1;
+  return `${ny}-${String(nm).padStart(2, "0")}-01`;
+}
+
 /**
  * The user's trailing ~7 months of transactions — owner-SELECT under the user's
  * RLS session (the policy already hides superseded/removed rows). Amounts /
@@ -141,4 +149,53 @@ export async function clearBudgetForUser(input: { userId: string; category: stri
     .eq("category", input.category);
   if (error) return { ok: false, error: "save_failed" };
   return { ok: true };
+}
+
+// WLT-22-1 — the line items behind a category's "this month so far" number.
+export interface CategoryTransaction {
+  occurredOn: string;
+  merchant: string | null;
+  description: string;
+  amount: number;
+}
+export type CategoryTransactionsResult =
+  | { ok: true; items: CategoryTransaction[]; total: number }
+  | { ok: false }; // a DB/RLS error — the caller must surface the error state, never a blank panel
+
+/**
+ * The transactions that make up a category's current-month total — owner-SELECT
+ * under the user's RLS session. Uses the SAME filter as computeMonthlySpending
+ * (debits in this month, up to today) so the listed Total reconciles to the
+ * budget row EXACTLY (the honesty contract). `category === ""` → the null-category
+ * "Other" bucket. Newest first. The user's own merchant/description — no PII fabricated.
+ */
+export async function readCategoryTransactions(
+  userId: string,
+  category: string,
+  month: string, // 'YYYY-MM'
+): Promise<CategoryTransactionsResult> {
+  const supabase = await createServerSupabase();
+  const asOf = todayUtc();
+  // Bound to exactly THIS month: [month-01, next-month-01). The `<= today` keeps
+  // the current month "so far" (matches computeMonthlySpending) and is a no-op for
+  // a past month (whose end is already ≤ today) — so a non-current month never
+  // bleeds into later months (the API contract holds for any caller).
+  let q = supabase
+    .from("transactions")
+    .select("occurred_on, merchant, description, amount")
+    .eq("user_id", userId)
+    .eq("direction", "debit")
+    .gte("occurred_on", `${month}-01`)
+    .lt("occurred_on", nextMonthStart(month))
+    .lte("occurred_on", asOf)
+    .order("occurred_on", { ascending: false });
+  q = category === "" ? q.is("category", null) : q.eq("category", category);
+  const { data, error } = await q;
+  if (error) return { ok: false }; // a query/RLS/db failure must NOT masquerade as "no transactions" (AC3)
+  const items: CategoryTransaction[] = (data ?? []).map((r) => {
+    const row = r as { occurred_on: string; merchant: string | null; description: string; amount: number | string };
+    return { occurredOn: row.occurred_on, merchant: row.merchant, description: row.description, amount: Number(row.amount) };
+  });
+  const total = Math.round(items.reduce((s, i) => s + i.amount, 0) * 100) / 100;
+  return { ok: true, items, total };
 }
