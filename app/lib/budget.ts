@@ -11,12 +11,15 @@ import {
   type SavedBudget,
   type SpendingTxn,
   buildBudgetRows,
+  computeMonthlySeries,
   computeTypicalMonthlyTotal,
+  seriesMonthKeys,
 } from "@wealth/core";
 
-// ~7 months: ≥6 complete months for the median-of-monthly-totals + the current
-// partial month for "this month so far".
-const TRAILING_DAYS = 215;
+// ~13 months: 12 full calendar months for the year-spread (WLT-21-2) — also
+// comfortably covers the recommendation's trailing-6-month window + this month.
+const TRAILING_DAYS = 400;
+const SERIES_MONTHS = 12;
 
 type Supa = Awaited<ReturnType<typeof createServerSupabase>>;
 
@@ -25,6 +28,9 @@ export interface BudgetView {
   asOfMonth: string; // 'YYYY-MM'
   typicalMonthlyTotal: number | null; // the percent helper base ("≈ $X/mo")
   hasData: boolean; // any transactions at all (else the connect-an-account empty state)
+  /** WLT-21-2: per-category 12-month spend series (index 0 = oldest … 11 = current "so far"). */
+  series: Record<string, number[]>;
+  seriesMonths: string[]; // the 12 ordered 'YYYY-MM' keys (oldest → current)
 }
 
 function todayUtc(): string {
@@ -73,11 +79,16 @@ export async function getBudgetView(userId: string): Promise<BudgetView> {
     readBudgets(userId, supabase),
   ]);
   const asOf = todayUtc();
+  const seriesMap = computeMonthlySeries(txns, asOf, SERIES_MONTHS);
+  const series: Record<string, number[]> = {};
+  for (const [cat, arr] of seriesMap) series[cat] = arr;
   return {
     rows: buildBudgetRows({ budgets, txns, asOf }),
     asOfMonth: asOf.slice(0, 7),
     typicalMonthlyTotal: computeTypicalMonthlyTotal(txns, asOf),
     hasData: txns.length > 0,
+    series,
+    seriesMonths: seriesMonthKeys(asOf, SERIES_MONTHS),
   };
 }
 
