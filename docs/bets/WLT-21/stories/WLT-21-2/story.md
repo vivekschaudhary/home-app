@@ -2,9 +2,11 @@
 id: WLT-21-2
 bet: WLT-21
 type: story
-status: ready
+status: shipped
 priority: P1
 created: 2026-06-16
+shipped: 2026-06-16
+shipped_pr: 59
 author: PM
 design_link: docs/bets/WLT-21/stories/WLT-21-2/design.md
 copy_link: docs/bets/WLT-21/stories/WLT-21-2/copy.md
@@ -51,7 +53,7 @@ Per `docs/bets/WLT-21/architecture.md` (on-read compute, no rollup, no new depen
 
 ## PRs
 
-_To be linked on build._
+- **PR #59** (`feat/WLT-21-2-year-spread`) — shipped 2026-06-16. Squash `9d71fec`. (Codex round: the responsive month-label contract — single-initial phone / 3-letter desktop — was added + test-covered.)
 
 Tags:
 - `regression: false`
@@ -80,4 +82,4 @@ _If post-merge bugs are found, story is re-opened and fixes live under `fixes/`.
 - [2026-06-16] [PM] **Budget-cap reference line scope** — severity: low — owner: Engineer — status: open — area: ux — ship the bars first; add the faint cap line only if it doesn't complicate the scaling.
 - [2026-06-16] [PM] **`budget_spread_viewed` emit path** — severity: low — owner: Engineer — status: open — area: instrumentation — pick the lightest additive path (tiny route vs. piggyback); must be non-blocking.
 
-_Story status: ready — Standard Experience Checklist has no empty category. Shipping this completes bet WLT-21._
+_Story status: shipped (PR #59, 2026-06-16) — all ACs met. This was the bet's final slice → **bet WLT-21 COMPLETE**._
