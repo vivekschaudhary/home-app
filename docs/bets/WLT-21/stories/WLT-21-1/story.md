@@ -2,9 +2,11 @@
 id: WLT-21-1
 bet: WLT-21
 type: story
-status: ready
+status: shipped
 priority: P1
 created: 2026-06-16
+shipped: 2026-06-16
+shipped_pr: 58
 author: PM
 design_link: docs/bets/WLT-21/stories/WLT-21-1/design.md
 copy_link: docs/bets/WLT-21/stories/WLT-21-1/copy.md
@@ -57,7 +59,7 @@ Per `docs/bets/WLT-21/architecture.md`:
 
 ## PRs
 
-_To be linked on build._
+- **PR #58** (`feat/WLT-21-1-budget-table`) — shipped 2026-06-16. Squash `2a26ce4`.
 
 Tags:
 - `regression: false`
@@ -84,6 +86,8 @@ _If post-merge bugs are found, story is re-opened and fixes live under `fixes/`.
 
 ### Issues
 - [2026-06-16] [PM] **Percent base legibility** — severity: low — owner: UX Writer — status: open — area: copy — the inline "≈ $X/mo" resolution must make "% of your typical monthly spending" unambiguous (finalized in copy.md; verify in build).
-- [2026-06-16] [Architect] **Essential-category allowlist vs real Plaid values** — severity: low — owner: Engineer — status: open — area: data — confirm the `RENT_AND_UTILITIES`-style strings against actual data during build; adjust the set.
+- [2026-06-16] [Engineer] **Essential-category allowlist vs real Plaid values** — severity: low — owner: Engineer — status: **resolved** — area: data — the mapper (`map.ts`) emits `personal_finance_category.primary` OR the legacy `category[0]`, so the taxonomy is a UNION; essentials + the picker now cover both (incl. `GROCERIES`/`INSURANCE`). Codex round.
+- [2026-06-16] [Engineer] **Authenticated soft-delete is impossible under the owner SELECT policy** — severity: high (caught pre-merge by the live-PG RLS gate) — owner: Engineer — status: **resolved** — area: security/data — `update … set deleted_at` fails Postgres' UPDATE WITH-CHECK once the new row leaves `deleted_at is null` visibility; `clearBudgetForUser` would have been broken in prod. Reproduced on real PG → switched to **hard delete** (the `budgets_delete_own` policy) + simplified the schema to `unique(user_id,category)`. **Lesson:** any user-facing soft-delete under a `deleted_at`-filtering SELECT policy needs a hard delete or a SECURITY-DEFINER RPC — the authenticated UPDATE path can't do it.
+- [2026-06-16] [Engineer] **CI route-verification was stale from WLT-20** — severity: low — owner: Engineer — status: **resolved** — area: ci — the `[mechanical-output-verification]` need-list still had the pre-`(app)` key `/dashboard/page`; updated to the real manifest keys + added the budget routes.
 
-_Story status: ready — Standard Experience Checklist has no empty category._
+_Story status: shipped (PR #58, 2026-06-16) — all ACs met; the Standard Experience Checklist had no empty category._
