@@ -7,11 +7,13 @@ const fetchBudgetMock = vi.fn();
 const saveBudgetMock = vi.fn();
 const clearBudgetMock = vi.fn();
 const recordSpreadViewedMock = vi.fn();
+const fetchCategoryTransactionsMock = vi.fn();
 vi.mock("@/app/lib/budget-client", () => ({
   fetchBudget: () => fetchBudgetMock(),
   saveBudget: (i: unknown) => saveBudgetMock(i),
   clearBudget: (c: unknown) => clearBudgetMock(c),
   recordSpreadViewed: () => recordSpreadViewedMock(),
+  fetchCategoryTransactions: (cat: string, month: string) => fetchCategoryTransactionsMock(cat, month),
 }));
 
 import { BudgetClient } from "./BudgetClient";
@@ -58,6 +60,7 @@ afterEach(() => {
   saveBudgetMock.mockReset();
   clearBudgetMock.mockReset();
   recordSpreadViewedMock.mockReset();
+  fetchCategoryTransactionsMock.mockReset();
 });
 
 describe("BudgetClient", () => {
@@ -139,6 +142,24 @@ describe("BudgetClient", () => {
     expect(screen.queryByText("Monthly Food And Drink spend — last 12 months")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /Show the last 12 months/ }));
     expect(recordSpreadViewedMock).toHaveBeenCalledTimes(1); // once per category per load
+  });
+
+  it("drilling into a category lists its line items; the Total reconciles to the row number", async () => {
+    fetchCategoryTransactionsMock.mockResolvedValue({
+      ok: true,
+      items: [
+        { occurredOn: "2026-06-14", merchant: "Trader Joe's", description: "x", amount: 320 },
+        { occurredOn: "2026-06-03", merchant: null, description: "Safeway", amount: 200 }, // merchant null → description
+      ],
+      total: 520,
+    });
+    render(<BudgetClient initial={VIEW} />);
+    fireEvent.click(screen.getByRole("button", { name: /Show the transactions in Food And Drink this month/ }));
+    await waitFor(() => expect(fetchCategoryTransactionsMock).toHaveBeenCalledWith("FOOD_AND_DRINK", "2026-06"));
+    expect(await screen.findByText("Trader Joe's")).toBeTruthy();
+    expect(screen.getByText("Safeway")).toBeTruthy(); // null merchant fell back to description
+    // the panel Total ($520.00) reconciles to the row's "This month so far" ($520.00) → ≥2 on screen
+    expect(screen.getAllByText("$520.00").length).toBeGreaterThanOrEqual(2);
   });
 
   it("the add-category picker adds a budgetable row", () => {

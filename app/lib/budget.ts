@@ -142,3 +142,47 @@ export async function clearBudgetForUser(input: { userId: string; category: stri
   if (error) return { ok: false, error: "save_failed" };
   return { ok: true };
 }
+
+// WLT-22-1 — the line items behind a category's "this month so far" number.
+export interface CategoryTransaction {
+  occurredOn: string;
+  merchant: string | null;
+  description: string;
+  amount: number;
+}
+export interface CategoryTransactionsResult {
+  items: CategoryTransaction[];
+  total: number;
+}
+
+/**
+ * The transactions that make up a category's current-month total — owner-SELECT
+ * under the user's RLS session. Uses the SAME filter as computeMonthlySpending
+ * (debits in this month, up to today) so the listed Total reconciles to the
+ * budget row EXACTLY (the honesty contract). `category === ""` → the null-category
+ * "Other" bucket. Newest first. The user's own merchant/description — no PII fabricated.
+ */
+export async function readCategoryTransactions(
+  userId: string,
+  category: string,
+  month: string, // 'YYYY-MM'
+): Promise<CategoryTransactionsResult> {
+  const supabase = await createServerSupabase();
+  const asOf = todayUtc();
+  let q = supabase
+    .from("transactions")
+    .select("occurred_on, merchant, description, amount")
+    .eq("user_id", userId)
+    .eq("direction", "debit")
+    .gte("occurred_on", `${month}-01`)
+    .lte("occurred_on", asOf) // "so far" — matches computeMonthlySpending
+    .order("occurred_on", { ascending: false });
+  q = category === "" ? q.is("category", null) : q.eq("category", category);
+  const { data } = await q;
+  const items: CategoryTransaction[] = (data ?? []).map((r) => {
+    const row = r as { occurred_on: string; merchant: string | null; description: string; amount: number | string };
+    return { occurredOn: row.occurred_on, merchant: row.merchant, description: row.description, amount: Number(row.amount) };
+  });
+  const total = Math.round(items.reduce((s, i) => s + i.amount, 0) * 100) / 100;
+  return { items, total };
+}

@@ -44,6 +44,31 @@ export async function saveBudget(input: {
   }
 }
 
+// WLT-22-1 — the line items behind a category's "this month so far" number.
+export interface CategoryTxnDTO {
+  occurredOn: string;
+  merchant: string | null;
+  description: string;
+  amount: number;
+}
+
+export async function fetchCategoryTransactions(
+  category: string,
+  month: string,
+): Promise<{ ok: true; items: CategoryTxnDTO[]; total: number } | { ok: false }> {
+  try {
+    const res = await fetch(
+      `/api/budget/transactions?category=${encodeURIComponent(category)}&month=${encodeURIComponent(month)}`,
+      { headers: { accept: "application/json" } },
+    );
+    if (!res.ok) return { ok: false };
+    const data = (await res.json()) as { items: CategoryTxnDTO[]; total: number };
+    return { ok: true, items: data.items, total: data.total };
+  } catch {
+    return { ok: false };
+  }
+}
+
 /** Fire-and-forget: record that the user expanded a category's year spread (WLT-21-2). */
 export function recordSpreadViewed(): void {
   try {

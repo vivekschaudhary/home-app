@@ -5,7 +5,15 @@ import Link from "next/link";
 import { BUDGETABLE_CATEGORIES, type BudgetRow, humanizeCategory } from "@wealth/core";
 import { Banner, Button, TextField, Toast } from "@wealth/ui";
 import { COPY } from "@/app/lib/copy";
-import { type BudgetViewDTO, clearBudget, fetchBudget, recordSpreadViewed, saveBudget } from "@/app/lib/budget-client";
+import {
+  type BudgetViewDTO,
+  clearBudget,
+  fetchBudget,
+  fetchCategoryTransactions,
+  recordSpreadViewed,
+  saveBudget,
+} from "@/app/lib/budget-client";
+import { CategoryTransactions, type DrillState } from "./CategoryTransactions";
 import { YearSpread } from "./YearSpread";
 
 const C = COPY.budget;
@@ -36,6 +44,8 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [openYears, setOpenYears] = useState<Set<string>>(new Set()); // expanded year-spreads (WLT-21-2)
   const spreadViewed = useRef<Set<string>>(new Set()); // fire budget_spread_viewed once per category per load
+  const [openDrill, setOpenDrill] = useState<Set<string>>(new Set()); // expanded line-item drill-downs (WLT-22-1)
+  const [drillCache, setDrillCache] = useState<Record<string, DrillState>>({}); // fetch once per category per load
 
   // Reconcile with live server state on mount (#36 — force-dynamic page can hand a
   // stale prefetch; trusting initial props forever is the bug).
@@ -168,6 +178,35 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
 
   const C_Y = COPY.budgetYear;
   const A_Y = COPY.budgetYearA11y;
+  const A_D = COPY.budgetDrillA11y;
+
+  // WLT-22-1 — drill into a category's line items. BudgetClient owns the fetch +
+  // cache so it fetches once per category per load (the GET emits the event once).
+  const loadDrill = useCallback(
+    async (category: string) => {
+      setDrillCache((c) => ({ ...c, [category]: { status: "loading" } }));
+      const res = await fetchCategoryTransactions(category, view.asOfMonth);
+      setDrillCache((c) => ({
+        ...c,
+        [category]: res.ok ? { status: "ok", items: res.items, total: res.total } : { status: "error" },
+      }));
+    },
+    [view.asOfMonth],
+  );
+
+  function toggleDrill(category: string) {
+    setOpenDrill((prev) => {
+      const next = new Set(prev);
+      if (next.has(category)) {
+        next.delete(category);
+      } else {
+        next.add(category);
+        const cached = drillCache[category];
+        if (!cached || cached.status === "error") void loadDrill(category);
+      }
+      return next;
+    });
+  }
 
   function statusBadge(row: BudgetRow) {
     if (row.status === "none" || row.effectiveCap == null) return null;
@@ -254,7 +293,23 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
               </td>
               <td className="block py-0.5 text-gray-900 md:table-cell md:py-3 md:pr-4">
                 <span className="mr-2 text-xs text-gray-500 md:hidden">{C.colActual}</span>
-                {money(row.actualThisMonth)}
+                {row.actualThisMonth > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => toggleDrill(row.category)}
+                    aria-expanded={openDrill.has(row.category)}
+                    aria-controls={`drill-${row.category}`}
+                    aria-label={fill(openDrill.has(row.category) ? A_D.closeItems : A_D.openItems, {
+                      category: row.label,
+                      amount: money(row.actualThisMonth),
+                    })}
+                    className="underline decoration-dotted decoration-gray-400 underline-offset-2"
+                  >
+                    {money(row.actualThisMonth)}
+                  </button>
+                ) : (
+                  money(row.actualThisMonth)
+                )}
               </td>
               <td className="block py-1 md:table-cell md:py-3 md:align-top">
                 <span className="mr-2 text-xs text-gray-500 md:hidden">{C.colBudget}</span>
@@ -357,6 +412,17 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
                     points={series}
                     months={view.seriesMonths}
                     cap={row.effectiveCap}
+                  />
+                </td>
+              </tr>
+            ) : null}
+            {openDrill.has(row.category) ? (
+              <tr className="block md:table-row">
+                <td id={`drill-${row.category}`} colSpan={4} className="block pb-3 md:table-cell">
+                  <CategoryTransactions
+                    label={row.label}
+                    state={drillCache[row.category] ?? { status: "loading" }}
+                    onRetry={() => loadDrill(row.category)}
                   />
                 </td>
               </tr>

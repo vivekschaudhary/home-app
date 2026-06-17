@@ -459,4 +459,19 @@ export const COPY = {
     monthAmount: "{month}: {amount}",
     currentMonth: "{month} (this month so far): {amount}",
   },
+  // WLT-22-1 — drill into a category's line items. docs/bets/WLT-22/stories/WLT-22-1/copy.md verbatim.
+  budgetDrill: {
+    panelHeading: "What's in {category} this month",
+    totalLabel: "Total",
+    loading: "Loading your transactions…",
+    empty: "No transactions in {category} this month.",
+    error: "We couldn't load these just now — try again.",
+    retry: "Try again",
+  },
+  budgetDrillA11y: {
+    openItems: "Show the transactions in {category} this month ({amount})",
+    closeItems: "Hide the transactions in {category} this month",
+    list: "Transactions in {category} this month",
+    itemLabel: "{date}, {merchant}, {amount}",
+  },
 } as const;

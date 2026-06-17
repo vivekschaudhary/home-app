@@ -128,6 +128,15 @@ test.describe("budget & spending — recommended/actual render + set + persist (
       await expect(page.getByText("Monthly Food And Drink spend — last 12 months")).toBeVisible();
       // the visible "Most: $X" label proves the panel drew the REAL series (max of 400/600/520)
       await expect(page.getByText("Most: $600.00")).toBeVisible();
+
+      // WLT-22-1: drill into the category → its real line items for this month,
+      // through the real session → RLS → render path. The seeded current-month
+      // debit is $520; the drill Total reconciles to the row number.
+      await page.getByRole("button", { name: /Show the transactions in Food And Drink this month/ }).click();
+      await expect(page.getByText("What's in Food And Drink this month")).toBeVisible();
+      await expect(page.getByText("Total")).toBeVisible();
+      // $520.00 shows as the row amount, the line item, and the Total — all reconciling
+      await expect(page.getByText("$520.00").first()).toBeVisible();
     } finally {
       await db.end();
     }

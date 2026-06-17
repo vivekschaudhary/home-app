@@ -38,6 +38,8 @@ export const FUNNEL_EVENTS = {
   BUDGET_CLEARED: "budget_cleared",
   // WLT-21-2 — a user expanded a category's 12-month year-spread (engagement).
   BUDGET_SPREAD_VIEWED: "budget_spread_viewed",
+  // WLT-22-1 — a user drilled into a category to see its line items (verify/trust).
+  CATEGORY_DRILLDOWN_VIEWED: "category_drilldown_viewed",
 } as const;
 
 export type FunnelEvent = (typeof FUNNEL_EVENTS)[keyof typeof FUNNEL_EVENTS];
