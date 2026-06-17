@@ -2,7 +2,7 @@
 id: WLT-22-1
 bet: WLT-22
 type: story
-status: ready
+status: shipped
 priority: P1
 created: 2026-06-17
 author: PM
@@ -49,7 +49,7 @@ Per `docs/bets/WLT-22/architecture.md` (drill-down needs **no schema** — it's 
 
 ## PRs
 
-_To be linked on build._
+- **PR #60** — `feat(WLT-22-1): drill into a category — see the line items behind the number` — **merged** 2026-06-17 (squash `d09d69a`).
 
 Tags:
 - `regression: false`
@@ -75,6 +75,12 @@ _If post-merge bugs are found, story is re-opened and fixes live under `fixes/`.
 - [2026-06-17] [PM] **Showing merchant feels like a privacy surprise** — likelihood: low — impact: low — mitigation: it's the user's OWN data on their OWN authed screen (same as Accounts); owner-scoped + AAL2-gated — area: privacy
 
 ### Issues
-- [2026-06-17] [PM] **Merchant null handling** — severity: low — owner: Engineer — status: open — area: data — fall back to `description`; never blank.
+- [2026-06-17] [PM] **Merchant null handling** — severity: low — owner: Engineer — status: **resolved** — area: data — `merchant ?? description`; covered by the "null merchant → description" component test.
 
-_Story status: ready — Standard Experience Checklist has no empty category. The verification half of WLT-22; WLT-22-2 (saved categories + recategorization) follows._
+### Review (post-build)
+- [2026-06-17] [Codex] **Round 1 — 1 BLOCKER + 1 BLOCKER + 2 ISSUEs** on `08083f6`/`40e355d`: (a) DB read failure surfaced as an empty successful drill-down (AC3 violation); (b) the owner-isolation real-path E2E was missing its negative case (AC4); (c) `category_drilldown_viewed` emitted on every GET, not first-open-per-load (AC6); (d) the drill panel wasn't a labelled region / lacked header semantics (design a11y).
+- [2026-06-17] [Engineer] **App-code fixes** in `26503ba`: discriminated `{ ok }` read → route 500 → inline error state; funnel moved client-side to `POST /api/budget/drilldown-viewed`, gated per-load, fired on first open; panel `role="region"` + `sr-only <th scope="col">` headers. +3 component tests. The E2E negative case was **left to Codex** to keep the security proof independent of the implementing host.
+- [2026-06-17] [Codex] **E2E owner-isolation negative case** added in `7d29173` (`test: add budget second-user drilldown isolation e2e`) — a second authed user sees only their own drilled rows; user 1's `$520`/merchant asserted absent (`toHaveCount(0)`).
+- [2026-06-17] [Codex] **CLEAR** — all four findings resolved; clear tied to HEAD `7d29173` (per `[reverify-after-blocker-fix-commit]` — the attestation is bound to the exact reviewed SHA, not a generic approval).
+
+_Story status: **shipped** (PR #60, squash `d09d69a`, 2026-06-17). The verification half of WLT-22; WLT-22-2 (saved categories + recategorization) follows._
