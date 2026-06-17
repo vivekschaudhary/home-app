@@ -129,6 +129,11 @@ describe("BudgetClient", () => {
     // the screen-reader equivalent carries the real current-month value, "so far"
     expect(screen.getByText("June (this month so far): $520.00")).toBeTruthy(); // sr-only data table
     expect(screen.getAllByText("July: $100.00").length).toBeGreaterThanOrEqual(1); // sr table + the SVG <title>
+    // responsive month labels: single-initial (phone) + 3-letter (desktop) both present (AC2/AC6)
+    expect(screen.getAllByTestId("ys-initial")).toHaveLength(12);
+    expect(screen.getAllByTestId("ys-short")).toHaveLength(12);
+    expect(screen.getAllByTestId("ys-short").map((e) => e.textContent)).toContain("Jun"); // current month, 3-letter
+    expect(screen.getAllByTestId("ys-initial").map((e) => e.textContent)).toContain("J"); // single-initial
     // collapse → the panel is gone; re-expanding does not re-fire the event
     fireEvent.click(screen.getByRole("button", { name: /Hide the last 12 months/ }));
     expect(screen.queryByText("Monthly Food And Drink spend — last 12 months")).toBeNull();

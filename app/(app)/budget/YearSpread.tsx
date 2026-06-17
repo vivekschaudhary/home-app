@@ -8,6 +8,7 @@ import { COPY } from "@/app/lib/copy";
 const Y = COPY.budgetYear;
 const A = COPY.budgetYearA11y;
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTHS_INITIAL = MONTHS_SHORT.map((m) => m.charAt(0)); // J F M A M J J A S O N D
 const MONTHS_FULL = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
@@ -53,7 +54,7 @@ export function YearSpread({
       <p className="text-xs font-medium text-gray-700">{fill(Y.caption, { category: label })}</p>
       <p className="text-[11px] text-gray-500">{fill(Y.maxLabel, { amount: money(Math.max(...points, 0)) })}</p>
 
-      <svg viewBox={`0 0 ${W} ${CH + 18}`} className="mt-1 h-24 w-full" role="img" aria-hidden="true">
+      <svg viewBox={`0 0 ${W} ${CH + 2}`} className="mt-1 h-20 w-full" role="img" aria-hidden="true">
         {capY != null ? (
           <line x1={0} y1={capY} x2={W} y2={capY} stroke="#9ca3af" strokeWidth={1} strokeDasharray="3 3" />
         ) : null}
@@ -79,13 +80,24 @@ export function YearSpread({
               </rect>
               {/* baseline tick so a $0 month still reads as a real, present zero */}
               {v === 0 ? <line x1={x} y1={CH} x2={x + BAR_W} y2={CH} stroke="#e5e7eb" strokeWidth={1} /> : null}
-              <text x={i * STEP + STEP / 2} y={CH + 13} textAnchor="middle" className="fill-gray-500 text-[9px]">
-                {MONTHS_SHORT[monthIndex(months[i] ?? "")]}
-              </text>
             </g>
           );
         })}
       </svg>
+
+      {/* Month labels — single-initial on phone, 3-letter on md+ (AC2/AC6). Aligned
+          to the bars: 12 equal flex cells match the 12 even SVG bars. */}
+      <div className="flex" aria-hidden="true">
+        {months.map((m, i) => {
+          const idx = monthIndex(m ?? "");
+          return (
+            <span key={i} className="flex-1 text-center text-[10px] text-gray-500">
+              <span data-testid="ys-initial" className="md:hidden">{MONTHS_INITIAL[idx]}</span>
+              <span data-testid="ys-short" className="hidden md:inline">{MONTHS_SHORT[idx]}</span>
+            </span>
+          );
+        })}
+      </div>
 
       {cap != null ? <p className="text-[11px] text-gray-500">{fill(Y.capLegend, { amount: money(cap) })}</p> : null}
 
