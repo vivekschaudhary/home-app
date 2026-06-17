@@ -36,7 +36,7 @@ The three resolved open questions from the brief: **recommended = the user's own
 
 **Page + write-path** (mirror `app/(app)/accounts/*`):
 - `app/(app)/budget/page.tsx` — RSC: `requireAal2()` → `getBudgetView(userId)` → `<BudgetClient initialRows asOfMonth />`; `force-dynamic`; emit `BUDGET_VIEWED`.
-- `app/lib/budget.ts` — `getBudgetView` (read `budgets` under RLS + `readSpendingForBudgets` = the `readRecentSpending` query widened to a trailing ~7-month window → `buildBudgetRows`); `saveBudgetForUser(userId, {category, limitAmount|limitPercent})` (validate exactly-one, upsert under RLS, emit `BUDGET_SET`); `clearBudgetForUser` (soft-delete, emit `BUDGET_CLEARED`).
+- `app/lib/budget.ts` — `getBudgetView` (read `budgets` under RLS + `readSpendingForBudgets` = the `readRecentSpending` query widened to a trailing ~7-month window → `buildBudgetRows`); `saveBudgetForUser(userId, {category, limitAmount|limitPercent})` (validate exactly-one, upsert under RLS, emit `BUDGET_SET`); `clearBudgetForUser` (hard-delete — owner DELETE policy; soft-delete-via-RLS is impossible here, see data model — emit `BUDGET_CLEARED`).
 - `app/api/budget/route.ts` — `runtime="nodejs"`; `GET` (reconcile-on-mount) + `POST` (save) + `DELETE`/clear; each `getAal2UserId()`→401, validate→400 `{error}`, return `{ok}`/`{rows}`.
 - `app/lib/budget-client.ts` — `fetchBudget()`/`saveBudget()` try/catch `{ok}|{error}`.
 - `app/(app)/budget/BudgetClient.tsx` — semantic `<table>`; inline edit with a **$/% segmented toggle** (`TextField type=number`); optimistic save + reconcile-on-mount (#36 discipline); `Banner`/`Toast`; over/under via a **labeled badge** (not color-only).
@@ -51,12 +51,12 @@ budgets (
   limit_amount  numeric(20,4),            -- a dollar cap, OR…
   limit_percent numeric(5,2),             -- …a percent (exactly one set)
   period text not null default 'monthly' check (period in ('monthly')),
-  created_at/updated_at/deleted_at, set_updated_at() trigger (from 0001),
+  created_at/updated_at, set_updated_at() trigger (from 0001),
   check ((limit_amount is not null) <> (limit_percent is not null))
 )
-create unique index on budgets (user_id, category) where deleted_at is null;
+unique (user_id, category)  -- one cap per category; clearing HARD-deletes
 ```
-RLS (4 policies, verbatim from `intents`): `select` own + `deleted_at is null`; `insert`/`update` `with check (auth.uid()=user_id)`; `delete` own. **Recommended + actual are NOT stored** (computed from `transactions`).
+RLS (4 owner-CRUD policies, like `intents`): `select`/`insert`/`update`/`delete` own (`auth.uid()=user_id`). **No soft-delete:** a `deleted_at`-filtering SELECT policy makes an authenticated `update … set deleted_at` fail Postgres' UPDATE WITH-CHECK (the new row leaves the policy's visibility), so soft-delete-via-RLS is structurally impossible. Clearing a budget hard-deletes (the `delete` policy); a budget cap needs no audit trail. Save = upsert on `(user_id, category)`. **Recommended + actual are NOT stored** (computed from `transactions`).
 
 ### API / contract changes
 - **HTTP (new):** `GET /api/budget` → `{rows: BudgetRow[]}`; `POST /api/budget` `{category, limitAmount?|limitPercent?}` → `{ok}`; `DELETE /api/budget?category=` → `{ok}`. All AAL2-guarded.
@@ -68,11 +68,11 @@ RLS (4 policies, verbatim from `intents`): `select` own + `deleted_at is null`; 
 ## Enterprise/Solution Architect input
 
 ### Cross-system implications
-- **New user-write posture.** `budgets` is the **first owner-CRUD financial-adjacent table the user writes directly**. RLS isolation is load-bearing → proven by the `rls.test.ts` budgets suite (owner CRUD; cross-tenant denied; soft-delete hidden) + the gated real-path E2E. No new external service/runtime/data store.
+- **New user-write posture.** `budgets` is the **first owner-CRUD financial-adjacent table the user writes directly**. RLS isolation is load-bearing → proven by the `rls.test.ts` budgets suite (owner CRUD incl. hard-delete clear; cross-tenant denied) + the gated real-path E2E. No new external service/runtime/data store.
 - **Provider coupling (pluggability flag).** `category` keys on Plaid's primary taxonomy; a future aggregation-provider swap changes those strings. Mitigation: budgets key on the **same** category string we display + humanize; the normalized/finer-category mapping is the named follow-on seam (and the user-requested finer split). Logged as an Issue, not a blocker.
 
 ### Standards compliance
-Owner-CRUD RLS matches the `intents`/`goals` standard; soft-delete + `set_updated_at()` trigger + `idx_*_user where deleted_at is null` match the migration convention; API-route mutation + AAL2 guard match the established write-path. **No standards drift.**
+Owner-CRUD RLS matches the `intents`/`goals` standard; `set_updated_at()` trigger + `idx_*_user` match the migration convention; API-route mutation + AAL2 guard match the established write-path. Budgets hard-delete on clear (vs intents/goals' unused soft-delete) — a deliberate, documented divergence forced by the RLS UPDATE WITH-CHECK behavior. **No standards drift.**
 
 ### Cost / capacity / vendor lock-in
 On-read compute adds one widened (~7-month) owner-scoped read per `/budget` load, served by `idx_transactions_user_occurred` — negligible. No vendor change. No lock-in beyond the already-accepted Plaid category coupling.
@@ -93,7 +93,7 @@ On-read compute adds one widened (~7-month) owner-scoped read per `/budget` load
 ## Test strategy
 - **Unit** (`packages/core/budget.test.ts`, table-driven like `recap.test.ts`): monthly-actual windowing; recommended = median-of-monthly-totals + essential/discretionary trim + floor; **cold-start → no recommendation**; percent→`effectiveCap` resolution; over/under status; `null`→"Other".
 - **Component** (`BudgetClient.test.tsx`, jsdom): renders rows; $/% toggle; edit→save POSTs the right body (mock `fetch`); honest empty + "—"; reconcile-on-mount.
-- **RLS** (`supabase/tests/rls.test.ts`, live PG in CI after `0010`): owner CRUD; **cross-tenant read/write denied**; soft-delete hidden.
+- **RLS** (`supabase/tests/rls.test.ts`, live PG in CI after `0010`): owner CRUD incl. **hard-delete clear**; **cross-tenant read/write/delete denied**; exactly-one-limit + per-category uniqueness.
 - **Real-path E2E** (`e2e/budget.spec.ts`, `E2E_PASSKEY=1`-gated, Codex-owned): sign up → AAL2 → seed `transactions` via `SUPABASE_DB_URL` → `/budget` renders recommended + this-month actual → set a budget ($ then %) → reload → persists + over/under reads right (#36-class RSC→RLS→render).
 - **Mechanical** (`[mechanical-output-verification]`): `0010` applies clean in CI; the 3 funnel events present.
 

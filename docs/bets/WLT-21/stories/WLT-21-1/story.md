@@ -35,7 +35,7 @@ This is the first section feature to mount into the shell, and the first **user-
 - [ ] **AC9 — Feedback + validation.** Save shows a pending state → a "Saved" `Toast`; a failed save shows an inline `Banner` + retry and **preserves the user's input**; invalid input (non-numeric, ≤0, percent not in 1–100) is blocked with a clear message.
 - [ ] **AC10 — Responsive.** Clean + usable on **phone ≤640** (rows become stacked cards; ≥44px touch targets), **tablet ~768–1024**, **desktop ≥1280** (the columnar table). No overflow/illegibility.
 - [ ] **AC11 — Accessibility.** Semantic table with `<th scope>` header associations (cards keep label↔value pairing); the budget input + $/% toggle are labeled, keyboard-operable, and announced; the status indicator is not color-only; `aria-live` on save feedback; WCAG AA contrast.
-- [ ] **AC12 — Owner isolation (load-bearing security).** A user only ever sees/sets their **own** budgets — proven by the `supabase/tests/rls.test.ts` budgets suite (cross-tenant read/write denied; soft-deleted hidden) **and** the gated real-path E2E. No budget read/write crosses tenants.
+- [ ] **AC12 — Owner isolation (load-bearing security).** A user only ever sees/sets their **own** budgets — proven by the `supabase/tests/rls.test.ts` budgets suite (cross-tenant read/write/delete denied; owner hard-delete clear) **and** the gated real-path E2E. No budget read/write crosses tenants.
 - [ ] **AC13 — Instrumentation.** `budget_viewed` (load), `budget_set` (save), `budget_cleared` (clear) emitted — additive funnel events (internal; supports the bet metric).
 
 ## Standard Experience Checklist
@@ -50,7 +50,7 @@ This is the first section feature to mount into the shell, and the first **user-
 ## Tech notes
 
 Per `docs/bets/WLT-21/architecture.md`:
-- **DB:** `supabase/migrations/0010_budgets.sql` — owner-CRUD `budgets` (mirror `intents`/`goals` RLS, **not** the financial service-role posture): `(category, limit_amount | limit_percent [exactly one], period 'monthly', soft-delete + set_updated_at trigger)`, unique active `(user_id, category)`. Add `0010` to `.github/workflows/ci.yml`.
+- **DB:** `supabase/migrations/0010_budgets.sql` — owner-CRUD `budgets` (mirror `intents`/`goals` RLS, **not** the financial service-role posture): `(category, limit_amount | limit_percent [exactly one], period 'monthly', set_updated_at trigger)`, unique `(user_id, category)`; clearing hard-deletes (no soft-delete — RLS WITH-CHECK forbids it). Add `0010` to `.github/workflows/ci.yml`.
 - **Compute (`packages/core/budget.ts`, pure):** `computeMonthlySpending(txns, asOf)`, `computeRecommendedBudgets(txns, asOf)` (median of trailing monthly totals + discretionary trim; ≥1 month or "—"), `buildBudgetRows({budgets, txns, asOf})` → the view model incl. effective-cap + over/under. Reuse `humanizeCategory`/`median`/`round2`/string-date math from `recap.ts`/`anomaly.ts`. A small `PLAID_PRIMARY_CATEGORIES` constant feeds the picker.
 - **App:** `app/lib/budget.ts` (`getBudgetView` reads `budgets` under RLS + a trailing ~7-month `readSpendingForBudgets`; `saveBudgetForUser`; `clearBudgetForUser`), `app/lib/budget-client.ts` (try/catch `{ok}|{error}`), `app/api/budget/route.ts` (`GET`/`POST`/`DELETE`, `getAal2UserId()` guard, `runtime="nodejs"`) — the Accounts read+mutate chain.
 - **UI:** `app/(app)/budget/page.tsx` (stub→real RSC, `force-dynamic`, `BUDGET_VIEWED`), `app/(app)/budget/BudgetClient.tsx` (semantic table / mobile cards; `@wealth/ui` `TextField`/`Button`/`Banner`/`Toast`; reconcile-on-mount). Flip `app/(app)/nav.ts` `budget.status`. Add the `budget`/`budgetErrors` copy block + the 3 funnel events. **On-read compute; no rollup; no new dependency.**
@@ -65,7 +65,7 @@ Tags:
 
 ## Tests
 
-_Engineer: unit (`packages/core/budget.test.ts` — monthly actual, recommended median+trim, cold-start "—", percent→effectiveCap, over/under, `null`→Other), component (`BudgetClient.test.tsx` jsdom — render rows, $/% toggle, edit→save POST body, empty/cold-start, reconcile-on-mount), RLS (`supabase/tests/rls.test.ts` — budgets owner-CRUD + cross-tenant denied + soft-delete hidden). Codex: the real-path E2E (`e2e/budget.spec.ts`, `E2E_PASSKEY=1`-gated) — AAL2 → seed transactions → `/budget` renders recommended+actual → set a budget ($ then %) → reload persists + over/under correct (the #36-class RSC→RLS→render + owner isolation)._
+_Engineer: unit (`packages/core/budget.test.ts` — monthly actual, recommended median+trim, cold-start "—", percent→effectiveCap, over/under, `null`→Other), component (`BudgetClient.test.tsx` jsdom — render rows, $/% toggle, edit→save POST body, empty/cold-start, reconcile-on-mount), RLS (`supabase/tests/rls.test.ts` — budgets owner-CRUD incl. hard-delete clear + cross-tenant denied + exactly-one + uniqueness). Codex: the real-path E2E (`e2e/budget.spec.ts`, `E2E_PASSKEY=1`-gated) — AAL2 → seed transactions → `/budget` renders recommended+actual → set a budget ($ then %) → reload persists + over/under correct (the #36-class RSC→RLS→render + owner isolation)._
 
 ## Fixes (post-merge)
 

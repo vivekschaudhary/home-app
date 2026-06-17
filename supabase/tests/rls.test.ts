@@ -481,7 +481,7 @@ suite("budgets RLS (WLT-21): owner CRUD + cross-tenant deny", () => {
     return res;
   }
 
-  it("owner sets + reads + updates + clears own budget; cross-tenant denied; soft-delete hidden", async () => {
+  it("owner sets + reads + updates + clears (hard-delete) own budget; cross-tenant denied", async () => {
     await client.query("begin");
     try {
       await client.query("insert into auth.users (id) values ($1),($2) on conflict do nothing", [USER_A, USER_B]);
@@ -503,7 +503,11 @@ suite("budgets RLS (WLT-21): owner CRUD + cross-tenant deny", () => {
       const crossUpd = await asUser(USER_B, "update budgets set limit_amount=1 where id=$1", [id]);
       expect(crossUpd.rowCount).toBe(0);
 
-      const del = await asUser(USER_A, "update budgets set deleted_at=now() where id=$1", [id]);
+      // Clear = the real clearBudgetForUser path: an authenticated owner DELETE.
+      // A cross-tenant delete matches 0 rows (USING); the owner's removes the row.
+      const crossDel = await asUser(USER_B, "delete from budgets where id=$1", [id]);
+      expect(crossDel.rowCount).toBe(0);
+      const del = await asUser(USER_A, "delete from budgets where id=$1", [id]);
       expect(del.rowCount).toBe(1);
       const afterClear = await asUser(USER_A, "select count(*)::int as n from budgets where id=$1", [id]);
       expect(afterClear.rows[0].n).toBe(0);

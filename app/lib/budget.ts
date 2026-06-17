@@ -49,7 +49,7 @@ async function readSpendingForBudgets(userId: string, supabase: Supa): Promise<S
   });
 }
 
-/** The user's active budgets — owner-SELECT (RLS hides soft-deleted). */
+/** The user's budgets — owner-SELECT. */
 async function readBudgets(userId: string, supabase: Supa): Promise<SavedBudget[]> {
   const { data } = await supabase
     .from("budgets")
@@ -85,8 +85,8 @@ export type BudgetSaveResult = { ok: true } | { ok: false; error: "invalid" | "s
 
 /**
  * Set or update the user's budget for one category — owner-scoped (RLS). Exactly
- * one of amount/percent. Update-then-insert against the active row (the partial
- * unique index `(user_id, category) where deleted_at is null` guarantees one).
+ * one of amount/percent. Upsert on the `(user_id, category)` unique constraint
+ * (insert, or update the existing cap — switching $↔% clears the other column).
  */
 export async function saveBudgetForUser(input: {
   userId: string;
@@ -105,34 +105,29 @@ export async function saveBudgetForUser(input: {
   if (limitPercent != null && !(limitPercent > 0 && limitPercent <= 100)) return { ok: false, error: "invalid" };
 
   const supabase = await createServerSupabase();
-  const patch = { limit_amount: limitAmount, limit_percent: limitPercent };
-  const { data: updated, error: updateErr } = await supabase
+  const { error } = await supabase
     .from("budgets")
-    .update(patch)
-    .eq("user_id", userId)
-    .eq("category", category)
-    .is("deleted_at", null)
-    .select("id");
-  if (updateErr) return { ok: false, error: "save_failed" };
-  if (!updated || updated.length === 0) {
-    const { error: insertErr } = await supabase
-      .from("budgets")
-      .insert({ user_id: userId, category, ...patch });
-    if (insertErr) return { ok: false, error: "save_failed" };
-  }
+    .upsert(
+      { user_id: userId, category, limit_amount: limitAmount, limit_percent: limitPercent },
+      { onConflict: "user_id,category" },
+    );
+  if (error) return { ok: false, error: "save_failed" };
   return { ok: true };
 }
 
-/** Clear the user's budget for a category (soft-delete the active row). */
+/**
+ * Clear the user's budget for a category — HARD delete (budgets_delete_own). Soft-
+ * delete via the authenticated path is structurally impossible here (see 0010),
+ * and a budget cap needs no audit trail.
+ */
 export async function clearBudgetForUser(input: { userId: string; category: string }): Promise<BudgetSaveResult> {
   if (!input.category) return { ok: false, error: "invalid" };
   const supabase = await createServerSupabase();
   const { error } = await supabase
     .from("budgets")
-    .update({ deleted_at: new Date().toISOString() })
+    .delete()
     .eq("user_id", input.userId)
-    .eq("category", input.category)
-    .is("deleted_at", null);
+    .eq("category", input.category);
   if (error) return { ok: false, error: "save_failed" };
   return { ok: true };
 }
