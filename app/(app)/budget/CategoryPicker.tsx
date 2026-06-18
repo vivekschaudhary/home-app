@@ -216,6 +216,12 @@ export function CategoryPicker({
               ))}
             </div>
           </fieldset>
+          {canRemember ? (
+            <label className="flex items-start gap-2 text-xs text-gray-700">
+              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="mt-0.5" />
+              <span>{fill(RM.rememberLabel, { merchant: merchantLabel })}</span>
+            </label>
+          ) : null}
           <div className="flex items-center gap-3">
             <Button
               variant="secondary"

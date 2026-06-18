@@ -275,6 +275,32 @@ describe("BudgetClient", () => {
     await waitFor(() => expect(screen.queryByLabelText("Category name")).toBeNull()); // popover dismissed
   });
 
+  it("create a category with 'remember' ticked applies it to the whole merchant (WLT-22-3)", async () => {
+    fetchCategoryTransactionsMock.mockResolvedValue({
+      ok: true,
+      items: [
+        { dedupKey: "dk-1", occurredOn: "2026-06-10", merchant: "Starbucks", description: "x", amount: 12, category: "FOOD_AND_DRINK" },
+      ],
+      total: 12,
+    });
+    createCategoryMock.mockResolvedValue({ ok: true, category: { id: "c-coffee", name: "Coffee", kind: "discretionary", source: "custom" } });
+    recategorizeTransactionMock.mockResolvedValue({ ok: true, count: 5 });
+    render(<BudgetClient initial={VIEW} />);
+    fireEvent.click(screen.getByRole("button", { name: /Show the transactions in Food And Drink this month/ }));
+    expect(await screen.findByText("Starbucks")).toBeTruthy();
+    fireEvent.click(await screen.findByRole("button", { name: /Change the category of Starbucks/ }));
+    fireEvent.click(await screen.findByText("+ New category"));
+    // the create form itself offers the remember option (merchant known)
+    fireEvent.change(screen.getByLabelText("Category name"), { target: { value: "Coffee" } });
+    fireEvent.click(screen.getByLabelText(/Always categorize Starbucks this way/));
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+    await waitFor(() => expect(createCategoryMock).toHaveBeenCalledWith("Coffee", "discretionary"));
+    // created → assigned as a RULE (applyToMerchant: true), not a one-off
+    await waitFor(() =>
+      expect(recategorizeTransactionMock).toHaveBeenCalledWith({ dedupKey: "dk-1", categoryId: "c-coffee", applyToMerchant: true }),
+    );
+  });
+
   it("a failed recategorize keeps the prior category + shows a discriminated error (AC6)", async () => {
     fetchCategoryTransactionsMock.mockResolvedValue({
       ok: true,
