@@ -92,24 +92,27 @@ Goal: every migration merged to `main` is applied to the prod Supabase DB as par
 
 ### Decisions (execution)
 - [2026-06-17] [Human] **OPS-2 APPROVED** — proceed to execution.
-- [2026-06-17] [Engineer] **Implement as a custom only-new tracking script (`scripts/migrate-prod.sh`), not `supabase db push`** — rationale: (1) re-running every migration on a LIVE prod DB would `drop policy … create policy` each deploy → a brief RLS gap; an only-new tracker avoids that; (2) sidesteps the Supabase-CLI `<timestamp>_name.sql` convention (our files are `00NN_*`); (3) each file + its tracking insert run in one transaction (atomic). The job is gated `needs:[check,e2e]` + `main`-only + the protected `production` Environment — area: ci-cd — reversibility: easy
+- [2026-06-17] [Engineer] **Implement as a custom only-new tracking script (`scripts/migrate-prod.sh`), not `supabase db push`** — rationale: (1) re-running every migration on a LIVE prod DB would `drop policy … create policy` each deploy → a brief RLS gap; an only-new tracker avoids that; (2) sidesteps the Supabase-CLI `<timestamp>_name.sql` convention (our files are `00NN_*`); (3) each file + its tracking insert run in one transaction (atomic) — area: ci-cd — reversibility: easy
+- [2026-06-17] [Codex] **BLOCKER (round 1): the `on: push` job races Vercel's independent deploy** — a parallel push-triggered job (esp. one waiting on a reviewer) lets new code go live before the migration → the exact "schema behind code" window. The repo already solved this class for Inngest via `deployment_status`.
+- [2026-06-17] [Human + Engineer] **Re-key to `deployment_status` (post-deploy auto), mirroring `inngest-sync.yml`** — fire when Vercel reports the **Production** deploy succeeded, check out the **deployed sha**, auto-apply pending migrations. **No human gate** (a gate post-deploy would pause WITH code already live); safety = the CI pre-merge validation (every migration applied to a real test PG) + expand-only migrations. Window shrinks from "indefinite" to ~seconds — area: ci-cd — alternatives: gated deploy-from-CI / migrate-before-promote (true ordering, zero window, but a much bigger deploy-pipeline change — deferred) — reversibility: easy
 
 ## Execution
 
-**Committed (this PR):** `scripts/migrate-prod.sh` (idempotent, only-new, transactional) + a gated `migrate-prod` job in `.github/workflows/ci.yml` (`needs:[check,e2e]`, `main`-only, `environment: production`).
+**Committed (this PR):** `scripts/migrate-prod.sh` (only-new, transactional) + **`.github/workflows/migrate-prod.yml`** — a `deployment_status` workflow that auto-applies pending migrations after a successful **Production** deploy, at the deployed sha (mirrors `inngest-sync.yml`).
+
+**Residual + its mitigation (honest):** this is **post-deploy** — code is live a few seconds before the schema. Safe for **expand-only** migrations + code that tolerates the pre-migration schema (**expand-contract**); it is NOT a substitute for backward-compatible code on a schema-requiring change. The WLT-22 incident is fully closed regardless (migrations now always apply, automatically, tied to the deploy). The zero-window alternative (gated deploy-from-CI) is deferred.
 
 **Manual steps required before this is live (prod access — owner: Human + Security Reviewer):**
-1. **Create the protected `production` GitHub Environment** (repo → Settings → Environments): add **Required reviewers** (so each prod-migrate run waits for a human ✓) and restrict deployment branches to `main`.
-2. **Add the `PROD_DB_URL` secret** to that Environment (a Postgres DSN with DDL privileges). Never a plain repo-level secret.
-3. **One-time tracking baseline** (so the first run is a no-op — `0001`–`0012` are already applied to prod):
+1. **Create the `production` GitHub Environment** (repo → Settings → Environments) and add the **`PROD_DB_URL` secret** (a Postgres DSN with DDL privileges). **Do NOT add Required reviewers** — this runs post-deploy, so a reviewer pause would strand new code on the old schema. (Restrict to `main` if desired.)
+2. **One-time tracking baseline** (so the first run is a no-op — `0001`–`0012` are already applied to prod):
    ```bash
    psql "$PROD_DB_URL" -c "create table if not exists public._migrations (filename text primary key, applied_at timestamptz not null default now());"
    for f in supabase/migrations/*.sql; do psql "$PROD_DB_URL" -c "insert into public._migrations(filename) values ('$(basename "$f")') on conflict do nothing;"; done
    ```
-4. Merge this PR → the next `main` push runs `migrate-prod` (applies 0 migrations until a new one lands), under the required-reviewer gate.
+3. Merge this PR → the **next production deploy** triggers `migrate-prod` (applies 0 until a new migration lands).
 
-- Started: 2026-06-17 — Outcome: pending (manual steps + review)
+- Started: 2026-06-17 — Outcome: pending (manual steps + Security review)
 
 ---
 
-_Status `in-execution`: workflow + script committed (PR pending); awaiting the manual Environment/secret/baseline steps + Codex/Security review before it goes live. Companion already shipped: PR #63 (CI applies all migrations to the test PG + the `0011` syntax fix)._
+_Status `in-execution`: revised per Codex's BLOCKER — workflow re-keyed to `deployment_status` (post-deploy, tied to the real prod release). Awaiting the manual Environment/secret/baseline steps + Security review before live. Companion already shipped: PR #63 (CI applies all migrations to the test PG + the `0011` syntax fix)._

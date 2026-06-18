@@ -1,0 +1,39 @@
+# OPS-2 — apply pending Supabase migrations to PRODUCTION after a successful prod deploy.
+#
+# Keyed off Vercel's GitHub deployment_status (its git integration posts these on
+# every deploy), exactly like inngest-sync.yml (OPS-1). My first cut used `on: push`,
+# which races Vercel's independent deploy (code could go live before the migration) —
+# this ties the apply to the REAL production release instead. We check out the
+# DEPLOYED sha so the migrations match the code that just went live, then apply
+# only-new + transactional migrations (scripts/migrate-prod.sh).
+#
+# AUTO (no human gate): a gate here would pause WITH code already live, so safety is
+# (a) CI validates every migration against a real test PG before merge (ci.yml loop)
+# and (b) migrations are expand-only. This is post-deploy by design — keep code
+# tolerant of the pre-migration schema (expand-contract) so the ~seconds gap is safe.
+name: Migrate prod (post-deploy)
+
+on:
+  deployment_status: {}
+
+# deployment_status workflows fire from the default branch only.
+jobs:
+  migrate:
+    # Only when the PRODUCTION deployment SUCCEEDED (skip previews + in-progress).
+    if: >-
+      github.event.deployment_status.state == 'success' &&
+      contains(github.event.deployment_status.environment, 'Production')
+    runs-on: ubuntu-latest
+    # Holds the PROD_DB_URL secret. IMPORTANT: configure this Environment WITHOUT
+    # required reviewers — this runs post-deploy, so a reviewer pause would leave new
+    # code live against the old schema until a human clicks. (The CI pre-merge
+    # validation is the gate.)
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.deployment.sha }} # the commit that just deployed
+      - name: Apply pending migrations to production
+        env:
+          PROD_DB_URL: ${{ secrets.PROD_DB_URL }}
+        run: bash scripts/migrate-prod.sh
