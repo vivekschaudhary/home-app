@@ -231,19 +231,28 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
   );
 
   const recategorize = useCallback(
-    async (sourceCategory: string, dedupKey: string, categoryId: string): Promise<RecatResult> => {
-      const res = await recategorizeTransaction({ dedupKey, categoryId });
+    async (sourceCategory: string, dedupKey: string, categoryId: string, applyToMerchant: boolean): Promise<RecatResult> => {
+      const res = await recategorizeTransaction({ dedupKey, categoryId, applyToMerchant });
       if (!res.ok) return res;
-      const destName = categories.find((c) => c.id === categoryId)?.name ?? "";
-      setToast(fill(COPY.budgetRecat.saved, { category: humanizeCategory(destName || null) }));
-      await Promise.all([
-        reloadOrDropDrill(sourceCategory),
-        destName && destName !== sourceCategory ? reloadOrDropDrill(destName) : Promise.resolve(),
-      ]);
       await refresh(); // budget rows reconcile (source drops, destination rises)
-      return { ok: true };
+      if (applyToMerchant) {
+        // A rule (WLT-22-3) can move MANY transactions across many categories —
+        // refetch every open drill + drop the rest so reopening refetches. The
+        // picker shows the counted success; no toast here (avoid double feedback).
+        const open = [...openDrill];
+        setDrillCache({});
+        await Promise.all(open.map((cat) => loadDrill(cat)));
+      } else {
+        const destName = categories.find((c) => c.id === categoryId)?.name ?? "";
+        setToast(fill(COPY.budgetRecat.saved, { category: humanizeCategory(destName || null) }));
+        await Promise.all([
+          reloadOrDropDrill(sourceCategory),
+          destName && destName !== sourceCategory ? reloadOrDropDrill(destName) : Promise.resolve(),
+        ]);
+      }
+      return { ok: true, count: res.count };
     },
-    [categories, reloadOrDropDrill, refresh],
+    [categories, reloadOrDropDrill, refresh, openDrill, loadDrill],
   );
 
   const createCat = useCallback(
@@ -491,7 +500,9 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
                     state={drillCache[row.category] ?? { status: "loading" }}
                     onRetry={() => loadDrill(row.category)}
                     categories={categories}
-                    onRecategorize={(dedupKey, categoryId) => recategorize(row.category, dedupKey, categoryId)}
+                    onRecategorize={(dedupKey, categoryId, applyToMerchant) =>
+                      recategorize(row.category, dedupKey, categoryId, applyToMerchant)
+                    }
                     onCreateCategory={createCat}
                   />
                 </td>
@@ -516,13 +527,15 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
             {C.addCta}
           </button>
         ) : (
-          <div className="rounded-md border border-gray-200 bg-white p-3">
-            <p className="text-sm font-medium text-gray-900">{C.pickerTitle}</p>
-            <p className="mt-0.5 text-xs text-gray-500">{C.pickerHint}</p>
+          <div className="space-y-3 rounded-md border border-gray-200 bg-white p-3 shadow-sm">
+            <div>
+              <p className="text-sm font-medium text-gray-900">{C.pickerTitle}</p>
+              <p className="mt-0.5 text-xs text-gray-500">{C.pickerHint}</p>
+            </div>
             {pickerOptions.length === 0 ? (
-              <p className="mt-2 text-sm text-gray-500">{C.pickerEmpty}</p>
+              <p className="text-sm text-gray-500">{C.pickerEmpty}</p>
             ) : (
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2">
                 {pickerOptions.map((c) => (
                   <button
                     key={c}
@@ -538,7 +551,7 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
             <button
               type="button"
               onClick={() => setPickerOpen(false)}
-              className="mt-2 block text-xs text-gray-500 underline"
+              className="block text-sm text-gray-500 underline"
             >
               {C.pickerCancel}
             </button>

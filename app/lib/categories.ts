@@ -5,7 +5,8 @@
 // in @wealth/db/categories — this file is the WRITE + management side.
 
 import { createServerSupabase } from "@vc1023/passkey-2fa";
-import { FUNNEL_EVENTS, isEssentialCategory } from "@wealth/core";
+import { FUNNEL_EVENTS, isEssentialCategory, normalizeMerchant } from "@wealth/core";
+import { applyRulesToTransactions } from "@wealth/db/categories";
 import { emitFunnel } from "@wealth/db/emit";
 
 type Supa = Awaited<ReturnType<typeof createServerSupabase>>;
@@ -126,14 +127,46 @@ export async function recategorizeTransaction(
   userId: string,
   dedupKey: string,
   categoryId: string,
-): Promise<{ ok: true } | { ok: false; error: "invalid" | "save_failed" }> {
+  applyToMerchant = false,
+): Promise<{ ok: true; count: number } | { ok: false; error: "invalid" | "save_failed" }> {
   if (!dedupKey || !categoryId) return { ok: false, error: "invalid" };
   const supabase = await createServerSupabase();
+
+  // WLT-22-3 — "remember the merchant": create a rule + backfill ALL the user's
+  // matching transactions as 'rule' (incl. this one, since it has no 'user'
+  // override). Returns how many were written. A merchant is required to match on.
+  if (applyToMerchant) {
+    const { data: tx } = await supabase
+      .from("transactions")
+      .select("merchant")
+      .eq("user_id", userId)
+      .eq("dedup_key", dedupKey)
+      .is("superseded_by", null)
+      .limit(1)
+      .maybeSingle();
+    const merchant = (tx as { merchant: string | null } | null)?.merchant ?? null;
+    if (merchant) {
+      const merchantNorm = normalizeMerchant(merchant);
+      const { data: rule, error: rErr } = await supabase
+        .from("category_rules")
+        .upsert({ user_id: userId, merchant_norm: merchantNorm, category_id: categoryId }, { onConflict: "user_id,merchant_norm" })
+        .select("id")
+        .single();
+      if (rErr || !rule) return { ok: false, error: "save_failed" }; // incl. a forged cross-tenant categoryId (FK)
+      const ruleId = (rule as { id: string }).id;
+      const count = await applyRulesToTransactions(supabase, userId, [{ merchantNorm, categoryId, ruleId }]);
+      await emitFunnel(FUNNEL_EVENTS.CATEGORY_RULE_CREATED, userId, {});
+      return { ok: true, count };
+    }
+    // merchant null → no rule possible; fall through to a single override.
+  }
+
+  // The single per-transaction override (WLT-22-2 path).
   const { error } = await supabase.from("transaction_categories").upsert(
     { user_id: userId, dedup_key: dedupKey, category_id: categoryId, assigned_by: "user", rule_id: null },
     { onConflict: "user_id,dedup_key" },
   );
   if (error) return { ok: false, error: "save_failed" }; // incl. a forged cross-tenant categoryId (FK violation)
   await emitFunnel(FUNNEL_EVENTS.TRANSACTION_RECATEGORIZED, userId, {});
-  return { ok: true };
+  return { ok: true, count: 1 };
 }

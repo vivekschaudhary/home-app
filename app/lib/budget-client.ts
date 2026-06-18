@@ -117,11 +117,14 @@ export async function createCategory(
   }
 }
 
-// WLT-22-2 — save the user's category for one transaction (the per-transaction override).
+// WLT-22-2/3 — save the user's category for one transaction (the per-transaction
+// override), or — with `applyToMerchant` — "remember the merchant": a rule that
+// backfills all matching transactions. Returns how many were written (`count`).
 export async function recategorizeTransaction(input: {
   dedupKey: string;
   categoryId: string;
-}): Promise<{ ok: true } | { ok: false; error: BudgetError }> {
+  applyToMerchant?: boolean;
+}): Promise<{ ok: true; count: number } | { ok: false; error: BudgetError }> {
   try {
     const res = await fetch("/api/categories/recategorize", {
       method: "POST",
@@ -129,7 +132,8 @@ export async function recategorizeTransaction(input: {
       body: JSON.stringify(input),
     });
     if (!res.ok) return { ok: false, error: res.status === 400 ? "invalid" : "server" };
-    return { ok: true };
+    const data = (await res.json().catch(() => ({ count: 1 }))) as { count?: number };
+    return { ok: true, count: typeof data.count === "number" ? data.count : 1 };
   } catch {
     return { ok: false, error: "network" };
   }

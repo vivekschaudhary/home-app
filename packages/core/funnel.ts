@@ -44,6 +44,9 @@ export const FUNNEL_EVENTS = {
   // their own (the saved-category model; ownership + trust).
   TRANSACTION_RECATEGORIZED: "transaction_recategorized",
   CATEGORY_CREATED: "category_created",
+  // WLT-22-3 — a user "remembered a merchant": a rule that categorizes that
+  // merchant's transactions (past backfill + future at sync).
+  CATEGORY_RULE_CREATED: "category_rule_created",
 } as const;
 
 export type FunnelEvent = (typeof FUNNEL_EVENTS)[keyof typeof FUNNEL_EVENTS];

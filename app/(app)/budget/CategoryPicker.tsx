@@ -7,40 +7,48 @@ import { Button, TextField } from "@wealth/ui";
 import type { CategoryDTO } from "@/app/lib/budget-client";
 import { COPY } from "@/app/lib/copy";
 
-// WLT-22-2 — per-line-item recategorize control. Opens a keyboard-navigable menu
-// of the user's categories (current marked); "+ New category" reveals an inline
-// create-form. The save is async — the TRIGGER shows the saving/error state and
-// the item keeps its prior category until a save succeeds (no optimistic revert).
+// WLT-22-2/3 — per-line-item recategorize control. Opens a keyboard-navigable
+// menu of the user's categories (current marked); "+ New category" reveals an
+// inline create-form. WLT-22-3 adds the "Always categorize {merchant} this way"
+// checkbox (only when the transaction has a merchant): checked + pick → the move
+// becomes a rule that backfills past + applies at sync (the counted success names
+// how many rows it touched). The save is async — the TRIGGER shows saving/error
+// and the item keeps its prior category until success (no optimistic revert).
 
 const R = COPY.budgetRecat;
 const RA = COPY.budgetRecatA11y;
+const RM = COPY.budgetRemember;
 
 function fill(template: string, vars: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
 }
 
-export type RecatResult = { ok: true } | { ok: false; error: "invalid" | "server" | "network" };
+export type RecatResult = { ok: true; count: number } | { ok: false; error: "invalid" | "server" | "network" };
 export type CreateResult =
   | { ok: true; category: CategoryDTO }
   | { ok: false; error: "invalid" | "duplicate" | "server" | "network" };
 
 export function CategoryPicker({
   current,
-  merchant,
+  merchantLabel,
   amount,
   categories,
+  canRemember,
   onPick,
   onCreate,
 }: {
   current: string; // the resolved current category name ("" = "Other")
-  merchant: string; // for the trigger's accessible name (merchant or description)
+  merchantLabel: string; // merchant or description, for display + a11y
   amount: string; // formatted, for the trigger's accessible name
   categories: CategoryDTO[];
-  onPick: (categoryId: string) => Promise<RecatResult>;
+  canRemember: boolean; // true when the transaction has a real merchant (a rule can match)
+  onPick: (categoryId: string, applyToMerchant: boolean) => Promise<RecatResult>;
   onCreate: (name: string, kind: "essential" | "discretionary") => Promise<CreateResult>;
 }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [remember, setRemember] = useState(false);
   const [lastPick, setLastPick] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
@@ -51,14 +59,25 @@ export function CategoryPicker({
   const kindName = useId();
 
   async function pick(categoryId: string) {
+    const applyToMerchant = canRemember && remember;
     setSaving(true);
     setError(null);
+    setSuccess(null);
     setLastPick(categoryId);
-    const res = await onPick(categoryId);
+    const res = await onPick(categoryId, applyToMerchant);
     setSaving(false);
     if (!res.ok) {
-      setError(res.error === "network" ? R.errorNetwork : res.error === "invalid" ? R.errorInvalid : R.error);
+      setError(res.error === "network" ? RM.errorNetwork : res.error === "invalid" ? R.errorInvalid : RM.error);
+      return;
     }
+    if (applyToMerchant) {
+      // Name the breadth — how many rows the rule touched (singular/plural).
+      const catName = categories.find((c) => c.id === categoryId)?.name ?? "";
+      const tmpl = res.count === 1 ? RM.successOne : RM.successMany;
+      setSuccess(fill(tmpl, { merchant: merchantLabel, category: humanizeCategory(catName), count: String(res.count) }));
+      setRemember(false);
+    }
+    // The single-move (unchecked) success is the BudgetClient "Moved to…" toast.
   }
 
   async function submitCreate() {
@@ -91,7 +110,10 @@ export function CategoryPicker({
 
   if (creating) {
     return (
-      <div className="rounded-md border border-gray-200 bg-white p-2" aria-label={RA.createForm}>
+      <div
+        className="ml-auto w-56 space-y-3 rounded-md border border-gray-200 bg-white p-3 text-left shadow-sm"
+        aria-label={RA.createForm}
+      >
         <TextField
           label={R.newCategoryNameLabel}
           value={name}
@@ -100,42 +122,58 @@ export function CategoryPicker({
           error={createErr ?? undefined}
           autoFocus
         />
-        <fieldset className="mt-2">
-          <legend className="text-xs font-medium text-gray-700">{R.kindLabel}</legend>
-          <div className="mt-1 flex gap-3">
+        <fieldset>
+          <legend className="text-sm font-medium text-gray-900">{R.kindLabel}</legend>
+          <div className="mt-1.5 flex gap-4">
             {(["discretionary", "essential"] as const).map((k) => (
-              <label key={k} className="flex items-center gap-1 text-sm text-gray-700">
+              <label key={k} className="flex items-center gap-1.5 text-sm text-gray-700">
                 <input type="radio" name={kindName} checked={kind === k} onChange={() => setKind(k)} />
                 {k === "essential" ? R.kindEssential : R.kindDiscretionary}
               </label>
             ))}
           </div>
         </fieldset>
-        <div className="mt-2 flex gap-2">
+        <div className="flex items-center gap-3">
           <Button onClick={submitCreate} loading={createBusy} loadingLabel={R.createSaving} className="w-auto px-3 py-1.5">
             {R.createSave}
           </Button>
-          <Button variant="secondary" onClick={cancelCreate} className="w-auto px-3 py-1.5">
+          <button type="button" onClick={cancelCreate} className="text-sm text-gray-500 underline">
             {R.createCancel}
-          </Button>
+          </button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="inline-flex items-center gap-2">
+    <div className="inline-flex flex-col items-end gap-1">
       <Menu as="div" className="relative inline-block text-left">
         <MenuButton
           ref={triggerRef}
           disabled={saving}
           aria-busy={saving || undefined}
-          aria-label={fill(RA.openPicker, { merchant, amount, category: humanizeCategory(current || null) })}
+          aria-label={fill(RA.openPicker, { merchant: merchantLabel, amount, category: humanizeCategory(current || null) })}
           className="rounded-md border border-gray-200 px-2 py-0.5 text-xs text-gray-700 hover:bg-gray-100 disabled:opacity-60"
         >
-          {saving ? R.saving : humanizeCategory(current || null)}
+          {saving ? (canRemember && remember ? RM.applying : R.saving) : humanizeCategory(current || null)}
         </MenuButton>
-        <MenuItems anchor="bottom end" className="z-50 w-56 rounded-md border border-gray-200 bg-white py-1 shadow-lg">
+        <MenuItems anchor="bottom end" className="z-50 w-64 rounded-md border border-gray-200 bg-white py-1 shadow-lg">
+          {canRemember ? (
+            <div className="border-b border-gray-100 px-3 py-1.5">
+              <label className="flex items-start gap-2 text-xs text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>
+                  {fill(RM.rememberLabel, { merchant: merchantLabel })}
+                  <span className="mt-0.5 block text-gray-400">{fill(RM.rememberHint, { merchant: merchantLabel })}</span>
+                </span>
+              </label>
+            </div>
+          ) : null}
           {categories.map((c) => (
             <MenuItem key={c.id}>
               <button
@@ -164,15 +202,20 @@ export function CategoryPicker({
           </MenuItem>
         </MenuItems>
       </Menu>
+      {success ? (
+        <span role="status" className="text-right text-xs text-gray-600">
+          {success}
+        </span>
+      ) : null}
       {error ? (
-        <span role="alert" className="text-xs text-red-600">
+        <span role="alert" className="text-right text-xs text-red-600">
           {error}{" "}
           <button
             type="button"
             onClick={() => (lastPick ? void pick(lastPick) : setError(null))}
             className="underline"
           >
-            {R.retry}
+            {RM.retry}
           </button>
         </span>
       ) : null}

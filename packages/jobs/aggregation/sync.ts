@@ -12,6 +12,7 @@ import { createProviderRegistry, ingestTransactions } from "@wealth/aggregation"
 import { createPlaidProvider } from "@wealth/aggregation/plaid";
 import { createSupabaseVault } from "@wealth/aggregation/vault";
 import { FUNNEL_EVENTS } from "@wealth/core";
+import { applyAllRulesForUser } from "@wealth/db/categories";
 import { emitFunnel } from "@wealth/db/emit";
 import { inngest } from "../client";
 import { settleHistory } from "./settle";
@@ -164,6 +165,14 @@ async function syncConnection(
       });
     }
   }
+
+  // WLT-22-3 — apply the user's "remember the merchant" rules to the freshly-
+  // synced transactions (the future half of past+future). Idempotent + a cheap
+  // no-op for a user with no rules; runs once after the history is in.
+  await step.run("apply-category-rules", async () => {
+    const svc = createServiceSupabase();
+    await applyAllRulesForUser(svc, userId);
+  });
 
   await step.run("emit-sync-completed", async () => {
     await emitFunnel(FUNNEL_EVENTS.TRANSACTIONS_SYNCED, userId, {

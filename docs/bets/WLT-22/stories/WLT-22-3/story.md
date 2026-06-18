@@ -2,7 +2,7 @@
 id: WLT-22-3
 bet: WLT-22
 type: story
-status: ready
+status: in-review
 priority: P1
 created: 2026-06-17
 author: PM
@@ -85,7 +85,19 @@ _If post-merge bugs are found, story is re-opened and fixes live under `fixes/`.
 
 ### Issues
 - [2026-06-17] [PM] **Rule management surface (view/edit/delete + delete→revert)** — severity: medium — owner: PM — status: open — area: product — the top deferred follow-on; resolve when storied.
-- [2026-06-17] [PM] **Merchant normalization edge cases** — severity: low — owner: Engineer — status: open — area: data — confirm lowercase + trim + collapse-whitespace is sufficient (store IDs like "#123" stay part of the key → per-store rules; acceptable, the override handles exceptions).
+- [2026-06-17] [PM] **Merchant normalization edge cases** — severity: low — owner: Engineer — status: **resolved (accepted)** — area: data — `normalizeMerchant` = lowercase + trim + collapse-whitespace; store IDs like "#123" stay part of the key → per-store rules, which is acceptable (the per-transaction override handles exceptions). Unit-tested.
+
+### Decisions (Engineer — build)
+- [2026-06-17] [Engineer] **Apply rules via ONE shared idempotent `applyRulesToTransactions` (@wealth/db) used by BOTH the UI backfill and the sync** — rationale: a single reconcile that's safe to re-run (`onConflict` UPDATE, `'user'` rows excluded) avoids threading newly-ingested dedup_keys through the ingest contract; self-healing (a rule added between syncs applies on the next sync) — area: architecture/correctness — alternatives: extend `ingestTransactions` to return inserted dedup_keys + apply only to those (rejected — changes the ingest contract, more surface) — reversibility: easy
+- [2026-06-17] [Engineer] **The pure matcher (`matchRuleAssignments`) lives in @wealth/core; the DB helper does only I/O** — rationale: the user-wins + normalize + dedup logic is unit-testable without a DB (the `categoriesToSeed` pattern) — area: testability — reversibility: easy
+- [2026-06-17] [Engineer] **Sync hook = one `step.run("apply-category-rules")` after the ingest+stabilization, before emit-sync-completed** — rationale: all newly-synced rows are present; a cheap no-op when the user has no rules; service-role client already in scope — area: integration — reversibility: easy
+- [2026-06-17] [Engineer] **"Remember" makes the anchor transaction a `'rule'` row too** (no `'user'` write first) — rationale: "remember the merchant" is a rule, not a one-off; the whole merchant becomes rule-driven + consistent; the count includes the anchor — area: ux/correctness — reversibility: medium
+- [2026-06-17] [Engineer] **The remember checkbox renders inside the picker menu (labelled, mouse/keyboard operable)** — rationale: one-gesture flow (check → pick); arrow-keys still cycle the category options, the checkbox is tab/click reachable — area: ux/a11y — reversibility: easy
+
+### Risks (Engineer — build)
+- [2026-06-17] [Engineer] **`applyRulesToTransactions` scans the user's transactions-with-merchant on each sync (when they have rules)** — likelihood: high (by design) — impact: low — mitigation: bounded per user, indexed on `(user_id)`, a no-op when ruleless; syncs are infrequent (webhook/6h cron) — area: performance
+- [2026-06-17] [Engineer] **Re-"remembering" a transaction that already has a `'user'` override leaves THAT row on its old category** (user wins) while siblings move — likelihood: low — impact: low — mitigation: documented precedence (AC3); rare path (re-remembering an already-hand-set txn); the count reflects what actually changed — area: correctness
+- [2026-06-17] [Engineer] **Migration `0012` not applied locally** (no local PG) — likelihood: n/a — impact: medium if malformed — mitigation: mirrors `0011`/`intents`/`budgets`; Codex's RLS suite applies + exercises it against real Postgres before merge — area: data
 
 ---
 
