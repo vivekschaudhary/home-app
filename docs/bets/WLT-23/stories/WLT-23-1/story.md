@@ -2,7 +2,7 @@
 id: WLT-23-1
 bet: WLT-23
 type: story
-status: in-review
+status: shipped
 priority: P2
 created: 2026-06-18
 author: PM
@@ -57,7 +57,7 @@ Per the brief, **`architecture_required: false`** — no new schema, no re-sync,
 
 ## PRs
 
-- PR #66 — implementation (ledger + nav + read + API + tests) — in-review (Codex owns the gated owner-isolation E2E)
+- PR #66 — implementation (ledger + nav + read + API + tests) — **merged** (squash `fd1094f`, 2026-06-18). Codex authored the gated owner-isolation E2E (`e2e/transactions.spec.ts`, commit `5e46375`); cursor hardening `150aa37`. CLEAR tied to HEAD `76489d6`.
 
 ## Tests
 
@@ -90,7 +90,8 @@ _If post-merge bugs are found, story is re-opened and fixes live under `fixes/`.
 
 ### Issues
 - [2026-06-18] [PM] **"Connect an account" nudge target** — severity: low — owner: Engineer — status: resolved — links to `/accounts` (the existing entry; no new flow).
-- [2026-06-18] [Codex→Engineer] **Gated owner-isolation real-path E2E missing (BLOCKER)** — severity: blocker — owner: **Codex (Reviewer)** — status: open — routed back per cross-model independence: the E2E/RLS proof for this diff is the Reviewer's deliverable, not the Engineer's (the WLT-22-1/2/3 pattern). Codex to author `e2e/transactions*.spec.ts` (two users, cross-account own-rows, paginate across a page boundary, second-user can't read user 1's transactions/account names) with a `test:` prefix.
+- [2026-06-18] [Codex→Engineer] **Gated owner-isolation real-path E2E missing (BLOCKER)** — severity: blocker — owner: **Codex (Reviewer)** — status: **resolved** — Codex authored `e2e/transactions.spec.ts` (`5e46375`): two users, cross-account own-rows, page-boundary pagination, second-user can't read user 1's transactions/account names. Cleared at HEAD `76489d6`.
+- [2026-06-18] [Security→Engineer] **Cursor [LOW] re-flagged at a stale SHA** — severity: low — owner: Engineer — status: **resolved (stale finding)** — the review header cited `5e46375`, an ancestor of the cursor fix `150aa37`; at the merged HEAD the decoded cursor is strict-validated (date + uuid) before the `.or()` filter. The reverify-against-HEAD discipline ([[reverify-after-blocker-fix-commit]]) avoided a redundant "fix".
 
 ---
 
