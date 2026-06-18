@@ -59,13 +59,11 @@ jobs:
       - name: Provision RLS test DB (Supabase auth shim + migrations)
         run: |
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/ci-bootstrap.sql
-          # Apply EVERY migration in order (the glob sorts 0001…NNNN lexically) so a
-          # newly-added migration is never silently skipped — the gap that left the
-          # WLT-22 tables (0011/0012) untested in CI and missing from prod (save_failed).
-          for f in supabase/migrations/*.sql; do
-            echo "── applying $f"
-            psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f "$f"
-          done
+          # Apply EVERY migration via the SAME runner prod uses (db/migrate.mjs, here
+          # `pnpm migrate` against SUPABASE_DB_URL) — one apply path for CI + prod, so
+          # a migration that passes here applies identically in prod. This loop is the
+          # gate that catches the WLT-22-class gap (0011/0012 untested → save_failed).
+          pnpm migrate
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
             -c "grant select, insert, update, delete on all tables in schema public to authenticated;"
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \

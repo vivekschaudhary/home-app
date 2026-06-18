@@ -3,7 +3,7 @@ id: OPS-2
 type: ops
 bet: null
 hygiene: true
-status: planned             # planned | approved | in-execution | shipped | rolled-back | deploy-failed
+status: in-execution        # planned | approved | in-execution | shipped | rolled-back | deploy-failed
 domain: ci-cd               # (also database) — automate Supabase migration apply to prod
 blast_radius: high
 author: Enterprise/Solution Architect
@@ -87,9 +87,36 @@ Goal: every migration merged to `main` is applied to the prod Supabase DB as par
 - [2026-06-17] [Enterprise Architect] **Tracking-baseline mismatch re-runs migrations** — likelihood: low — impact: low — mitigation: migrations are idempotent; repair the tracking table to mark 0001–0012 applied before enabling
 
 ### Issues
-- [2026-06-17] [Enterprise Architect] **No staging Supabase project confirmed** — severity: medium — owner: EA — status: open — the dry-run (Plan step 5) needs a non-prod Supabase project; if none exists, provision one or dry-run against the CI test DB.
-- [2026-06-17] [Enterprise Architect] **Whether a scoped token or a raw `PROD_DB_URL` is used** — severity: low — owner: Security Reviewer — status: open — resolve at execution.
+- [2026-06-17] [Enterprise Architect] **No staging Supabase project confirmed** — severity: medium — owner: EA — status: **mitigated** — a staging DB isn't strictly needed: after the baseline, the FIRST `migrate-prod` run applies **0** migrations (no-op), and every run is gated by the required-reviewer Environment + proven against the CI test PG. The real first exercise is the next new migration, under human approval.
+- [2026-06-17] [Enterprise Architect] **Whether a scoped token or a raw `PROD_DB_URL` is used** — severity: low — owner: Security Reviewer — status: open — implemented with a `PROD_DB_URL` Environment secret; Security Review may prefer a scoped role/token.
+
+### Decisions (execution)
+- [2026-06-17] [Human] **OPS-2 APPROVED** — proceed to execution.
+- [2026-06-17] [Engineer] **Implement as a custom only-new tracking script (`scripts/migrate-prod.sh`), not `supabase db push`** — rationale: (1) re-running every migration on a LIVE prod DB would `drop policy … create policy` each deploy → a brief RLS gap; an only-new tracker avoids that; (2) sidesteps the Supabase-CLI `<timestamp>_name.sql` convention (our files are `00NN_*`); (3) each file + its tracking insert run in one transaction (atomic) — area: ci-cd — reversibility: easy
+- [2026-06-17] [Codex] **BLOCKER (round 1): the `on: push` job races Vercel's independent deploy** — a parallel push-triggered job (esp. one waiting on a reviewer) lets new code go live before the migration → the exact "schema behind code" window. The repo already solved this class for Inngest via `deployment_status`.
+- [2026-06-17] [Human + Engineer] **Re-key to `deployment_status` (post-deploy auto), mirroring `inngest-sync.yml`** — fire when Vercel reports the **Production** deploy succeeded, check out the **deployed sha**, auto-apply pending migrations. **No human gate** (a gate post-deploy would pause WITH code already live); safety = the CI pre-merge validation (every migration applied to a real test PG) + expand-only migrations. Window shrinks from "indefinite" to ~seconds — area: ci-cd — alternatives: gated deploy-from-CI / migrate-before-promote (true ordering, zero window, but a much bigger deploy-pipeline change — deferred) — reversibility: easy
+- [2026-06-17] [Codex] **BLOCKER (round 2): concurrent prod deploys could still race** — the script's read-then-apply check sat outside any lock, so two close deploys could both see a migration as pending; the older commits, the newer fails on the `_migrations` PK insert and exits before its newer-SHA-only files. Fix: serialize the runs.
+- [2026-06-17] [Engineer] **Serialize two ways** — (1) workflow `concurrency: {group: migrate-prod, cancel-in-progress: false}` (one run at a time; the newest pending survives, so no migration is dropped); (2) the runner runs the whole pass on ONE connection holding `pg_advisory_lock`, with the per-file "already applied?" check **inside** the lock — so there's no read-then-apply window even for a manual run. **Validated against a throwaway local Postgres:** run 1 applied all 12 (incl. the fixed `0011`) + created the WLT-22 tables; run 2 applied 0 (idempotent) — area: ci-cd — reversibility: easy
+- [2026-06-18] [Human + Engineer] **Switch the apply mechanism from a psql script (`scripts/migrate-prod.sh`) to a Node runner (`db/migrate.mjs`, `pnpm migrate`), and unify CI onto it** — rationale: (1) **one apply path for CI + prod** — CI now runs the SAME `pnpm migrate` it ships to prod (replacing CI's separate `psql` migration loop), so "passes in CI" means "applies identically in prod"; (2) **testable, readable logic** in JS vs the psql `\gset`/`\if` metaprogramming, using `pg` (already a devDependency — the RLS suites use the same `Client`, zero new deps); (3) the **four guarantees are preserved exactly** — session `pg_advisory_lock` held across the whole pass on one connection, only-new checked **inside** the lock, atomic per file (`begin`/file/tracking-insert/`commit`, rollback + non-zero exit on error), ordered `0001…NNNN`. **`scripts/migrate-prod.sh` deleted.** The runner doubles as the manual break-glass runbook (`PROD_DB_URL=… pnpm migrate`). **Re-validated on a throwaway Postgres:** 12 applied fresh (ordered) → 0 on idempotent re-run → a deliberately-broken migration exits non-zero, **rolls back** (its partial table absent, not recorded), prior 12 intact — area: ci-cd — reversibility: easy — **NOTE: this changed the prod-credential code path → re-opens Codex + Security review.**
+- [2026-06-18] [Codex + Security] **CLEAR — tied to HEAD `faaac7a`** (the Node-runner refactor). Re-review of the changed prod-credential apply path came back clean. The clear is bound to this exact SHA: any further commit to the branch re-opens it. **Code-side review complete; the remaining gate is the Human's prod-access prerequisites below (baseline → secret/Environment) before merge.**
+
+## Execution
+
+**Committed (this PR):** `db/migrate.mjs` (only-new, transactional, advisory-locked) + `"migrate"` script in `package.json` + **`.github/workflows/migrate-prod.yml`** — a `deployment_status` workflow that runs `pnpm migrate` to auto-apply pending migrations after a successful **Production** deploy, at the deployed sha (mirrors `inngest-sync.yml`). CI (`ci.yml`) now applies migrations via the **same** `pnpm migrate` (replacing its psql loop) — one apply path for CI + prod. (Superseded: `scripts/migrate-prod.sh`, deleted.)
+
+**Residual + its mitigation (honest):** this is **post-deploy** — code is live a few seconds before the schema. Safe for **expand-only** migrations + code that tolerates the pre-migration schema (**expand-contract**); it is NOT a substitute for backward-compatible code on a schema-requiring change. The WLT-22 incident is fully closed regardless (migrations now always apply, automatically, tied to the deploy). The zero-window alternative (gated deploy-from-CI) is deferred.
+
+**Manual steps required before this is live (prod access — owner: Human + Security Reviewer):**
+1. **Create the `production` GitHub Environment** (repo → Settings → Environments) and add the **`PROD_DB_URL` secret** (a Postgres DSN with DDL privileges). **Do NOT add Required reviewers** — this runs post-deploy, so a reviewer pause would strand new code on the old schema. (Restrict to `main` if desired.)
+2. **One-time tracking baseline** (so the first run is a no-op — `0001`–`0012` are already applied to prod):
+   ```bash
+   psql "$PROD_DB_URL" -c "create table if not exists public._migrations (filename text primary key, applied_at timestamptz not null default now());"
+   for f in supabase/migrations/*.sql; do psql "$PROD_DB_URL" -c "insert into public._migrations(filename) values ('$(basename "$f")') on conflict do nothing;"; done
+   ```
+3. Merge this PR → the **next production deploy** triggers `migrate-prod` (applies 0 until a new migration lands).
+
+- Started: 2026-06-17 — script validated end-to-end on a throwaway local Postgres (12/12 apply, idempotent re-run) — Outcome: pending (manual Environment/secret/baseline steps)
 
 ---
 
-_Awaiting HITL approval of this plan (status `planned` → `approved`) before execution. Companion already shipped: PR #63 (CI applies all migrations to the test PG + the `0011` syntax fix)._
+_Status `in-execution`: revised per Codex's BLOCKER — workflow re-keyed to `deployment_status` (post-deploy, tied to the real prod release). Awaiting the manual Environment/secret/baseline steps + Security review before live. Companion already shipped: PR #63 (CI applies all migrations to the test PG + the `0011` syntax fix)._
