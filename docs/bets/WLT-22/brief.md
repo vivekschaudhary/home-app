@@ -1,7 +1,7 @@
 ---
 id: WLT-22
 type: feature
-status: Approved
+status: shipped
 priority: P1
 parent: FOUNDATION-PRODUCT
 portfolio_stub: false
@@ -133,3 +133,5 @@ _Decomposed via `/create-story WLT-22` (nested numbering), suggested:_
 - [2026-06-16] [PM] **Recommendation/essentials logic on custom + finer categories** — severity: low — owner: Architect — status: open — area: product — the WLT-21 essential allowlist + median logic must extend to the finer/custom set.
 
 _Approved by: Vivek on 2026-06-17_
+
+_**Bet COMPLETE 2026-06-17** — all three slices shipped: **WLT-22-1** (drill-down, PR #60) · **WLT-22-2** (recategorize + custom categories, PR #61) · **WLT-22-3** (remember-the-merchant rules, PR #62). The user can now **verify** a budget number (see its line items), **correct** it (recategorize + own categories, saved across re-syncs), and **remember** a merchant (a rule that backfills past + applies at sync) — every surface reading the user-resolved category through one shared resolver. **Deferred follow-on (not this bet):** category/rule management (rename · delete-category → reassign · delete-rule → revert) and the rename-safe `budgets.category_id` migration; the optional Plaid `detailed` cold-start seed._

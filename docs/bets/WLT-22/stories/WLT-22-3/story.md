@@ -2,7 +2,7 @@
 id: WLT-22-3
 bet: WLT-22
 type: story
-status: in-review
+status: shipped
 priority: P1
 created: 2026-06-17
 author: PM
@@ -55,7 +55,7 @@ Per `docs/bets/WLT-22/architecture.md` (the saved-category model — this slice 
 
 ## PRs
 
-_Auto-populated as PRs open._
+- **PR #62** — `feat(WLT-22-3): remember the merchant — category rules, past + future` — **merged** 2026-06-17 (squash `3d025c5`).
 
 ## Tests
 
@@ -101,4 +101,10 @@ _If post-merge bugs are found, story is re-opened and fixes live under `fixes/`.
 
 ---
 
-_Story status: **ready** — Standard Experience Checklist has no empty category (Cross-surface consistency `n/a — web-only at Phase 1`; the load-bearing cross-screen agreement is AC4). The automation that completes the WLT-22 correction layer; **shipping it makes the WLT-22 bet COMPLETE** (all three slices: verify → correct → remember). Rule management is a separate follow-on, not part of this bet._
+### Review (post-build)
+- [2026-06-17] [Codex] **Round 1 — 2 BLOCKERs** on `3216509`, both Codex-owned test deliverables (not app-code defects): the `category_rules` RLS suite and the gated real-path E2E. Routed back to Codex per the story's test division + security-proof independence (the WLT-22-1/2 precedent).
+- [2026-06-17] [Engineer] **UI polish** (`1625b88`/`7e1ddb2`/`9297c68`) during the review window — roomier create-category card + consistent spacing on the "+ Add a category" pop-up + Cancel-as-text-link (matching the budget screen's primary-Button/secondary-link convention). CSS-only.
+- [2026-06-17] [Codex] **Both BLOCKERs cleared** in `74980a2` (`test: cover merchant rules rls and e2e`): `category_rules` RLS (owner CRUD, cross-tenant deny, **forged cross-tenant `category_id` on insert + update**, hard-delete) + the gated E2E — **remember** a merchant → **backfill 3**, a **`'user'` override survives**, the **sync-apply auto-categorizes** a new transaction (via the real `applyAllRulesForUser`), **second-user isolation**. `0012_category_rules.sql`'s first real-Postgres exercise.
+- [2026-06-17] [Codex] **CLEAR** — tied to HEAD `74980a2` (per `[reverify-after-blocker-fix-commit]`). Merged squash `3d025c5`.
+
+_Story status: **shipped** (PR #62, squash `3d025c5`, 2026-06-17). Standard Experience Checklist has no empty category (Cross-surface consistency `n/a — web-only at Phase 1`; the load-bearing cross-screen agreement is AC4). **This story completes the WLT-22 bet** (all three slices: verify → correct → remember). Rule management is a separate follow-on, not part of this bet._
