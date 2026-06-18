@@ -3,7 +3,7 @@ id: OPS-2
 type: ops
 bet: null
 hygiene: true
-status: planned             # planned | approved | in-execution | shipped | rolled-back | deploy-failed
+status: in-execution        # planned | approved | in-execution | shipped | rolled-back | deploy-failed
 domain: ci-cd               # (also database) — automate Supabase migration apply to prod
 blast_radius: high
 author: Enterprise/Solution Architect
@@ -87,9 +87,29 @@ Goal: every migration merged to `main` is applied to the prod Supabase DB as par
 - [2026-06-17] [Enterprise Architect] **Tracking-baseline mismatch re-runs migrations** — likelihood: low — impact: low — mitigation: migrations are idempotent; repair the tracking table to mark 0001–0012 applied before enabling
 
 ### Issues
-- [2026-06-17] [Enterprise Architect] **No staging Supabase project confirmed** — severity: medium — owner: EA — status: open — the dry-run (Plan step 5) needs a non-prod Supabase project; if none exists, provision one or dry-run against the CI test DB.
-- [2026-06-17] [Enterprise Architect] **Whether a scoped token or a raw `PROD_DB_URL` is used** — severity: low — owner: Security Reviewer — status: open — resolve at execution.
+- [2026-06-17] [Enterprise Architect] **No staging Supabase project confirmed** — severity: medium — owner: EA — status: **mitigated** — a staging DB isn't strictly needed: after the baseline, the FIRST `migrate-prod` run applies **0** migrations (no-op), and every run is gated by the required-reviewer Environment + proven against the CI test PG. The real first exercise is the next new migration, under human approval.
+- [2026-06-17] [Enterprise Architect] **Whether a scoped token or a raw `PROD_DB_URL` is used** — severity: low — owner: Security Reviewer — status: open — implemented with a `PROD_DB_URL` Environment secret; Security Review may prefer a scoped role/token.
+
+### Decisions (execution)
+- [2026-06-17] [Human] **OPS-2 APPROVED** — proceed to execution.
+- [2026-06-17] [Engineer] **Implement as a custom only-new tracking script (`scripts/migrate-prod.sh`), not `supabase db push`** — rationale: (1) re-running every migration on a LIVE prod DB would `drop policy … create policy` each deploy → a brief RLS gap; an only-new tracker avoids that; (2) sidesteps the Supabase-CLI `<timestamp>_name.sql` convention (our files are `00NN_*`); (3) each file + its tracking insert run in one transaction (atomic). The job is gated `needs:[check,e2e]` + `main`-only + the protected `production` Environment — area: ci-cd — reversibility: easy
+
+## Execution
+
+**Committed (this PR):** `scripts/migrate-prod.sh` (idempotent, only-new, transactional) + a gated `migrate-prod` job in `.github/workflows/ci.yml` (`needs:[check,e2e]`, `main`-only, `environment: production`).
+
+**Manual steps required before this is live (prod access — owner: Human + Security Reviewer):**
+1. **Create the protected `production` GitHub Environment** (repo → Settings → Environments): add **Required reviewers** (so each prod-migrate run waits for a human ✓) and restrict deployment branches to `main`.
+2. **Add the `PROD_DB_URL` secret** to that Environment (a Postgres DSN with DDL privileges). Never a plain repo-level secret.
+3. **One-time tracking baseline** (so the first run is a no-op — `0001`–`0012` are already applied to prod):
+   ```bash
+   psql "$PROD_DB_URL" -c "create table if not exists public._migrations (filename text primary key, applied_at timestamptz not null default now());"
+   for f in supabase/migrations/*.sql; do psql "$PROD_DB_URL" -c "insert into public._migrations(filename) values ('$(basename "$f")') on conflict do nothing;"; done
+   ```
+4. Merge this PR → the next `main` push runs `migrate-prod` (applies 0 migrations until a new one lands), under the required-reviewer gate.
+
+- Started: 2026-06-17 — Outcome: pending (manual steps + review)
 
 ---
 
-_Awaiting HITL approval of this plan (status `planned` → `approved`) before execution. Companion already shipped: PR #63 (CI applies all migrations to the test PG + the `0011` syntax fix)._
+_Status `in-execution`: workflow + script committed (PR pending); awaiting the manual Environment/secret/baseline steps + Codex/Security review before it goes live. Companion already shipped: PR #63 (CI applies all migrations to the test PG + the `0011` syntax fix)._
