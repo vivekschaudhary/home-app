@@ -1,7 +1,7 @@
 "use client";
 
 import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { humanizeCategory } from "@wealth/core";
 import { Button, TextField } from "@wealth/ui";
 import type { CategoryDTO } from "@/app/lib/budget-client";
@@ -56,7 +56,32 @@ export function CategoryPicker({
   const [createErr, setCreateErr] = useState<string | null>(null);
   const [createBusy, setCreateBusy] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const kindName = useId();
+
+  // The create-form is a floating popover (anchored below the trigger) so it never
+  // pushes/overlaps the transaction rows. Close it on Escape or an outside click.
+  useEffect(() => {
+    if (!creating) return;
+    function close() {
+      setCreating(false);
+      setCreateErr(null);
+      setName("");
+      triggerRef.current?.focus();
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") close();
+    }
+    function onDown(e: MouseEvent) {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) close();
+    }
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onDown);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onDown);
+    };
+  }, [creating]);
 
   async function pick(categoryId: string) {
     const applyToMerchant = canRemember && remember;
@@ -108,51 +133,8 @@ export function CategoryPicker({
     triggerRef.current?.focus();
   }
 
-  if (creating) {
-    return (
-      <div
-        className="ml-auto w-60 space-y-4 rounded-md border border-gray-200 bg-white p-4 text-left shadow-sm"
-        aria-label={RA.createForm}
-      >
-        <TextField
-          label={R.newCategoryNameLabel}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder={R.newCategoryNamePlaceholder}
-          error={createErr ?? undefined}
-          autoFocus
-        />
-        <fieldset>
-          <legend className="text-sm font-medium text-gray-900">{R.kindLabel}</legend>
-          <div className="mt-2 flex gap-5">
-            {(["discretionary", "essential"] as const).map((k) => (
-              <label key={k} className="flex items-center gap-1.5 text-sm text-gray-700">
-                <input type="radio" name={kindName} checked={kind === k} onChange={() => setKind(k)} />
-                {k === "essential" ? R.kindEssential : R.kindDiscretionary}
-              </label>
-            ))}
-          </div>
-        </fieldset>
-        <div className="flex items-center gap-3 pt-1">
-          <Button
-            variant="secondary"
-            onClick={submitCreate}
-            loading={createBusy}
-            loadingLabel={R.createSaving}
-            className="w-auto px-3 py-1.5"
-          >
-            {R.createSave}
-          </Button>
-          <button type="button" onClick={cancelCreate} className="text-sm text-gray-500 underline">
-            {R.createCancel}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="inline-flex flex-col items-end gap-1">
+    <div className="relative inline-flex flex-col items-end gap-1">
       <Menu as="div" className="relative inline-block text-left">
         <MenuButton
           ref={triggerRef}
@@ -208,6 +190,54 @@ export function CategoryPicker({
           </MenuItem>
         </MenuItems>
       </Menu>
+      {creating ? (
+        <div
+          ref={panelRef}
+          role="dialog"
+          aria-label={RA.createForm}
+          className="absolute right-0 top-full z-50 mt-1 w-56 space-y-3 rounded-md border border-gray-200 bg-white p-3 text-left shadow-lg"
+        >
+          <TextField
+            label={R.newCategoryNameLabel}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={R.newCategoryNamePlaceholder}
+            error={createErr ?? undefined}
+            autoFocus
+          />
+          <fieldset>
+            <legend className="text-sm font-medium text-gray-900">{R.kindLabel}</legend>
+            <div className="mt-1.5 flex gap-4">
+              {(["discretionary", "essential"] as const).map((k) => (
+                <label key={k} className="flex items-center gap-1.5 text-sm text-gray-700">
+                  <input type="radio" name={kindName} checked={kind === k} onChange={() => setKind(k)} />
+                  {k === "essential" ? R.kindEssential : R.kindDiscretionary}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          {canRemember ? (
+            <label className="flex items-start gap-2 text-xs text-gray-700">
+              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="mt-0.5" />
+              <span>{fill(RM.rememberLabel, { merchant: merchantLabel })}</span>
+            </label>
+          ) : null}
+          <div className="flex items-center gap-3">
+            <Button
+              variant="secondary"
+              onClick={submitCreate}
+              loading={createBusy}
+              loadingLabel={R.createSaving}
+              className="w-auto px-3 py-1.5"
+            >
+              {R.createSave}
+            </Button>
+            <button type="button" onClick={cancelCreate} className="text-sm text-gray-500 underline">
+              {R.createCancel}
+            </button>
+          </div>
+        </div>
+      ) : null}
       {success ? (
         <span role="status" className="text-right text-xs text-gray-600">
           {success}
