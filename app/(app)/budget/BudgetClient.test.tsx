@@ -257,6 +257,24 @@ describe("BudgetClient", () => {
     );
   });
 
+  it("the create-category popover closes on Escape (WLT-22)", async () => {
+    fetchCategoryTransactionsMock.mockResolvedValue({
+      ok: true,
+      items: [
+        { dedupKey: "dk-1", occurredOn: "2026-06-10", merchant: "Costco", description: "x", amount: 520, category: "FOOD_AND_DRINK" },
+      ],
+      total: 520,
+    });
+    render(<BudgetClient initial={VIEW} />);
+    fireEvent.click(screen.getByRole("button", { name: /Show the transactions in Food And Drink this month/ }));
+    expect(await screen.findByText("Costco")).toBeTruthy();
+    fireEvent.click(await screen.findByRole("button", { name: /Change the category of Costco/ }));
+    fireEvent.click(await screen.findByText("+ New category"));
+    expect(screen.getByLabelText("Category name")).toBeTruthy(); // popover open
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByLabelText("Category name")).toBeNull()); // popover dismissed
+  });
+
   it("a failed recategorize keeps the prior category + shows a discriminated error (AC6)", async () => {
     fetchCategoryTransactionsMock.mockResolvedValue({
       ok: true,
