@@ -2,7 +2,7 @@
 id: WLT-23-1
 bet: WLT-23
 type: story
-status: in-build
+status: in-review
 priority: P2
 created: 2026-06-18
 author: PM
@@ -57,7 +57,7 @@ Per the brief, **`architecture_required: false`** — no new schema, no re-sync,
 
 ## PRs
 
-_Auto-populated as PRs open._
+- PR #66 — implementation (ledger + nav + read + API + tests) — in-review (Codex owns the gated owner-isolation E2E)
 
 ## Tests
 
