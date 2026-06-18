@@ -110,7 +110,9 @@ _(Most are design/story-level, not evidence questions — flagged for the story 
 
 _Decomposed via `/create-story WLT-23` (nested numbering). Suggested first slice:_
 
-- **WLT-23-1 — The Transactions ledger** → the nav item + the owner-scoped, paginated, searchable all-accounts list (date · merchant · amount · resolved category · account), honest states, instrumentation. Read-only. (Filters beyond search, and recategorize-in-list, are fast-follows if wanted.)
+- **WLT-23-1 — The Transactions ledger** → the nav item + the owner-scoped, paginated, searchable all-accounts list (date · merchant · amount · resolved category · account), honest states, instrumentation. Read-only. — **shipped** (PR #66, `fd1094f`).
+- **WLT-23-2 — Filter the ledger (account + category)** → an account filter + a resolved-category filter alongside the search, composing with keyset paging; honest no-match + Clear; `transactions_filtered`. — **ready**.
+- **WLT-23-3 — Recategorize from the ledger** (queued) → inline reuse of the WLT-22 `CategoryPicker` to correct a transaction's category (and optionally "remember the merchant") directly from the list. — _next slice after WLT-23-2 ships._
 
 ## DRI Log
 
