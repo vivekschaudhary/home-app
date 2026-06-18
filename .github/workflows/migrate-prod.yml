@@ -42,7 +42,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.deployment.sha }} # the commit that just deployed
+      # Same runner CI uses (db/migrate.mjs via `pnpm migrate`) — one apply path for
+      # CI + prod. Needs the toolchain + deps (pg is a devDependency).
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - name: Apply pending migrations to production
         env:
           PROD_DB_URL: ${{ secrets.PROD_DB_URL }}
-        run: bash scripts/migrate-prod.sh
+        run: pnpm migrate
