@@ -8,7 +8,8 @@
 // automatic via .github/workflows/inngest-sync.yml on each production deploy.
 
 import { createServiceSupabase } from "@vc1023/passkey-2fa";
-import { type AnomalyAccount, type AnomalyTxn, detectAnomalies } from "@wealth/core";
+import { type AnomalyAccount, type AnomalyTxn, detectAnomalies, effectiveCategory } from "@wealth/core";
+import { readCategoryAssignments } from "@wealth/db/categories";
 import { inngest } from "../client";
 
 function todayUtc(): string {
@@ -37,24 +38,28 @@ export const anomalyScanDaily = inngest.createFunction(
       const since = new Date(Date.now() - 100 * 86_400_000).toISOString().slice(0, 10); // ~quarter of history for a baseline
       let nInserted = 0;
       for (const userId of userIds) {
-        const [{ data: txRows }, { data: acctRows }] = await Promise.all([
+        const [{ data: txRows }, { data: acctRows }, assignments] = await Promise.all([
           svc
             .from("transactions")
-            .select("id, account_id, direction, category, amount, occurred_on")
+            .select("id, account_id, dedup_key, direction, category, amount, occurred_on")
             .eq("user_id", userId)
             .is("removed_at", null)
             .is("superseded_by", null)
             .gte("occurred_on", since),
           svc.from("financial_accounts").select("id, kind, balance_current").eq("user_id", userId).is("deleted_at", null),
+          // WLT-22-2: the user's saved category assignments, via the ONE shared
+          // helper — so anomalies detect on the user's category, consistent with
+          // budget + recap (the guardrail). Service-role client, scoped by user_id.
+          readCategoryAssignments(svc, userId),
         ]);
 
         const transactions: AnomalyTxn[] = (txRows ?? []).map((r) => {
-          const row = r as { id: string; account_id: string; direction: string; category: string | null; amount: number | string; occurred_on: string };
+          const row = r as { id: string; account_id: string; dedup_key: string; direction: string; category: string | null; amount: number | string; occurred_on: string };
           return {
             id: row.id,
             accountId: row.account_id,
             direction: row.direction,
-            category: row.category,
+            category: effectiveCategory(row.category, assignments.get(row.dedup_key)),
             amount: Number(row.amount),
             occurredOn: row.occurred_on,
           };

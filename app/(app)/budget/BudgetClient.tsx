@@ -7,14 +7,19 @@ import { Banner, Button, TextField, Toast } from "@wealth/ui";
 import { COPY } from "@/app/lib/copy";
 import {
   type BudgetViewDTO,
+  type CategoryDTO,
   clearBudget,
+  createCategory,
   fetchBudget,
+  fetchCategories,
   fetchCategoryTransactions,
+  recategorizeTransaction,
   recordDrilldownViewed,
   recordSpreadViewed,
   saveBudget,
 } from "@/app/lib/budget-client";
 import { CategoryTransactions, type DrillState } from "./CategoryTransactions";
+import type { CreateResult, RecatResult } from "./CategoryPicker";
 import { YearSpread } from "./YearSpread";
 
 const C = COPY.budget;
@@ -48,6 +53,7 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
   const [openDrill, setOpenDrill] = useState<Set<string>>(new Set()); // expanded line-item drill-downs (WLT-22-1)
   const [drillCache, setDrillCache] = useState<Record<string, DrillState>>({}); // fetch once per category per load
   const drillViewed = useRef<Set<string>>(new Set()); // categories already counted for category_drilldown_viewed this load (AC6)
+  const [categories, setCategories] = useState<CategoryDTO[]>([]); // the user's category set for the recategorize picker (WLT-22-2)
 
   // Reconcile with live server state on mount (#36 — force-dynamic page can hand a
   // stale prefetch; trusting initial props forever is the bug).
@@ -194,6 +200,59 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
       }));
     },
     [view.asOfMonth],
+  );
+
+  // WLT-22-2 — the user's categories for the recategorize picker. Fetched once on
+  // mount (the GET seeds from the user's distinct provider categories).
+  useEffect(() => {
+    void (async () => {
+      const res = await fetchCategories();
+      if (res.ok) setCategories(res.categories);
+    })();
+  }, []);
+
+  // A recategorization MOVES a transaction between categories. Reconcile every
+  // affected surface (AC4): refetch the source + destination drills (the item
+  // leaves one panel, joins the other) and the budget rows (the totals shift).
+  const reloadOrDropDrill = useCallback(
+    async (category: string) => {
+      if (openDrill.has(category)) {
+        await loadDrill(category);
+      } else {
+        setDrillCache((c) => {
+          if (!(category in c)) return c;
+          const next = { ...c };
+          delete next[category];
+          return next; // next open refetches
+        });
+      }
+    },
+    [openDrill, loadDrill],
+  );
+
+  const recategorize = useCallback(
+    async (sourceCategory: string, dedupKey: string, categoryId: string): Promise<RecatResult> => {
+      const res = await recategorizeTransaction({ dedupKey, categoryId });
+      if (!res.ok) return res;
+      const destName = categories.find((c) => c.id === categoryId)?.name ?? "";
+      setToast(fill(COPY.budgetRecat.saved, { category: humanizeCategory(destName || null) }));
+      await Promise.all([
+        reloadOrDropDrill(sourceCategory),
+        destName && destName !== sourceCategory ? reloadOrDropDrill(destName) : Promise.resolve(),
+      ]);
+      await refresh(); // budget rows reconcile (source drops, destination rises)
+      return { ok: true };
+    },
+    [categories, reloadOrDropDrill, refresh],
+  );
+
+  const createCat = useCallback(
+    async (name: string, kind: "essential" | "discretionary"): Promise<CreateResult> => {
+      const res = await createCategory(name, kind);
+      if (res.ok) setCategories((cs) => [...cs, res.category].sort((a, b) => a.name.localeCompare(b.name)));
+      return res;
+    },
+    [],
   );
 
   function toggleDrill(category: string) {
@@ -431,6 +490,9 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
                     label={row.label}
                     state={drillCache[row.category] ?? { status: "loading" }}
                     onRetry={() => loadDrill(row.category)}
+                    categories={categories}
+                    onRecategorize={(dedupKey, categoryId) => recategorize(row.category, dedupKey, categoryId)}
+                    onCreateCategory={createCat}
                   />
                 </td>
               </tr>

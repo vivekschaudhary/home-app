@@ -8,3 +8,4 @@ export * from "./workflow";
 export * from "./recap";
 export * from "./anomaly";
 export * from "./budget";
+export * from "./categories";

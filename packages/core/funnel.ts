@@ -40,6 +40,10 @@ export const FUNNEL_EVENTS = {
   BUDGET_SPREAD_VIEWED: "budget_spread_viewed",
   // WLT-22-1 — a user drilled into a category to see its line items (verify/trust).
   CATEGORY_DRILLDOWN_VIEWED: "category_drilldown_viewed",
+  // WLT-22-2 — a user corrected a transaction's category / created a category of
+  // their own (the saved-category model; ownership + trust).
+  TRANSACTION_RECATEGORIZED: "transaction_recategorized",
+  CATEGORY_CREATED: "category_created",
 } as const;
 
 export type FunnelEvent = (typeof FUNNEL_EVENTS)[keyof typeof FUNNEL_EVENTS];

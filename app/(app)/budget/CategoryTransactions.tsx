@@ -1,6 +1,7 @@
 import { Banner } from "@wealth/ui";
-import type { CategoryTxnDTO } from "@/app/lib/budget-client";
+import type { CategoryDTO, CategoryTxnDTO } from "@/app/lib/budget-client";
 import { COPY } from "@/app/lib/copy";
+import { type CreateResult, CategoryPicker, type RecatResult } from "./CategoryPicker";
 
 // WLT-22-1 — the line items behind a category's "this month so far" number.
 // Presentational: BudgetClient owns the fetch/cache (so it fetches once per
@@ -35,10 +36,16 @@ export function CategoryTransactions({
   label,
   state,
   onRetry,
+  categories,
+  onRecategorize,
+  onCreateCategory,
 }: {
   label: string;
   state: DrillState;
   onRetry: () => void;
+  categories: CategoryDTO[];
+  onRecategorize: (dedupKey: string, categoryId: string) => Promise<RecatResult>;
+  onCreateCategory: (name: string, kind: "essential" | "discretionary") => Promise<CreateResult>;
 }) {
   return (
     <div
@@ -68,14 +75,25 @@ export function CategoryTransactions({
               <th scope="col">{DA.colDate}</th>
               <th scope="col">{DA.colMerchant}</th>
               <th scope="col">{DA.colAmount}</th>
+              <th scope="col">{DA.colCategory}</th>
             </tr>
           </thead>
           <tbody>
-            {state.items.map((it, i) => (
-              <tr key={i} className="border-b border-gray-100 last:border-0">
+            {state.items.map((it) => (
+              <tr key={it.dedupKey} className="border-b border-gray-100 last:border-0">
                 <td className="whitespace-nowrap py-1 pr-3 align-top text-gray-500">{shortDate(it.occurredOn)}</td>
                 <td className="max-w-[40ch] truncate py-1 pr-3 text-gray-900">{it.merchant ?? it.description}</td>
-                <td className="whitespace-nowrap py-1 text-right font-medium text-gray-900">{money(it.amount)}</td>
+                <td className="whitespace-nowrap py-1 pr-3 text-right font-medium text-gray-900">{money(it.amount)}</td>
+                <td className="py-1 text-right align-top">
+                  <CategoryPicker
+                    current={it.category}
+                    merchant={it.merchant ?? it.description}
+                    amount={money(it.amount)}
+                    categories={categories}
+                    onPick={(categoryId) => onRecategorize(it.dedupKey, categoryId)}
+                    onCreate={onCreateCategory}
+                  />
+                </td>
               </tr>
             ))}
           </tbody>
@@ -85,6 +103,7 @@ export function CategoryTransactions({
                 {D.totalLabel}
               </td>
               <td className="pt-2 text-right font-semibold text-gray-900">{money(state.total)}</td>
+              <td className="pt-2" />
             </tr>
           </tfoot>
         </table>

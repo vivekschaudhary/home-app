@@ -58,6 +58,16 @@ const ESSENTIAL_CATEGORIES = new Set([
   "TRANSPORTATION",
 ]);
 
+/**
+ * Whether a category is "essential" (untrimmed recommendation) by the built-in
+ * provider/legacy allow-list. The DEFAULT classifier; WLT-22-2 lets the app
+ * override per the user's own `categories.kind` (a custom "Rent" marked
+ * essential), falling back to this for anything the user hasn't classified.
+ */
+export function isEssentialCategory(name: string): boolean {
+  return ESSENTIAL_CATEGORIES.has(name);
+}
+
 const DISCRETIONARY_TRIM = 0.9; // recommend 10% under typical for discretionary
 const RECOMMEND_MIN_MONTHS = 1; // need ≥1 month of history to suggest anything
 const TRAILING_MONTHS = 6; // the window for "typical" (median of monthly totals)
@@ -84,6 +94,8 @@ export interface BuildBudgetRowsInput {
   budgets: readonly SavedBudget[];
   txns: readonly SpendingTxn[];
   asOf: string; // 'YYYY-MM-DD'
+  /** WLT-22-2: classify a category as essential per the user's own `kind` (falls back to the built-in set). */
+  isEssential?: (name: string) => boolean;
 }
 
 function round2(n: number): number {
@@ -175,7 +187,11 @@ export function computeMonthlySeries(
  * discretionary categories (essentials untrimmed). A category with no spend in the
  * window gets NO recommendation (omitted) — honest cold-start, never fabricated.
  */
-export function computeRecommendedBudgets(txns: readonly SpendingTxn[], asOf: string): Map<string, number> {
+export function computeRecommendedBudgets(
+  txns: readonly SpendingTxn[],
+  asOf: string,
+  isEssential: (name: string) => boolean = isEssentialCategory,
+): Map<string, number> {
   const allowed = new Set(trailingMonths(asOf.slice(0, 7), TRAILING_MONTHS));
   const byCatMonth = new Map<string, Map<string, number>>();
   for (const t of txns) {
@@ -196,7 +212,7 @@ export function computeRecommendedBudgets(txns: readonly SpendingTxn[], asOf: st
     if (monthlyTotals.length < RECOMMEND_MIN_MONTHS) continue; // not enough history
     const typical = median(monthlyTotals);
     if (typical <= 0) continue;
-    const rec = ESSENTIAL_CATEGORIES.has(key) ? typical : typical * DISCRETIONARY_TRIM;
+    const rec = isEssential(key) ? typical : typical * DISCRETIONARY_TRIM;
     out.set(key, round2(rec));
   }
   return out;
@@ -229,9 +245,9 @@ export function resolvePercentCap(percent: number, typicalTotal: number | null):
  * budget, joined with its recommendation + actual + over/under status. Sorted by
  * this-month spend (desc). null category → "Other", never dropped.
  */
-export function buildBudgetRows({ budgets, txns, asOf }: BuildBudgetRowsInput): BudgetRow[] {
+export function buildBudgetRows({ budgets, txns, asOf, isEssential }: BuildBudgetRowsInput): BudgetRow[] {
   const actuals = computeMonthlySpending(txns, asOf);
-  const recommended = computeRecommendedBudgets(txns, asOf);
+  const recommended = computeRecommendedBudgets(txns, asOf, isEssential);
   const typicalTotal = typicalMonthlyTotal(txns, asOf);
   const budgetByCat = new Map(budgets.map((b) => [b.category, b]));
 

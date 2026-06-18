@@ -113,6 +113,19 @@ describe("computeRecommendedBudgets — median of trailing monthly totals", () =
     expect(r.get("GROCERIES")).toBe(300); // NOT 270 — essential, not trimmed
     expect(r.get("INSURANCE")).toBe(100);
   });
+
+  it("WLT-22-2: a custom isEssential predicate untrims a user category the built-in set wouldn't", () => {
+    const txns = [
+      // "Rent" is a CUSTOM category (not in the built-in essential set): 1000/1000 → median 1000
+      tx("2026-04-01", 1000, "Rent"),
+      tx("2026-05-01", 1000, "Rent"),
+    ];
+    // Default classifier → "Rent" is discretionary → trimmed to 900.
+    expect(computeRecommendedBudgets(txns, ASOF).get("Rent")).toBe(900);
+    // The user marked "Rent" essential → untrimmed (the AC9 kind override).
+    const userKind = (name: string) => name === "Rent";
+    expect(computeRecommendedBudgets(txns, ASOF, userKind).get("Rent")).toBe(1000);
+  });
 });
 
 describe("resolvePercentCap + computeTypicalMonthlyTotal", () => {
