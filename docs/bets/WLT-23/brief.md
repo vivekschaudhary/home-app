@@ -1,7 +1,7 @@
 ---
 id: WLT-23
 type: feature
-status: proposed
+status: Approved
 priority: P2
 parent: FOUNDATION-PRODUCT
 portfolio_stub: false
@@ -13,8 +13,8 @@ author: PM
 sources:
   - "user feedback (operator/dogfooding, 2026-06-18): 'I'd like to see all the transactions in the account' — today the app shows accounts (balances) + budgets (categorized spend) but has no plain ledger of all transactions."
   - "competitive scan (2026-06-18): every major PFM ships a searchable transactions ledger — Monarch ('all your transactions in one clean, searchable list'), Copilot ('tracks each transaction in a simple ledger … organized by day'), YNAB."
-  - docs/bets/WLT-2/brief.md        # the aggregation pipeline + transactions data
-  - docs/bets/WLT-22/brief.md       # the saved-category resolver reused for the category column
+  - docs/bets/WLT-2/brief.md # the aggregation pipeline + transactions data
+  - docs/bets/WLT-22/brief.md # the saved-category resolver reused for the category column
   - docs/foundation/product.md
 key_metric:
   name: the user can SEE + FIND any transaction — a complete, searchable ledger of all their activity
@@ -78,7 +78,7 @@ If we add a **Transactions** view — a new top-level nav item opening a searcha
 
 - **Editing transactions** (amount / date / merchant) — read-only; Plaid owns the entries.
 - **Manual transaction add / CSV import here** — that's WLT-2's connect/import flow.
-- **Recategorize-in-the-ledger** — *if* included, it reuses the existing WLT-22 picker; otherwise a fast-follow. Not a rebuild, and not assumed in this brief's core slice.
+- **Recategorize-in-the-ledger** — _if_ included, it reuses the existing WLT-22 picker; otherwise a fast-follow. Not a rebuild, and not assumed in this brief's core slice.
 - **Advanced filtering** (date-range, amount-range, multi-select, saved views), **bulk actions**, **split-transaction**, **"mark as reviewed"** — later if wanted; start minimal.
 - Multi-currency; per-account sub-pages (the nav decision was a single all-accounts ledger, not a per-account drill).
 
@@ -132,4 +132,4 @@ _Decomposed via `/create-story WLT-23` (nested numbering). Suggested first slice
 
 ---
 
-_Approved by: <pending> on <date>_
+_Approved by: Vivek (DRI) on 2026-06-18_
