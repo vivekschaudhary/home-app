@@ -2,7 +2,7 @@
 id: WLT-22-2
 bet: WLT-22
 type: story
-status: in-review
+status: shipped
 priority: P1
 created: 2026-06-17
 author: PM
@@ -55,7 +55,7 @@ Per `docs/bets/WLT-22/architecture.md` (the saved-category model). **This slice 
 
 ## PRs
 
-_Auto-populated as PRs open._
+- **PR #61** — `feat(WLT-22-2): recategorize a transaction + custom categories — the saved-category spine` — **merged** 2026-06-17 (squash `a7d95b0`).
 
 ## Tests
 
@@ -104,4 +104,9 @@ _If post-merge bugs are found, story is re-opened and fixes live under `fixes/`.
 
 ---
 
-_Story status: **ready** — Standard Experience Checklist has no empty category (Cross-surface consistency `n/a — web-only at Phase 1`; the load-bearing cross-screen agreement is AC4). The correction half of WLT-22; **WLT-22-3** (remember-the-merchant rules) follows on the same spine._
+### Review (post-build)
+- [2026-06-17] [Codex] **Round 1 — 2 BLOCKERs** on `da77eec`, both Codex-owned test deliverables (not app-code defects): the RLS suite for the two new tables, and the gated real-path E2E. Routed back to Codex per the story's test division + security-proof independence (the WLT-22-1 precedent).
+- [2026-06-17] [Codex] **Both BLOCKERs cleared** in `b571dee` (`test: cover category RLS and recategorize e2e`): RLS suite for `categories` + `transaction_categories` (owner CRUD, cross-tenant deny, **forged cross-tenant `category_id` rejected at the composite-FK boundary**, hard-delete) + the gated E2E (recategorize through the UI + reconcile; **CDC-revision survival** keyed by `dedup_key`, AC2; **second-user isolation**, AC8). `0011_categories.sql`'s first real-Postgres exercise.
+- [2026-06-17] [Codex] **CLEAR** — tied to HEAD `b571dee` (per `[reverify-after-blocker-fix-commit]`). Merged squash `a7d95b0`.
+
+_Story status: **shipped** (PR #61, squash `a7d95b0`, 2026-06-17). Standard Experience Checklist has no empty category (Cross-surface consistency `n/a — web-only at Phase 1`; the load-bearing cross-screen agreement is AC4). The correction half of WLT-22; **WLT-22-3** (remember-the-merchant rules) follows on the same spine._
