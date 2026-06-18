@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BudgetViewDTO } from "@/app/lib/budget-client";
 
 const fetchBudgetMock = vi.fn();
@@ -9,6 +9,9 @@ const clearBudgetMock = vi.fn();
 const recordSpreadViewedMock = vi.fn();
 const recordDrilldownViewedMock = vi.fn();
 const fetchCategoryTransactionsMock = vi.fn();
+const fetchCategoriesMock = vi.fn();
+const createCategoryMock = vi.fn();
+const recategorizeTransactionMock = vi.fn();
 vi.mock("@/app/lib/budget-client", () => ({
   fetchBudget: () => fetchBudgetMock(),
   saveBudget: (i: unknown) => saveBudgetMock(i),
@@ -16,6 +19,9 @@ vi.mock("@/app/lib/budget-client", () => ({
   recordSpreadViewed: () => recordSpreadViewedMock(),
   recordDrilldownViewed: () => recordDrilldownViewedMock(),
   fetchCategoryTransactions: (cat: string, month: string) => fetchCategoryTransactionsMock(cat, month),
+  fetchCategories: () => fetchCategoriesMock(),
+  createCategory: (name: string, kind: string) => createCategoryMock(name, kind),
+  recategorizeTransaction: (i: unknown) => recategorizeTransactionMock(i),
 }));
 
 import { BudgetClient } from "./BudgetClient";
@@ -52,10 +58,44 @@ const VIEW: BudgetViewDTO = {
   ],
 };
 
+// Headless UI (v2) — used by the WLT-22-2 recategorize picker — reaches for these
+// browser APIs jsdom lacks (mirrors shell.test.tsx).
+beforeAll(() => {
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    value: (q: string) => ({
+      matches: false,
+      media: q,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }),
+  });
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+});
+
 beforeEach(() => {
   fetchBudgetMock.mockResolvedValue({ ok: true, view: VIEW });
   saveBudgetMock.mockResolvedValue({ ok: true });
   clearBudgetMock.mockResolvedValue({ ok: true });
+  fetchCategoriesMock.mockResolvedValue({
+    ok: true,
+    categories: [
+      { id: "c-food", name: "FOOD_AND_DRINK", kind: "essential", source: "seed" },
+      { id: "c-rent", name: "RENT", kind: "essential", source: "seed" },
+    ],
+  });
+  recategorizeTransactionMock.mockResolvedValue({ ok: true });
 });
 afterEach(() => {
   fetchBudgetMock.mockReset();
@@ -64,6 +104,9 @@ afterEach(() => {
   recordSpreadViewedMock.mockReset();
   recordDrilldownViewedMock.mockReset();
   fetchCategoryTransactionsMock.mockReset();
+  fetchCategoriesMock.mockReset();
+  createCategoryMock.mockReset();
+  recategorizeTransactionMock.mockReset();
 });
 
 describe("BudgetClient", () => {
@@ -151,8 +194,8 @@ describe("BudgetClient", () => {
     fetchCategoryTransactionsMock.mockResolvedValue({
       ok: true,
       items: [
-        { occurredOn: "2026-06-14", merchant: "Trader Joe's", description: "x", amount: 320 },
-        { occurredOn: "2026-06-03", merchant: null, description: "Safeway", amount: 200 }, // merchant null → description
+        { dedupKey: "dk-1", occurredOn: "2026-06-14", merchant: "Trader Joe's", description: "x", amount: 320, category: "FOOD_AND_DRINK" },
+        { dedupKey: "dk-2", occurredOn: "2026-06-03", merchant: null, description: "Safeway", amount: 200, category: "FOOD_AND_DRINK" }, // merchant null → description
       ],
       total: 520,
     });
@@ -165,10 +208,80 @@ describe("BudgetClient", () => {
     expect(screen.getAllByText("$520.00").length).toBeGreaterThanOrEqual(2);
   });
 
+  it("recategorize a transaction → POSTs {dedupKey, categoryId}, acknowledges, refetches (WLT-22-2)", async () => {
+    fetchCategoryTransactionsMock.mockResolvedValue({
+      ok: true,
+      items: [
+        { dedupKey: "dk-1", occurredOn: "2026-06-10", merchant: "Costco", description: "x", amount: 520, category: "FOOD_AND_DRINK" },
+      ],
+      total: 520,
+    });
+    render(<BudgetClient initial={VIEW} />);
+    fireEvent.click(screen.getByRole("button", { name: /Show the transactions in Food And Drink this month/ }));
+    expect(await screen.findByText("Costco")).toBeTruthy();
+    // open the per-item category picker, pick RENT (humanized "Rent")
+    fireEvent.click(await screen.findByRole("button", { name: /Change the category of Costco/ }));
+    fireEvent.click(await screen.findByText("Rent"));
+    await waitFor(() =>
+      expect(recategorizeTransactionMock).toHaveBeenCalledWith({ dedupKey: "dk-1", categoryId: "c-rent" }),
+    );
+    // the move is acknowledged + the view refetches to reconcile the totals
+    expect(await screen.findByText("Moved to Rent")).toBeTruthy();
+    await waitFor(() => expect(fetchBudgetMock.mock.calls.length).toBeGreaterThanOrEqual(2)); // mount + post-move
+  });
+
+  it("create a custom category: empty name rejected, then created + assigned (WLT-22-2 AC3)", async () => {
+    fetchCategoryTransactionsMock.mockResolvedValue({
+      ok: true,
+      items: [
+        { dedupKey: "dk-1", occurredOn: "2026-06-10", merchant: "Costco", description: "x", amount: 520, category: "FOOD_AND_DRINK" },
+      ],
+      total: 520,
+    });
+    createCategoryMock.mockResolvedValue({ ok: true, category: { id: "c-new", name: "Rent", kind: "discretionary", source: "custom" } });
+    render(<BudgetClient initial={VIEW} />);
+    fireEvent.click(screen.getByRole("button", { name: /Show the transactions in Food And Drink this month/ }));
+    expect(await screen.findByText("Costco")).toBeTruthy();
+    fireEvent.click(await screen.findByRole("button", { name: /Change the category of Costco/ }));
+    fireEvent.click(await screen.findByText("+ New category"));
+    // submit empty → validation error, no POST
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+    expect(await screen.findByText("Give the category a name.")).toBeTruthy();
+    expect(createCategoryMock).not.toHaveBeenCalled();
+    // name it + create → POST, then the new category is assigned to the transaction
+    fireEvent.change(screen.getByLabelText("Category name"), { target: { value: "Rent" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+    await waitFor(() => expect(createCategoryMock).toHaveBeenCalledWith("Rent", "discretionary"));
+    await waitFor(() =>
+      expect(recategorizeTransactionMock).toHaveBeenCalledWith({ dedupKey: "dk-1", categoryId: "c-new" }),
+    );
+  });
+
+  it("a failed recategorize keeps the prior category + shows a discriminated error (AC6)", async () => {
+    fetchCategoryTransactionsMock.mockResolvedValue({
+      ok: true,
+      items: [
+        { dedupKey: "dk-1", occurredOn: "2026-06-10", merchant: "Costco", description: "x", amount: 520, category: "FOOD_AND_DRINK" },
+      ],
+      total: 520,
+    });
+    recategorizeTransactionMock.mockResolvedValue({ ok: false, error: "network" });
+    render(<BudgetClient initial={VIEW} />);
+    fireEvent.click(screen.getByRole("button", { name: /Show the transactions in Food And Drink this month/ }));
+    expect(await screen.findByText("Costco")).toBeTruthy();
+    fireEvent.click(await screen.findByRole("button", { name: /Change the category of Costco/ }));
+    fireEvent.click(await screen.findByText("Rent"));
+    // the offline error surfaces; no success toast (item keeps its category)
+    expect(await screen.findByText(/try again when you're back/)).toBeTruthy();
+    expect(screen.queryByText("Moved to Rent")).toBeNull();
+  });
+
   it("the opened drill-down is a labelled region with semantic column headers", async () => {
     fetchCategoryTransactionsMock.mockResolvedValue({
       ok: true,
-      items: [{ occurredOn: "2026-06-14", merchant: "Trader Joe's", description: "x", amount: 520 }],
+      items: [
+        { dedupKey: "dk-1", occurredOn: "2026-06-14", merchant: "Trader Joe's", description: "x", amount: 520, category: "FOOD_AND_DRINK" },
+      ],
       total: 520,
     });
     render(<BudgetClient initial={VIEW} />);
@@ -176,8 +289,13 @@ describe("BudgetClient", () => {
     // labelled region (design: "the panel is a labelled region")
     const region = await screen.findByRole("region", { name: "Transactions in Food And Drink this month" });
     expect(region).toBeTruthy();
-    // semantic column headers associate each amount with its date + merchant (design a11y contract)
-    expect(within(region).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["Date", "Merchant", "Amount"]);
+    // semantic column headers associate each amount with its date + merchant (+ the WLT-22-2 recategorize column)
+    expect(within(region).getAllByRole("columnheader").map((h) => h.textContent)).toEqual([
+      "Date",
+      "Merchant",
+      "Amount",
+      "Category",
+    ]);
   });
 
   it("category_drilldown_viewed fires once per category per load — not on retry, refetch, or reopen", async () => {
@@ -215,7 +333,7 @@ describe("BudgetClient", () => {
     // retry refetches (this time succeeds)
     fetchCategoryTransactionsMock.mockResolvedValueOnce({
       ok: true,
-      items: [{ occurredOn: "2026-06-10", merchant: "Costco", description: "x", amount: 520 }],
+      items: [{ dedupKey: "dk-1", occurredOn: "2026-06-10", merchant: "Costco", description: "x", amount: 520, category: "FOOD_AND_DRINK" }],
       total: 520,
     });
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));

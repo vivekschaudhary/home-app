@@ -149,9 +149,55 @@ test.describe("budget & spending — recommended/actual render + set + persist (
       await expect(page.getByText("$520.00").first()).toBeVisible();
       await expect(page.getByText("User One Market")).toBeVisible();
 
-      // AC4 negative case: a SECOND authed user with the same category can only
-      // see their OWN drilled rows through the real session → RLS → render path,
-      // never user 1's line items.
+      // WLT-22-2: create a custom category inline ("Rent") and move the current-
+      // month transaction into it through the real UI path. The source drill drops
+      // to empty; reload proves the budget row + destination drill reconcile.
+      await page.getByRole("button", { name: /Change the category of User One Market/ }).click();
+      await page.getByText("+ New category").click();
+      await page.getByLabel("Category name").fill("Rent");
+      await page.getByRole("button", { name: "Create" }).click();
+      await expect(page.getByText("Moved to Rent")).toBeVisible();
+      await expect(page.getByText("No transactions in Food And Drink this month.")).toBeVisible();
+
+      await page.goto("/budget");
+      await expect(page.getByText("Rent")).toBeVisible();
+      await expect(page.getByRole("button", { name: /Show the transactions in Rent this month/ })).toBeVisible();
+      await expect(page.getByRole("button", { name: /Show the transactions in Food And Drink this month/ })).toHaveCount(0);
+      await page.getByRole("button", { name: /Show the transactions in Rent this month/ }).click();
+      await expect(page.getByText("What's in Rent this month")).toBeVisible();
+      await expect(page.getByText("User One Market")).toBeVisible();
+      await expect(page.getByText("$520.00").first()).toBeVisible();
+
+      // AC2 guardrail: a Plaid CDC revision writes a NEW transaction row with the
+      // SAME dedup_key. The saved assignment must survive because it hangs off the
+      // stable dedup_key, not the revision row id. Supersede the old row, reload,
+      // and verify the UPDATED txn still resolves to Rent in the real UI path.
+      const currentTxn = await db.query(
+        "select id from transactions where user_id = $1 and dedup_key = 'e2e-b-3' and superseded_by is null",
+        [userId],
+      );
+      expect(currentTxn.rows).toHaveLength(1);
+      const oldTxnId = currentTxn.rows[0].id as string;
+      const revisedTxn = await db.query(
+        `insert into transactions
+           (user_id, account_id, source, dedup_key, content_hash, amount, direction, currency, description, merchant, category, occurred_on)
+         values
+           ($1,$2,'plaid','e2e-b-3','h3-revised',520,'debit','USD','x','User One Market Updated','FOOD_AND_DRINK',$3)
+         returning id`,
+        [userId, accountId, todayUtc()],
+      );
+      const revisedTxnId = revisedTxn.rows[0].id as string;
+      await db.query("update transactions set superseded_by = $2 where id = $1", [oldTxnId, revisedTxnId]);
+
+      await page.goto("/budget");
+      await page.getByRole("button", { name: /Show the transactions in Rent this month/ }).click();
+      await expect(page.getByText("User One Market Updated")).toBeVisible();
+      await expect(page.getByText("User One Market")).toHaveCount(0);
+      await expect(page.getByRole("button", { name: /Show the transactions in Food And Drink this month/ })).toHaveCount(0);
+
+      // AC8 negative case: a SECOND authed user cannot read the first user's
+      // custom category/assignment, and their own recategorize action cannot
+      // affect the first user's resolved rows.
       otherContext = await browser.newContext();
       const otherPage = await otherContext.newPage();
       await signUpWithPasskey(otherPage, otherContext, otherEmail, password);
@@ -180,8 +226,23 @@ test.describe("budget & spending — recommended/actual render + set + persist (
       await expect(otherPage.getByText("What's in Food And Drink this month")).toBeVisible();
       await expect(otherPage.getByText("User Two Cafe")).toBeVisible();
       await expect(otherPage.getByText("$111.11").first()).toBeVisible();
-      await expect(otherPage.getByText("User One Market")).toHaveCount(0);
+      await expect(otherPage.getByText("User One Market Updated")).toHaveCount(0);
       await expect(otherPage.getByText("$520.00")).toHaveCount(0);
+      // The first user's custom "Rent" category does NOT leak into user 2's picker.
+      await otherPage.getByRole("button", { name: /Change the category of User Two Cafe/ }).click();
+      await expect(otherPage.getByText(/^Rent$/)).toHaveCount(0);
+      await otherPage.getByText("+ New category").click();
+      await otherPage.getByLabel("Category name").fill("Utilities");
+      await otherPage.getByRole("button", { name: "Create" }).click();
+      await expect(otherPage.getByText("Moved to Utilities")).toBeVisible();
+      await expect(otherPage.getByText("No transactions in Food And Drink this month.")).toBeVisible();
+
+      // User 2's recategorization is isolated: reloading user 1 still shows the
+      // revised transaction in Rent, unchanged by the second user's actions.
+      await page.goto("/budget");
+      await page.getByRole("button", { name: /Show the transactions in Rent this month/ }).click();
+      await expect(page.getByText("User One Market Updated")).toBeVisible();
+      await expect(page.getByText("User Two Cafe")).toHaveCount(0);
     } finally {
       await otherContext?.close();
       await db.end();

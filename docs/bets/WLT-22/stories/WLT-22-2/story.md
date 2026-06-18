@@ -2,7 +2,7 @@
 id: WLT-22-2
 bet: WLT-22
 type: story
-status: Approved
+status: in-review
 priority: P1
 created: 2026-06-17
 author: PM
@@ -29,7 +29,7 @@ From the WLT-22-1 drill-down, let a user **fix a mis-categorized transaction** �
 - [ ] **AC6 — Honest states + discriminated feedback.** Recategorize has a **saving** state (`aria-busy`), a **success** acknowledgment (the number visibly moves), and an **error** that discriminates **network / validation / server** + retry — and the item **keeps its prior category until a save succeeds** (no optimistic-then-revert). Create-category has empty-name + duplicate-name validation, a saving state, and an error + retry.
 - [ ] **AC7 — Accessibility.** The category control is a labelled button (`aria-haspopup` / `aria-expanded`) whose accessible name carries the current category; the picker is a keyboard-navigable menu (arrows / Enter / Esc) with the current option marked; **focus moves into the picker on open and returns to the control on close/select**; the create-form is labelled; validation errors are announced; WCAG AA.
 - [ ] **AC8 — Owner-scoped (load-bearing security).** `categories` + `transaction_categories` are **owner-CRUD under RLS** (the `intents`/`budgets` 4-policy pattern, **hard-delete** on clear); a user can only read/write their **own**; **composite FKs `(category_id, user_id)`** block a forged cross-tenant `category_id`. Proven by the RLS suite **and** a gated real-path E2E — a **second user cannot read or affect** the first user's categories or assignments.
-- [ ] **AC9 — WLT-21 budgets carry over.** Existing budgets (keyed on the provider string) are **migrated to the seeded `category_id`** so a user who set budgets in WLT-21 keeps them, now on the resolved category. The recommendation/essentials logic reads `category.kind`.
+- [ ] **AC9 — WLT-21 budgets carry over.** Existing budgets carry over **automatically**: categories are **name-keyed** (`categories.name` is canonical; seeded names == the provider strings WLT-21 budgets were keyed on), so an untouched transaction resolves to its Plaid string and a custom "Rent" resolves to "Rent" — both match their saved budget by name, **no budgets-table migration**. The recommendation/essentials logic reads `category.kind` (a custom category marked essential isn't trimmed). _The rename-safe `budgets.category_id` migration is deferred to ship with category rename/delete (also deferred) — approved scope decision 2026-06-17._
 - [ ] **AC10 — Instrumentation.** Additive funnel events **`transaction_recategorized`** and **`category_created`**, each emitted once per action.
 
 ## Standard Experience Checklist
@@ -89,7 +89,18 @@ _If post-merge bugs are found, story is re-opened and fixes live under `fixes/`.
 ### Issues
 
 - [2026-06-17] [PM] **Delete-a-category / delete-an-assignment semantics** — severity: low — owner: PM/Designer — status: deferred — area: product — not in this slice (create + assign only); resolve when category management is storied.
-- [2026-06-17] [PM] **Seeded-category essentials mapping** — severity: low — owner: Engineer — status: open — area: product — seed `category.kind` from the WLT-21 essential allowlist so `computeRecommendedBudgets` keeps working on the resolved categories.
+- [2026-06-17] [PM] **Seeded-category essentials mapping** — severity: low — owner: Engineer — status: **resolved** — area: product — `category.kind` seeded from the essential allow-list; `computeRecommendedBudgets` takes an `isEssential` predicate backed by the user's kinds (falls back to the built-in set). Covered by a core unit test.
+
+### Decisions (Engineer — build)
+- [2026-06-17] [Engineer] **Shared resolver = pure `effectiveCategory` (@wealth/core) + `readCategoryAssignments` (@wealth/db) in all three readers; resolution in-memory (two owner-scoped selects joined by `dedup_key`), pure compute untouched** — rationale: keeps `packages/core/{budget,recap,anomaly}` source-agnostic; avoids PostgREST embedding ambiguity on the composite FK; one helper both the RLS app client and the service-role job can call — area: architecture/correctness — alternatives: a SQL view / PostgREST embed (rejected — brittle on the composite FK) — reversibility: easy
+- [2026-06-17] [Engineer] **Name-keyed categories; NO budgets migration** (the approved scope decision) — rationale: seeded names == provider strings, so WLT-21 string-keyed budgets carry over with zero migration; `category_id` rename-safety ships with rename/delete — area: data/scope — reversibility: medium
+- [2026-06-17] [Engineer] **Drill read resolves-then-filters** (fetch the month's debits + the assignment map, resolve, filter to the target) instead of `.eq("category", …)` — rationale: a transaction MOVED into a category must appear in its drill + one moved OUT must drop, so the drill total stays equal to the budget row (AC4) — area: correctness — reversibility: easy
+- [2026-06-17] [Engineer] **Recategorize/create funnel events emitted server-side inside the write routes** (not client fire-and-forget like the WLT-22-1 GET) — rationale: deliberate non-idempotent writes fire once per action; no double-count, simpler than a gated client emit — area: instrumentation — reversibility: easy
+- [2026-06-17] [Engineer] **The WLT-21 "+ Add a category" picker stays on `BUDGETABLE_CATEGORIES`** (not unified with user categories this slice) — rationale: no AC depends on it; budgets are string-keyed + independent of the categories table; unifying it would change tested WLT-21 behaviour for no slice gain — area: scope — status: deferred — reversibility: easy
+
+### Risks (Engineer — build)
+- [2026-06-17] [Engineer] **The resolver runs per reader on every load** (an extra owner-scoped read of the assignment map) — likelihood: high (by design) — impact: low — mitigation: the map is bounded (only touched transactions), indexed on `(user_id)`; an unassigned user resolves to today's behaviour (dark-safe) — area: performance
+- [2026-06-17] [Engineer] **Migration `0011` not applied locally** (no local PG) — likelihood: n/a — impact: medium if malformed — mitigation: mirrors the `intents`/`budgets` shape exactly; Codex's RLS suite applies + exercises it against real Postgres before merge — area: data
 
 ---
 

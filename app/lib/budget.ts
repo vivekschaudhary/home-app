@@ -13,8 +13,12 @@ import {
   buildBudgetRows,
   computeMonthlySeries,
   computeTypicalMonthlyTotal,
+  effectiveCategory,
+  isEssentialCategory,
   seriesMonthKeys,
 } from "@wealth/core";
+import { readCategoryAssignments } from "@wealth/db/categories";
+import { readCategoryKinds } from "./categories";
 
 // ~13 months: 12 full calendar months for the year-spread (WLT-21-2) — also
 // comfortably covers the recommendation's trailing-6-month window + this month.
@@ -52,14 +56,31 @@ function nextMonthStart(month: string): string {
  */
 async function readSpendingForBudgets(userId: string, supabase: Supa): Promise<SpendingTxn[]> {
   const since = new Date(Date.now() - TRAILING_DAYS * 86_400_000).toISOString().slice(0, 10);
-  const { data } = await supabase
-    .from("transactions")
-    .select("direction, category, amount, occurred_on")
-    .eq("user_id", userId)
-    .gte("occurred_on", since);
+  // WLT-22-2: resolve each txn's category through the ONE shared helper
+  // (saved ?? Plaid) so the budget groups by the user's category, not Plaid's raw
+  // one — consistent with recap + anomaly (the brief's #1 guardrail).
+  const [{ data }, assignments] = await Promise.all([
+    supabase
+      .from("transactions")
+      .select("dedup_key, direction, category, amount, occurred_on")
+      .eq("user_id", userId)
+      .gte("occurred_on", since),
+    readCategoryAssignments(supabase, userId),
+  ]);
   return (data ?? []).map((r) => {
-    const row = r as { direction: string; category: string | null; amount: number | string; occurred_on: string };
-    return { direction: row.direction, category: row.category, amount: Number(row.amount), occurredOn: row.occurred_on };
+    const row = r as {
+      dedup_key: string;
+      direction: string;
+      category: string | null;
+      amount: number | string;
+      occurred_on: string;
+    };
+    return {
+      direction: row.direction,
+      category: effectiveCategory(row.category, assignments.get(row.dedup_key)),
+      amount: Number(row.amount),
+      occurredOn: row.occurred_on,
+    };
   });
 }
 
@@ -82,16 +103,21 @@ async function readBudgets(userId: string, supabase: Supa): Promise<SavedBudget[
 /** Assemble the budget table view (read-only; the page emits budget_viewed). */
 export async function getBudgetView(userId: string): Promise<BudgetView> {
   const supabase = await createServerSupabase();
-  const [txns, budgets] = await Promise.all([
+  const [txns, budgets, kinds] = await Promise.all([
     readSpendingForBudgets(userId, supabase),
     readBudgets(userId, supabase),
+    readCategoryKinds(userId, supabase),
   ]);
   const asOf = todayUtc();
   const seriesMap = computeMonthlySeries(txns, asOf, SERIES_MONTHS);
   const series: Record<string, number[]> = {};
   for (const [cat, arr] of seriesMap) series[cat] = arr;
+  // WLT-22-2: classify by the user's own category kind (a custom "Rent" they
+  // marked essential), falling back to the built-in allow-list for anything
+  // they haven't classified (incl. an unseeded user → identical to today).
+  const isEssential = (name: string) => (kinds.has(name) ? kinds.get(name) === "essential" : isEssentialCategory(name));
   return {
-    rows: buildBudgetRows({ budgets, txns, asOf }),
+    rows: buildBudgetRows({ budgets, txns, asOf, isEssential }),
     asOfMonth: asOf.slice(0, 7),
     typicalMonthlyTotal: computeTypicalMonthlyTotal(txns, asOf),
     hasData: txns.length > 0,
@@ -152,11 +178,15 @@ export async function clearBudgetForUser(input: { userId: string; category: stri
 }
 
 // WLT-22-1 — the line items behind a category's "this month so far" number.
+// WLT-22-2 adds `dedupKey` (the recategorize write target) + `category` (the
+// item's RESOLVED current category name, for the picker's "current" mark).
 export interface CategoryTransaction {
+  dedupKey: string;
   occurredOn: string;
   merchant: string | null;
   description: string;
   amount: number;
+  category: string; // resolved current category ("" = the null-category "Other" bucket)
 }
 export type CategoryTransactionsResult =
   | { ok: true; items: CategoryTransaction[]; total: number }
@@ -180,22 +210,46 @@ export async function readCategoryTransactions(
   // the current month "so far" (matches computeMonthlySpending) and is a no-op for
   // a past month (whose end is already ≤ today) — so a non-current month never
   // bleeds into later months (the API contract holds for any caller).
-  let q = supabase
-    .from("transactions")
-    .select("occurred_on, merchant, description, amount")
-    .eq("user_id", userId)
-    .eq("direction", "debit")
-    .gte("occurred_on", `${month}-01`)
-    .lt("occurred_on", nextMonthStart(month))
-    .lte("occurred_on", asOf)
-    .order("occurred_on", { ascending: false });
-  q = category === "" ? q.is("category", null) : q.eq("category", category);
-  const { data, error } = await q;
+  //
+  // WLT-22-2: we can't filter on `transactions.category` in SQL anymore — the
+  // category the user sees is the RESOLVED one (saved ?? Plaid). Fetch the month's
+  // debits + the assignment map, resolve each, then filter to the target category
+  // — so a transaction MOVED into this category appears and one moved OUT drops
+  // (the AC4 reconcile: drill total stays equal to the budget row).
+  const [{ data, error }, assignments] = await Promise.all([
+    supabase
+      .from("transactions")
+      .select("dedup_key, occurred_on, merchant, description, amount, category")
+      .eq("user_id", userId)
+      .eq("direction", "debit")
+      .gte("occurred_on", `${month}-01`)
+      .lt("occurred_on", nextMonthStart(month))
+      .lte("occurred_on", asOf)
+      .order("occurred_on", { ascending: false }),
+    readCategoryAssignments(supabase, userId),
+  ]);
   if (error) return { ok: false }; // a query/RLS/db failure must NOT masquerade as "no transactions" (AC3)
-  const items: CategoryTransaction[] = (data ?? []).map((r) => {
-    const row = r as { occurred_on: string; merchant: string | null; description: string; amount: number | string };
-    return { occurredOn: row.occurred_on, merchant: row.merchant, description: row.description, amount: Number(row.amount) };
-  });
+  const items: CategoryTransaction[] = (data ?? [])
+    .map((r) => {
+      const row = r as {
+        dedup_key: string;
+        occurred_on: string;
+        merchant: string | null;
+        description: string;
+        amount: number | string;
+        category: string | null;
+      };
+      const resolved = effectiveCategory(row.category, assignments.get(row.dedup_key)) ?? "";
+      return {
+        dedupKey: row.dedup_key,
+        occurredOn: row.occurred_on,
+        merchant: row.merchant,
+        description: row.description,
+        amount: Number(row.amount),
+        category: resolved,
+      };
+    })
+    .filter((it) => it.category === category); // "" = the null-category "Other" bucket
   const total = Math.round(items.reduce((s, i) => s + i.amount, 0) * 100) / 100;
   return { ok: true, items, total };
 }

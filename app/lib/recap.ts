@@ -18,10 +18,12 @@ import {
   computeNetWorthMovement,
   computeSpendingComparison,
   computeTargetProgress,
+  effectiveCategory,
   personalizeNetWorth,
   selectPromptedAction,
 } from "@wealth/core";
 import { emitAudit, emitFunnel } from "@wealth/db/emit";
+import { readCategoryAssignments } from "@wealth/db/categories";
 import { readAccountBalances } from "./aggregation-read";
 
 /** The top open/surfaced anomaly to show (WLT-18). amount/category/date only — no PII. */
@@ -168,16 +170,28 @@ function todayUtc(): string {
 async function readRecentSpending(userId: string): Promise<SpendingTxn[]> {
   const supabase = await createServerSupabase();
   const since = new Date(Date.now() - 14 * 86_400_000).toISOString().slice(0, 10);
-  const { data } = await supabase
-    .from("transactions")
-    .select("direction, category, amount, occurred_on")
-    .eq("user_id", userId)
-    .gte("occurred_on", since);
+  // WLT-22-2: resolve through the ONE shared helper (saved ?? Plaid) so "where
+  // your money went" groups by the user's category, consistent with budget +
+  // anomaly — a recategorization shifts every surface together (the guardrail).
+  const [{ data }, assignments] = await Promise.all([
+    supabase
+      .from("transactions")
+      .select("dedup_key, direction, category, amount, occurred_on")
+      .eq("user_id", userId)
+      .gte("occurred_on", since),
+    readCategoryAssignments(supabase, userId),
+  ]);
   return (data ?? []).map((r) => {
-    const row = r as { direction: string; category: string | null; amount: number | string; occurred_on: string };
+    const row = r as {
+      dedup_key: string;
+      direction: string;
+      category: string | null;
+      amount: number | string;
+      occurred_on: string;
+    };
     return {
       direction: row.direction,
-      category: row.category,
+      category: effectiveCategory(row.category, assignments.get(row.dedup_key)),
       amount: Number(row.amount), // numeric → string via PostgREST; normalize
       occurredOn: row.occurred_on,
     };
