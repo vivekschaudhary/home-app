@@ -110,7 +110,10 @@ export function CategoryPicker({
 
   if (creating) {
     return (
-      <div className="rounded-md border border-gray-200 bg-white p-2" aria-label={RA.createForm}>
+      <div
+        className="ml-auto w-56 space-y-3 rounded-md border border-gray-200 bg-white p-3 text-left shadow-sm"
+        aria-label={RA.createForm}
+      >
         <TextField
           label={R.newCategoryNameLabel}
           value={name}
@@ -119,18 +122,18 @@ export function CategoryPicker({
           error={createErr ?? undefined}
           autoFocus
         />
-        <fieldset className="mt-2">
-          <legend className="text-xs font-medium text-gray-700">{R.kindLabel}</legend>
-          <div className="mt-1 flex gap-3">
+        <fieldset>
+          <legend className="text-sm font-medium text-gray-900">{R.kindLabel}</legend>
+          <div className="mt-1.5 flex gap-4">
             {(["discretionary", "essential"] as const).map((k) => (
-              <label key={k} className="flex items-center gap-1 text-sm text-gray-700">
+              <label key={k} className="flex items-center gap-1.5 text-sm text-gray-700">
                 <input type="radio" name={kindName} checked={kind === k} onChange={() => setKind(k)} />
                 {k === "essential" ? R.kindEssential : R.kindDiscretionary}
               </label>
             ))}
           </div>
         </fieldset>
-        <div className="mt-2 flex gap-2">
+        <div className="flex gap-2">
           <Button onClick={submitCreate} loading={createBusy} loadingLabel={R.createSaving} className="w-auto px-3 py-1.5">
             {R.createSave}
           </Button>
