@@ -133,13 +133,13 @@ export function CategoryPicker({
             ))}
           </div>
         </fieldset>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-3">
           <Button onClick={submitCreate} loading={createBusy} loadingLabel={R.createSaving} className="w-auto px-3 py-1.5">
             {R.createSave}
           </Button>
-          <Button variant="secondary" onClick={cancelCreate} className="w-auto px-3 py-1.5">
+          <button type="button" onClick={cancelCreate} className="text-sm text-gray-500 underline">
             {R.createCancel}
-          </Button>
+          </button>
         </div>
       </div>
     );
