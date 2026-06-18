@@ -550,3 +550,125 @@ suite("budgets RLS (WLT-21): owner CRUD + cross-tenant deny", () => {
     }
   }, 30_000);
 });
+
+// Categories posture (WLT-22-2): owner CRUD for the user's category set +
+// per-transaction saved assignments. The composite FK on
+// transaction_categories(category_id, user_id) is load-bearing: a user-owned
+// assignment cannot point at another tenant's category.
+suite("categories RLS (WLT-22-2): owner CRUD + composite-FK isolation", () => {
+  let client: Client;
+  beforeAll(async () => {
+    client = new Client({ connectionString: DB_URL });
+    await client.connect();
+  });
+  afterAll(async () => {
+    await client?.end();
+  });
+  async function asUser(uid: string, sql: string, params: unknown[] = []) {
+    await client.query("select set_config('request.jwt.claims', $1, true)", [
+      JSON.stringify({ sub: uid, role: "authenticated" }),
+    ]);
+    await client.query("set local role authenticated");
+    const res = await client.query(sql, params);
+    await client.query("reset role");
+    return res;
+  }
+
+  it("owner CRUD on categories; cross-tenant read/update/delete denied; clear hard-deletes", async () => {
+    await client.query("begin");
+    try {
+      await client.query("insert into auth.users (id) values ($1),($2) on conflict do nothing", [USER_A, USER_B]);
+
+      const ins = await asUser(
+        USER_A,
+        "insert into categories (user_id, name, kind, source) values ($1,'RENT','essential','custom') returning id",
+        [USER_A],
+      );
+      const id = ins.rows[0].id as string;
+
+      const owner = await asUser(USER_A, "select count(*)::int as n from categories where id=$1", [id]);
+      expect(owner.rows[0].n).toBe(1);
+      const other = await asUser(USER_B, "select count(*)::int as n from categories where id=$1", [id]);
+      expect(other.rows[0].n).toBe(0);
+
+      const upd = await asUser(USER_A, "update categories set kind='discretionary' where id=$1", [id]);
+      expect(upd.rowCount).toBe(1);
+      const crossUpd = await asUser(USER_B, "update categories set name='HACKED' where id=$1", [id]);
+      expect(crossUpd.rowCount).toBe(0);
+
+      const crossDel = await asUser(USER_B, "delete from categories where id=$1", [id]);
+      expect(crossDel.rowCount).toBe(0);
+      const del = await asUser(USER_A, "delete from categories where id=$1", [id]);
+      expect(del.rowCount).toBe(1);
+      const afterClear = await asUser(USER_A, "select count(*)::int as n from categories where id=$1", [id]);
+      expect(afterClear.rows[0].n).toBe(0);
+
+      await expect(
+        asUser(
+          USER_B,
+          "insert into categories (user_id, name, kind, source) values ($1,'UTILITIES','essential','custom')",
+          [USER_A],
+        ),
+      ).rejects.toThrow();
+    } finally {
+      await client.query("rollback");
+    }
+  }, 30_000);
+
+  it("owner CRUD on transaction_categories; forged cross-tenant category_id is rejected at the DB boundary", async () => {
+    await client.query("begin");
+    try {
+      await client.query("insert into auth.users (id) values ($1),($2) on conflict do nothing", [USER_A, USER_B]);
+
+      const catA1 = await client.query(
+        "insert into categories (user_id, name, kind, source) values ($1,'RENT','essential','custom') returning id",
+        [USER_A],
+      );
+      const catA2 = await client.query(
+        "insert into categories (user_id, name, kind, source) values ($1,'UTILITIES','essential','custom') returning id",
+        [USER_A],
+      );
+      const catB = await client.query(
+        "insert into categories (user_id, name, kind, source) values ($1,'TRAVEL','discretionary','seed') returning id",
+        [USER_B],
+      );
+      const categoryA1 = catA1.rows[0].id as string;
+      const categoryA2 = catA2.rows[0].id as string;
+      const categoryB = catB.rows[0].id as string;
+
+      const ins = await asUser(
+        USER_A,
+        "insert into transaction_categories (user_id, dedup_key, category_id, assigned_by) values ($1,'txn-a',$2,'user') returning id",
+        [USER_A, categoryA1],
+      );
+      const id = ins.rows[0].id as string;
+
+      const owner = await asUser(USER_A, "select count(*)::int as n from transaction_categories where id=$1", [id]);
+      expect(owner.rows[0].n).toBe(1);
+      const other = await asUser(USER_B, "select count(*)::int as n from transaction_categories where id=$1", [id]);
+      expect(other.rows[0].n).toBe(0);
+
+      const upd = await asUser(USER_A, "update transaction_categories set category_id=$2 where id=$1", [id, categoryA2]);
+      expect(upd.rowCount).toBe(1);
+      const crossUpd = await asUser(USER_B, "update transaction_categories set category_id=$2 where id=$1", [id, categoryB]);
+      expect(crossUpd.rowCount).toBe(0);
+
+      const crossDel = await asUser(USER_B, "delete from transaction_categories where id=$1", [id]);
+      expect(crossDel.rowCount).toBe(0);
+      const del = await asUser(USER_A, "delete from transaction_categories where id=$1", [id]);
+      expect(del.rowCount).toBe(1);
+      const afterClear = await asUser(USER_A, "select count(*)::int as n from transaction_categories where id=$1", [id]);
+      expect(afterClear.rows[0].n).toBe(0);
+
+      await expect(
+        asUser(
+          USER_B,
+          "insert into transaction_categories (user_id, dedup_key, category_id, assigned_by) values ($1,'txn-foreign',$2,'user')",
+          [USER_B, categoryA1],
+        ),
+      ).rejects.toThrow();
+    } finally {
+      await client.query("rollback");
+    }
+  }, 30_000);
+});
