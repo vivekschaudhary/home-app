@@ -3,7 +3,7 @@ id: OPS-2
 type: ops
 bet: null
 hygiene: true
-status: in-execution        # planned | approved | in-execution | shipped | rolled-back | deploy-failed
+status: shipped             # planned | approved | in-execution | shipped | rolled-back | deploy-failed
 domain: ci-cd               # (also database) — automate Supabase migration apply to prod
 blast_radius: high
 author: Enterprise/Solution Architect
@@ -115,8 +115,12 @@ Goal: every migration merged to `main` is applied to the prod Supabase DB as par
    ```
 3. Merge this PR → the **next production deploy** triggers `migrate-prod` (applies 0 until a new migration lands).
 
-- Started: 2026-06-17 — script validated end-to-end on a throwaway local Postgres (12/12 apply, idempotent re-run) — Outcome: pending (manual Environment/secret/baseline steps)
+**`PROD_DB_URL` must be the Supabase _Session pooler_ string — NOT the Direct connection.** From a GitHub Actions runner the **Direct connection** (`db.<ref>.supabase.co:5432`) resolves **IPv6-only** → `connect ENETUNREACH` (runners have no IPv6, absent the paid IPv4 add-on). Use the **Session pooler** (`postgres.<ref>@aws-0-<region>.pooler.supabase.com:`**`5432`**) — IPv4-reachable **and** session-mode (so `pg_advisory_lock` + the multi-statement transactions still work). Do **not** use the **Transaction pooler** (port **6543**) — it breaks the session advisory lock. And it's a **GitHub Actions environment secret** (repo → Settings → Environments → `Production`), not a Vercel env var — different store; the workflow reads the former.
+
+- Started: 2026-06-17 — runner validated end-to-end on a throwaway local Postgres (12 applied fresh, idempotent re-run, broken-migration rollback).
+- Completed: 2026-06-18 — merged (#64, squash `feced44`). Codex + Security CLEAR at `faaac7a`. First real prod run (`migrate-prod`, run `27781804987`) **succeeded**: `0 applied, 12 already present` — the expected no-op confirming the baseline + the full pipeline (Session-pooler connection, advisory lock, only-new tracking).
+- **Outcome: LIVE.** Two config snags fixed during go-live (both operator-side, not code): (1) the secret was initially absent from the `Production` GitHub Actions environment (empty `PROD_DB_URL` → the runner failed loudly, safely); (2) the Direct-connection DSN was IPv6-unreachable from Actions → swapped to the Session pooler. From here, every merged migration auto-applies to prod after deploy.
 
 ---
 
-_Status `in-execution`: revised per Codex's BLOCKER — workflow re-keyed to `deployment_status` (post-deploy, tied to the real prod release). Awaiting the manual Environment/secret/baseline steps + Security review before live. Companion already shipped: PR #63 (CI applies all migrations to the test PG + the `0011` syntax fix)._
+_Status `shipped` (2026-06-18): merged + verified in prod (first run a clean no-op). The WLT-22 manual-migration gap is closed — migrations now always reach prod, automatically, tied to the deploy. Companion already shipped: PR #63 (CI applies all migrations to the test PG + the `0011` syntax fix). Possible follow-on OPS-3: the read-only drift check (prod applied-set vs `supabase/migrations/`)._
