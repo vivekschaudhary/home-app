@@ -23,11 +23,23 @@ export type TransactionsPageResult = { ok: true; page: TransactionsPage } | { ok
 
 // ── Pure helpers (unit-tested) ──────────────────────────────────────────────
 
+// The cursor's two fields are interpolated into the PostgREST `.or(...)` filter
+// grammar, so they MUST be shape-validated before use — a crafted cursor could
+// otherwise alter the predicate or force a 502 (RLS still blocks cross-tenant
+// reads, but this keeps the public route contract robust). `occurred_on` is a
+// DATE; `id` is the transactions PK (uuid). Anything else → treat as page 1.
+const CURSOR_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const CURSOR_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** Opaque keyset cursor for the last row on a page: `(occurred_on, id)`. */
 export function encodeCursor(row: { occurredOn: string; id: string }): string {
   return Buffer.from(`${row.occurredOn}|${row.id}`, "utf8").toString("base64url");
 }
-/** Decode a cursor back to `(occurredOn, id)`; null if malformed (treated as page 1). */
+/**
+ * Decode a cursor back to `(occurredOn, id)`; null if malformed OR if either
+ * field doesn't match its strict shape (date / uuid) — so a hostile cursor can
+ * never reach the `.or(...)` filter and a bad cursor degrades cleanly to page 1.
+ */
 export function decodeCursor(cursor: string | null | undefined): { occurredOn: string; id: string } | null {
   if (!cursor) return null;
   try {
@@ -36,7 +48,7 @@ export function decodeCursor(cursor: string | null | undefined): { occurredOn: s
     if (sep < 0) return null;
     const occurredOn = raw.slice(0, sep);
     const id = raw.slice(sep + 1);
-    if (!occurredOn || !id) return null;
+    if (!CURSOR_DATE_RE.test(occurredOn) || !CURSOR_ID_RE.test(id)) return null;
     return { occurredOn, id };
   } catch {
     return null;
