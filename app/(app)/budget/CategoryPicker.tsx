@@ -111,7 +111,7 @@ export function CategoryPicker({
   if (creating) {
     return (
       <div
-        className="ml-auto w-56 space-y-3 rounded-md border border-gray-200 bg-white p-3 text-left shadow-sm"
+        className="ml-auto w-60 space-y-4 rounded-md border border-gray-200 bg-white p-4 text-left shadow-sm"
         aria-label={RA.createForm}
       >
         <TextField
@@ -124,7 +124,7 @@ export function CategoryPicker({
         />
         <fieldset>
           <legend className="text-sm font-medium text-gray-900">{R.kindLabel}</legend>
-          <div className="mt-1.5 flex gap-4">
+          <div className="mt-2 flex gap-5">
             {(["discretionary", "essential"] as const).map((k) => (
               <label key={k} className="flex items-center gap-1.5 text-sm text-gray-700">
                 <input type="radio" name={kindName} checked={kind === k} onChange={() => setKind(k)} />
@@ -133,8 +133,14 @@ export function CategoryPicker({
             ))}
           </div>
         </fieldset>
-        <div className="flex items-center gap-3">
-          <Button onClick={submitCreate} loading={createBusy} loadingLabel={R.createSaving} className="w-auto px-3 py-1.5">
+        <div className="flex items-center gap-3 pt-1">
+          <Button
+            variant="secondary"
+            onClick={submitCreate}
+            loading={createBusy}
+            loadingLabel={R.createSaving}
+            className="w-auto px-3 py-1.5"
+          >
             {R.createSave}
           </Button>
           <button type="button" onClick={cancelCreate} className="text-sm text-gray-500 underline">

@@ -328,13 +328,11 @@ describe("BudgetClient", () => {
     // labelled region (design: "the panel is a labelled region")
     const region = await screen.findByRole("region", { name: "Transactions in Food And Drink this month" });
     expect(region).toBeTruthy();
-    // semantic column headers associate each amount with its date + merchant (+ the WLT-22-2 recategorize column)
-    expect(within(region).getAllByRole("columnheader").map((h) => h.textContent)).toEqual([
-      "Date",
-      "Merchant",
-      "Amount",
-      "Category",
-    ]);
+    // semantic column headers associate each amount with its date + merchant (+ the WLT-22-2 recategorize column).
+    // findAllByRole WAITS for the table to render — the region appears in the loading state first, so a synchronous
+    // getAllByRole here races the fetch→render (green locally, flaky on slower CI).
+    const headers = await within(region).findAllByRole("columnheader");
+    expect(headers.map((h) => h.textContent)).toEqual(["Date", "Merchant", "Amount", "Category"]);
   });
 
   it("category_drilldown_viewed fires once per category per load — not on retry, refetch, or reopen", async () => {

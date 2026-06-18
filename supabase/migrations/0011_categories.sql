@@ -35,10 +35,13 @@ create table if not exists categories (
                 check (source in ('seed','custom')),
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now(),
-  unique (user_id, lower(name)),   -- one category per name per user (case-insensitive)
   unique (id, user_id)             -- composite-FK target (same-user assignment)
 );
 create index if not exists idx_categories_user on categories (user_id);
+-- One category per name per user, case-insensitive. A UNIQUE INDEX (not an inline
+-- `unique (...)` table constraint) because Postgres only allows plain columns in a
+-- table constraint — an expression like lower(name) must live in an index.
+create unique index if not exists categories_user_lower_name_key on categories (user_id, lower(name));
 
 drop trigger if exists trg_categories_updated_at on categories;
 create trigger trg_categories_updated_at before update on categories
