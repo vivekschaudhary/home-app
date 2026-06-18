@@ -16,7 +16,7 @@ describe("NAV_SECTIONS / SHELL_PATHS integrity", () => {
     }
   });
 
-  it("the expected 7 sections are present, in order, with Dashboard + Accounts live", () => {
+  it("the expected 8 sections are present, in order, with Dashboard + Budget + Transactions + Accounts live", () => {
     expect(NAV_SECTIONS.map((s) => s.key)).toEqual([
       "dashboard",
       "budget",
@@ -24,12 +24,14 @@ describe("NAV_SECTIONS / SHELL_PATHS integrity", () => {
       "debt",
       "investments",
       "subscriptions",
+      "transactions",
       "accounts",
     ]);
-    // WLT-21-1 flipped budget → live (the first section feature to mount).
+    // WLT-21-1 flipped budget → live; WLT-23-1 mounts transactions → live (adjacent to accounts).
     expect(NAV_SECTIONS.filter((s) => s.status === "live").map((s) => s.key)).toEqual([
       "dashboard",
       "budget",
+      "transactions",
       "accounts",
     ]);
   });

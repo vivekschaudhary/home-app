@@ -93,6 +93,8 @@ jobs:
             "/(app)/settings/security/page",
             "/(app)/budget/page",
             "/api/budget/route",
+            "/(app)/transactions/page",
+            "/api/transactions/route",
             "/sign-in/page",
             "/sign-up/page",
             "/unsupported/page",

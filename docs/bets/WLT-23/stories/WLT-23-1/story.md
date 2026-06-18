@@ -2,7 +2,7 @@
 id: WLT-23-1
 bet: WLT-23
 type: story
-status: ready
+status: in-review
 priority: P2
 created: 2026-06-18
 author: PM
@@ -57,7 +57,7 @@ Per the brief, **`architecture_required: false`** — no new schema, no re-sync,
 
 ## PRs
 
-_Auto-populated as PRs open._
+- PR #66 — implementation (ledger + nav + read + API + tests) — in-review (Codex owns the gated owner-isolation E2E)
 
 ## Tests
 
@@ -77,13 +77,20 @@ _If post-merge bugs are found, story is re-opened and fixes live under `fixes/`.
 - [2026-06-18] [PM] **Reuse the WLT-22 resolver for the category column, read-only ledger** — rationale: one category truth with the budget; editing/categorization is WLT-22's domain (reuse, don't rebuild) — area: correctness/scope — reversibility: easy
 - [2026-06-18] [Designer] **Show all directions + pending; keyset "Load more"; search-only v1; nav adjacent to Accounts** — see design.md DRI (resolves the brief's pending/transfers open Issue) — area: ux — reversibility: easy/medium
 - [2026-06-18] [PM] **Jira mirror skipped (no silent skip)** — `connectors.ticketing: jira` + `jira_sync: true`, but no Jira MCP is connected on this host — per PM host-degradation, the WLT-23-1 sub-ticket mirror is skipped; create it manually under the WLT-23 epic when the connector is available — area: process — reversibility: n/a
+- [2026-06-18] [Engineer] **Keyset pagination via a PostgREST `.or()` predicate + `.limit(n+1)`** — the next page is `occurred_on.lt.D OR (occurred_on.eq.D AND id.lt.ID)` ordered `occurred_on desc, id desc`; the opaque cursor is base64url of `occurred_on|id`; `limit+1` detects "has more" without a count — area: data/perf — alternatives: offset (drifts under inserts; hits the 1000-row cap) — reversibility: easy
+- [2026-06-18] [Engineer] **Account name + saved category via in-memory maps, not PostgREST embedding** — fetch `financial_accounts(id,name)` + the shared `readCategoryAssignments` map and resolve in JS (mirrors the WLT-22 reader) — avoids embedding ambiguity on the composite FK, stays owner-scoped, and `accountName.size` cheaply yields `hasAccount` for the empty-state branch — area: data — reversibility: easy
+- [2026-06-18] [Engineer] **The RSC server-read is the real-path seam; no client mount-refetch** — `/transactions` is `force-dynamic`, so the RSC read (session→RLS→render) is fresh per load (#36); unlike `/budget` it does NOT also refetch page 1 on mount — that would double a heavy paginated read for no freshness gain — area: perf — reversibility: easy
+- [2026-06-18] [Engineer] **Search sanitized for the `.or()` grammar** — strip `% , ( ) * \` from the user term (the or-filter delimiters + ilike wildcards) and bound to 100 chars, so a search term can't break or inject into the keyset filter — area: security/correctness — reversibility: easy
+- [2026-06-18] [Engineer] **Cursor strict-validation (Codex ISSUE/LOW, fixed `150aa37`)** — `decodeCursor` rejects any decoded payload whose fields aren't a strict (date, uuid); a crafted `cursor` query param can no longer alter the `.or()` predicate or force a 502 — it degrades to page 1. The search term was already sanitized; this closes the same gap on the cursor — area: security/correctness — reversibility: easy
 
 ### Risks
 - [2026-06-18] [PM] **The deliberately-unbounded list hits the 1000-row PostgREST cap or feels slow on 24mo** — likelihood: medium — impact: medium — mitigation: keyset pagination (≈50/page) is an AC, not optional; each query stays bounded — area: performance
 - [2026-06-18] [Engineer-watch] **`readCategoryAssignments` returns an unbounded map** (a user with >1000 saved assignments) — likelihood: low — impact: low — mitigation: same pattern the budget already uses; assignments are sparse (only user-touched rows); revisit only if it surfaces — area: performance/data
+- [2026-06-18] [Engineer] **Keyset correctness depends on `id` being a stable total-order tiebreak within a date** — likelihood: low — impact: medium — mitigation: `id` is a per-row uuid (stable, unique), so `(occurred_on desc, id desc)` is a deterministic non-skipping order; the cursor predicate matches it exactly — the gated real-path E2E (Codex) should paginate across a page boundary to confirm no row is dropped/duplicated — area: data/correctness
 
 ### Issues
-- [2026-06-18] [PM] **"Connect an account" nudge target** — severity: low — owner: Engineer — status: open — link to the existing accounts/connect entry; do not invent a new flow.
+- [2026-06-18] [PM] **"Connect an account" nudge target** — severity: low — owner: Engineer — status: resolved — links to `/accounts` (the existing entry; no new flow).
+- [2026-06-18] [Codex→Engineer] **Gated owner-isolation real-path E2E missing (BLOCKER)** — severity: blocker — owner: **Codex (Reviewer)** — status: open — routed back per cross-model independence: the E2E/RLS proof for this diff is the Reviewer's deliverable, not the Engineer's (the WLT-22-1/2/3 pattern). Codex to author `e2e/transactions*.spec.ts` (two users, cross-account own-rows, paginate across a page boundary, second-user can't read user 1's transactions/account names) with a `test:` prefix.
 
 ---
 
