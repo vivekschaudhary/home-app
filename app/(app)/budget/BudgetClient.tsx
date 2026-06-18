@@ -231,19 +231,28 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
   );
 
   const recategorize = useCallback(
-    async (sourceCategory: string, dedupKey: string, categoryId: string): Promise<RecatResult> => {
-      const res = await recategorizeTransaction({ dedupKey, categoryId });
+    async (sourceCategory: string, dedupKey: string, categoryId: string, applyToMerchant: boolean): Promise<RecatResult> => {
+      const res = await recategorizeTransaction({ dedupKey, categoryId, applyToMerchant });
       if (!res.ok) return res;
-      const destName = categories.find((c) => c.id === categoryId)?.name ?? "";
-      setToast(fill(COPY.budgetRecat.saved, { category: humanizeCategory(destName || null) }));
-      await Promise.all([
-        reloadOrDropDrill(sourceCategory),
-        destName && destName !== sourceCategory ? reloadOrDropDrill(destName) : Promise.resolve(),
-      ]);
       await refresh(); // budget rows reconcile (source drops, destination rises)
-      return { ok: true };
+      if (applyToMerchant) {
+        // A rule (WLT-22-3) can move MANY transactions across many categories —
+        // refetch every open drill + drop the rest so reopening refetches. The
+        // picker shows the counted success; no toast here (avoid double feedback).
+        const open = [...openDrill];
+        setDrillCache({});
+        await Promise.all(open.map((cat) => loadDrill(cat)));
+      } else {
+        const destName = categories.find((c) => c.id === categoryId)?.name ?? "";
+        setToast(fill(COPY.budgetRecat.saved, { category: humanizeCategory(destName || null) }));
+        await Promise.all([
+          reloadOrDropDrill(sourceCategory),
+          destName && destName !== sourceCategory ? reloadOrDropDrill(destName) : Promise.resolve(),
+        ]);
+      }
+      return { ok: true, count: res.count };
     },
-    [categories, reloadOrDropDrill, refresh],
+    [categories, reloadOrDropDrill, refresh, openDrill, loadDrill],
   );
 
   const createCat = useCallback(
@@ -491,7 +500,9 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
                     state={drillCache[row.category] ?? { status: "loading" }}
                     onRetry={() => loadDrill(row.category)}
                     categories={categories}
-                    onRecategorize={(dedupKey, categoryId) => recategorize(row.category, dedupKey, categoryId)}
+                    onRecategorize={(dedupKey, categoryId, applyToMerchant) =>
+                      recategorize(row.category, dedupKey, categoryId, applyToMerchant)
+                    }
                     onCreateCategory={createCat}
                   />
                 </td>

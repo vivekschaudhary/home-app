@@ -508,4 +508,15 @@ export const COPY = {
     categoryOptionCurrent: "{category} (current)",
     createForm: "Create a new category",
   },
+  // WLT-22-3 — "remember the merchant" (a rule applied to past + future).
+  budgetRemember: {
+    rememberLabel: "Always categorize {merchant} this way",
+    rememberHint: "Applies to your past and future {merchant} transactions.",
+    applying: "Applying…",
+    successOne: "Now categorizing {merchant} as {category} — updated 1 transaction",
+    successMany: "Now categorizing {merchant} as {category} — updated {count} transactions",
+    error: "We couldn't apply that just now — try again.",
+    errorNetwork: "You appear to be offline — try again when you're back.",
+    retry: "Try again",
+  },
 } as const;

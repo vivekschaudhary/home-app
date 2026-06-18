@@ -44,7 +44,7 @@ export function CategoryTransactions({
   state: DrillState;
   onRetry: () => void;
   categories: CategoryDTO[];
-  onRecategorize: (dedupKey: string, categoryId: string) => Promise<RecatResult>;
+  onRecategorize: (dedupKey: string, categoryId: string, applyToMerchant: boolean) => Promise<RecatResult>;
   onCreateCategory: (name: string, kind: "essential" | "discretionary") => Promise<CreateResult>;
 }) {
   return (
@@ -87,10 +87,11 @@ export function CategoryTransactions({
                 <td className="py-1 text-right align-top">
                   <CategoryPicker
                     current={it.category}
-                    merchant={it.merchant ?? it.description}
+                    merchantLabel={it.merchant ?? it.description}
                     amount={money(it.amount)}
                     categories={categories}
-                    onPick={(categoryId) => onRecategorize(it.dedupKey, categoryId)}
+                    canRemember={it.merchant != null}
+                    onPick={(categoryId, applyToMerchant) => onRecategorize(it.dedupKey, categoryId, applyToMerchant)}
                     onCreate={onCreateCategory}
                   />
                 </td>

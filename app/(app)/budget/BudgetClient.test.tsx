@@ -95,7 +95,7 @@ beforeEach(() => {
       { id: "c-rent", name: "RENT", kind: "essential", source: "seed" },
     ],
   });
-  recategorizeTransactionMock.mockResolvedValue({ ok: true });
+  recategorizeTransactionMock.mockResolvedValue({ ok: true, count: 1 });
 });
 afterEach(() => {
   fetchBudgetMock.mockReset();
@@ -223,7 +223,7 @@ describe("BudgetClient", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Change the category of Costco/ }));
     fireEvent.click(await screen.findByText("Rent"));
     await waitFor(() =>
-      expect(recategorizeTransactionMock).toHaveBeenCalledWith({ dedupKey: "dk-1", categoryId: "c-rent" }),
+      expect(recategorizeTransactionMock).toHaveBeenCalledWith({ dedupKey: "dk-1", categoryId: "c-rent", applyToMerchant: false }),
     );
     // the move is acknowledged + the view refetches to reconcile the totals
     expect(await screen.findByText("Moved to Rent")).toBeTruthy();
@@ -253,7 +253,7 @@ describe("BudgetClient", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
     await waitFor(() => expect(createCategoryMock).toHaveBeenCalledWith("Rent", "discretionary"));
     await waitFor(() =>
-      expect(recategorizeTransactionMock).toHaveBeenCalledWith({ dedupKey: "dk-1", categoryId: "c-new" }),
+      expect(recategorizeTransactionMock).toHaveBeenCalledWith({ dedupKey: "dk-1", categoryId: "c-new", applyToMerchant: false }),
     );
   });
 
@@ -274,6 +274,45 @@ describe("BudgetClient", () => {
     // the offline error surfaces; no success toast (item keeps its category)
     expect(await screen.findByText(/try again when you're back/)).toBeTruthy();
     expect(screen.queryByText("Moved to Rent")).toBeNull();
+  });
+
+  it("remember the merchant → POSTs applyToMerchant: true and names the count (WLT-22-3)", async () => {
+    fetchCategoryTransactionsMock.mockResolvedValue({
+      ok: true,
+      items: [
+        { dedupKey: "dk-1", occurredOn: "2026-06-10", merchant: "Starbucks", description: "x", amount: 12, category: "FOOD_AND_DRINK" },
+      ],
+      total: 12,
+    });
+    recategorizeTransactionMock.mockResolvedValue({ ok: true, count: 4 });
+    render(<BudgetClient initial={VIEW} />);
+    fireEvent.click(screen.getByRole("button", { name: /Show the transactions in Food And Drink this month/ }));
+    expect(await screen.findByText("Starbucks")).toBeTruthy();
+    fireEvent.click(await screen.findByRole("button", { name: /Change the category of Starbucks/ }));
+    // check "Always categorize Starbucks this way", then pick Rent
+    fireEvent.click(await screen.findByLabelText(/Always categorize Starbucks this way/));
+    fireEvent.click(await screen.findByText("Rent"));
+    await waitFor(() =>
+      expect(recategorizeTransactionMock).toHaveBeenCalledWith({ dedupKey: "dk-1", categoryId: "c-rent", applyToMerchant: true }),
+    );
+    // the counted success names the breadth (plural)
+    expect(await screen.findByText("Now categorizing Starbucks as Rent — updated 4 transactions")).toBeTruthy();
+  });
+
+  it("no 'remember' checkbox for a transaction without a merchant (WLT-22-3)", async () => {
+    fetchCategoryTransactionsMock.mockResolvedValue({
+      ok: true,
+      items: [
+        { dedupKey: "dk-1", occurredOn: "2026-06-10", merchant: null, description: "Cash withdrawal", amount: 40, category: "FOOD_AND_DRINK" },
+      ],
+      total: 40,
+    });
+    render(<BudgetClient initial={VIEW} />);
+    fireEvent.click(screen.getByRole("button", { name: /Show the transactions in Food And Drink this month/ }));
+    expect(await screen.findByText("Cash withdrawal")).toBeTruthy();
+    fireEvent.click(await screen.findByRole("button", { name: /Change the category of Cash withdrawal/ }));
+    expect(await screen.findByText("Rent")).toBeTruthy(); // the picker opened…
+    expect(screen.queryByLabelText(/Always categorize/)).toBeNull(); // …but no rule checkbox (no merchant)
   });
 
   it("the opened drill-down is a labelled region with semantic column headers", async () => {
