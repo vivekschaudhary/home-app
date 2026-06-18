@@ -47,6 +47,9 @@ export const FUNNEL_EVENTS = {
   // WLT-22-3 — a user "remembered a merchant": a rule that categorizes that
   // merchant's transactions (past backfill + future at sync).
   CATEGORY_RULE_CREATED: "category_rule_created",
+  // WLT-23-1 — a user opened the Transactions ledger (the all-accounts activity
+  // surface). transactions_viewed = a visit to /transactions (return-surface signal).
+  TRANSACTIONS_VIEWED: "transactions_viewed",
 } as const;
 
 export type FunnelEvent = (typeof FUNNEL_EVENTS)[keyof typeof FUNNEL_EVENTS];

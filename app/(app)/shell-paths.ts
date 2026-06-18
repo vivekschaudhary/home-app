@@ -10,5 +10,6 @@ export const SHELL_PATHS = [
   "/debt",
   "/investments",
   "/subscriptions",
+  "/transactions", // WLT-23-1 — the all-accounts ledger
   "/settings", // covers /settings/security (the account-menu surface)
 ] as const;
