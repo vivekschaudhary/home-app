@@ -95,6 +95,8 @@ Goal: every migration merged to `main` is applied to the prod Supabase DB as par
 - [2026-06-17] [Engineer] **Implement as a custom only-new tracking script (`scripts/migrate-prod.sh`), not `supabase db push`** — rationale: (1) re-running every migration on a LIVE prod DB would `drop policy … create policy` each deploy → a brief RLS gap; an only-new tracker avoids that; (2) sidesteps the Supabase-CLI `<timestamp>_name.sql` convention (our files are `00NN_*`); (3) each file + its tracking insert run in one transaction (atomic) — area: ci-cd — reversibility: easy
 - [2026-06-17] [Codex] **BLOCKER (round 1): the `on: push` job races Vercel's independent deploy** — a parallel push-triggered job (esp. one waiting on a reviewer) lets new code go live before the migration → the exact "schema behind code" window. The repo already solved this class for Inngest via `deployment_status`.
 - [2026-06-17] [Human + Engineer] **Re-key to `deployment_status` (post-deploy auto), mirroring `inngest-sync.yml`** — fire when Vercel reports the **Production** deploy succeeded, check out the **deployed sha**, auto-apply pending migrations. **No human gate** (a gate post-deploy would pause WITH code already live); safety = the CI pre-merge validation (every migration applied to a real test PG) + expand-only migrations. Window shrinks from "indefinite" to ~seconds — area: ci-cd — alternatives: gated deploy-from-CI / migrate-before-promote (true ordering, zero window, but a much bigger deploy-pipeline change — deferred) — reversibility: easy
+- [2026-06-17] [Codex] **BLOCKER (round 2): concurrent prod deploys could still race** — the script's read-then-apply check sat outside any lock, so two close deploys could both see a migration as pending; the older commits, the newer fails on the `_migrations` PK insert and exits before its newer-SHA-only files. Fix: serialize the runs.
+- [2026-06-17] [Engineer] **Serialize two ways** — (1) workflow `concurrency: {group: migrate-prod, cancel-in-progress: false}` (one run at a time; the newest pending survives, so no migration is dropped); (2) the script runs the whole pass in ONE psql session holding `pg_advisory_lock`, with the per-file "already applied?" check **inside** the lock (`\gset`+`\if`) — so there's no read-then-apply window even for a manual run. **Validated against a throwaway local Postgres:** run 1 applied all 12 (incl. the fixed `0011`) + created the WLT-22 tables; run 2 applied 0 (idempotent) — area: ci-cd — reversibility: easy
 
 ## Execution
 
@@ -111,7 +113,7 @@ Goal: every migration merged to `main` is applied to the prod Supabase DB as par
    ```
 3. Merge this PR → the **next production deploy** triggers `migrate-prod` (applies 0 until a new migration lands).
 
-- Started: 2026-06-17 — Outcome: pending (manual steps + Security review)
+- Started: 2026-06-17 — script validated end-to-end on a throwaway local Postgres (12/12 apply, idempotent re-run) — Outcome: pending (manual Environment/secret/baseline steps)
 
 ---
 

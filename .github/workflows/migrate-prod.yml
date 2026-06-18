@@ -16,6 +16,15 @@ name: Migrate prod (post-deploy)
 on:
   deployment_status: {}
 
+# Serialize prod migration runs — only ONE at a time (Codex round-2 BLOCKER: two
+# close deploys could both evaluate "pending" and race the read-then-apply).
+# cancel-in-progress: false → a run triggered while another is active waits; GitHub
+# keeps the NEWEST pending run (whose SHA already contains every migration up to it),
+# so serializing never drops a migration.
+concurrency:
+  group: migrate-prod
+  cancel-in-progress: false
+
 # deployment_status workflows fire from the default branch only.
 jobs:
   migrate:

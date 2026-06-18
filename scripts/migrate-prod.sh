@@ -1,43 +1,50 @@
 #!/usr/bin/env bash
-# OPS-2 — apply PENDING Supabase migrations to production, safely.
+# OPS-2 — apply PENDING Supabase migrations to production, safely + serialized.
 #
 # Design (see docs/ops/OPS-2.md):
-#   • ONLY-NEW: a `public._migrations` tracking table records what's applied, so we
-#     never re-run an already-applied migration. (Re-running every migration on a
-#     LIVE prod DB would briefly `drop policy … create policy`, opening an RLS gap.)
-#   • TRANSACTIONAL: each migration file + its tracking insert run in ONE
-#     transaction — if the SQL fails, nothing is recorded and the next run retries.
+#   • SERIALIZED at the DB: the whole pass runs in ONE psql session holding a session
+#     advisory lock (pg_advisory_lock). A second runner — another deploy's job OR a
+#     manual run — BLOCKS on the lock until the first finishes. (Codex round-2 BLOCKER:
+#     a read-then-apply check outside a lock let two close deploys both decide a
+#     migration was "pending" and race.) Workflow `concurrency` is the belt; this is
+#     the suspenders (covers manual runs too).
+#   • ONLY-NEW, checked INSIDE the lock: each migration is applied only if it isn't
+#     already in `public._migrations` — and that check happens within the locked
+#     session, so there's no window between "is it applied?" and "apply it". (Re-running
+#     a migration on a LIVE prod DB would briefly drop+recreate its RLS policies.)
+#   • ATOMIC per file: each migration + its tracking insert run in their own
+#     transaction; ON_ERROR_STOP aborts (and rolls back) on the first failure, so
+#     nothing is left half-recorded.
 #   • ORDERED: the glob sorts 0001…NNNN lexically.
-#   • IDEMPOTENT first run: after the one-time baseline (0001…current marked
-#     applied), the first CI run applies 0 migrations — a safe no-op. Real work
-#     happens only when a NEW migration merges.
 #
 # Requires: $PROD_DB_URL (a Postgres connection string with DDL privileges).
 set -euo pipefail
 
 : "${PROD_DB_URL:?PROD_DB_URL is not set}"
 
-run() { psql "$PROD_DB_URL" -v ON_ERROR_STOP=1 "$@"; }
+# Arbitrary constant key identifying the "prod migrate" advisory lock.
+LOCK_KEY=823471
 
-# Tracking table (idempotent — safe to run every time).
-run -q -c "create table if not exists public._migrations (
-  filename   text        primary key,
-  applied_at timestamptz not null default now()
-);"
+# Build ONE psql script: lock → ensure the tracking table → for each file, apply it
+# ONLY if not yet recorded (\gset + \if, evaluated INSIDE the lock). Piped to a single
+# session so the advisory lock is held for the entire pass (released on session exit).
+{
+  echo "\\set ON_ERROR_STOP on"
+  echo "select pg_advisory_lock(${LOCK_KEY});"
+  echo "create table if not exists public._migrations (filename text primary key, applied_at timestamptz not null default now());"
+  for f in supabase/migrations/*.sql; do
+    base="$(basename "$f")"
+    echo "select case when exists(select 1 from public._migrations where filename = '${base}') then 'false' else 'true' end as _do \\gset"
+    echo "\\if :_do"
+    echo "  \\echo '→ applying ${base}'"
+    echo "  begin;"
+    echo "  \\i ${f}"
+    echo "  insert into public._migrations(filename) values ('${base}');"
+    echo "  commit;"
+    echo "\\else"
+    echo "  \\echo '✓ already applied: ${base}'"
+    echo "\\endif"
+  done
+} | psql "$PROD_DB_URL"
 
-applied=0
-for f in supabase/migrations/*.sql; do
-  base="$(basename "$f")"
-  if [ "$(run -tAc "select 1 from public._migrations where filename = '$base'")" = "1" ]; then
-    echo "✓ already applied: $base"
-    continue
-  fi
-  echo "→ applying: $base"
-  # File + the tracking insert in a SINGLE transaction: a failure rolls back both,
-  # so a half-applied migration is never recorded as done.
-  run --single-transaction -f "$f" \
-    -c "insert into public._migrations (filename) values ('$base');"
-  applied=$((applied + 1))
-done
-
-echo "── migrate-prod: applied $applied new migration(s)"
+echo "── migrate-prod: pass complete"
