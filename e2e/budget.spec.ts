@@ -1,5 +1,7 @@
 import { type BrowserContext, type CDPSession, type Page, expect, test } from "@playwright/test";
 import { Client } from "pg";
+import { createServiceSupabase } from "@vc1023/passkey-2fa";
+import { applyAllRulesForUser } from "@wealth/db/categories";
 
 // WLT-21-1 — Budget & Spending, REAL-PATH (the [real-path-integration-coverage]
 // mandate; the #36 class + the owner-isolation AC12). Drives the actual /budget
@@ -94,6 +96,18 @@ test.describe("budget & spending — recommended/actual render + set + persist (
            ($1,$2,'plaid','e2e-b-2','h2',600,'debit','USD','x','Past Grocer B','FOOD_AND_DRINK',$4),
            ($1,$2,'plaid','e2e-b-3','h3',520,'debit','USD','x','User One Market','FOOD_AND_DRINK',$5)`,
         [userId, accountId, monthDay(2), monthDay(1), todayUtc()],
+      );
+      // WLT-22-3 merchant-rule fixture: three same-merchant SHOPPING rows (one
+      // prior month, two current month). "Remember" should backfill ALL three;
+      // a later one-off user override must still win on the chosen row.
+      await db.query(
+        `insert into transactions
+           (user_id, account_id, source, dedup_key, content_hash, amount, direction, currency, description, merchant, category, occurred_on)
+         values
+           ($1,$2,'plaid','e2e-r-1','rh1',90,'debit','USD','x','Corner Hardware','SHOPPING',$3),
+           ($1,$2,'plaid','e2e-r-2','rh2',130,'debit','USD','x','Corner Hardware','SHOPPING',$4),
+           ($1,$2,'plaid','e2e-r-3','rh3',40,'debit','USD','x','Corner Hardware','SHOPPING',$4)`,
+        [userId, accountId, monthDay(1), todayUtc()],
       );
 
       // The real read path: authenticated RSC → getBudgetView → RLS → rendered rows.
@@ -195,9 +209,94 @@ test.describe("budget & spending — recommended/actual render + set + persist (
       await expect(page.getByText("User One Market")).toHaveCount(0);
       await expect(page.getByRole("button", { name: /Show the transactions in Food And Drink this month/ })).toHaveCount(0);
 
-      // AC8 negative case: a SECOND authed user cannot read the first user's
-      // custom category/assignment, and their own recategorize action cannot
-      // affect the first user's resolved rows.
+      // WLT-22-3: remember a SAME-MERCHANT SHOPPING batch as Rent. The counted
+      // success names the breadth; budget/drill reconcile through the real read
+      // path, and the DB proves the PRIOR-MONTH match was backfilled too.
+      await page.getByRole("button", { name: /Show the transactions in Shopping this month/ }).click();
+      await expect(page.getByText("What's in Shopping this month")).toBeVisible();
+      await expect(page.getByText("Corner Hardware")).toBeVisible();
+      await expect(page.getByText("$170.00")).toBeVisible();
+      await page.getByRole("button", { name: /Change the category of Corner Hardware/ }).first().click();
+      await page.getByLabel("Always categorize Corner Hardware this way").check();
+      await page.getByRole("button", { name: /^Rent$/ }).click();
+      await expect(page.getByText("Now categorizing Corner Hardware as Rent — updated 3 transactions")).toBeVisible();
+      await expect(page.getByText("No transactions in Shopping this month.")).toBeVisible();
+
+      const rentCategory = await db.query("select id from categories where user_id = $1 and name = 'Rent'", [userId]);
+      expect(rentCategory.rows).toHaveLength(1);
+      const rentCategoryId = rentCategory.rows[0].id as string;
+      const remembered = await db.query(
+        `select dedup_key, assigned_by, category_id
+           from transaction_categories
+          where user_id = $1 and dedup_key in ('e2e-r-1','e2e-r-2','e2e-r-3')
+          order by dedup_key`,
+        [userId],
+      );
+      expect(remembered.rows).toHaveLength(3);
+      expect(remembered.rows).toEqual([
+        { dedup_key: "e2e-r-1", assigned_by: "rule", category_id: rentCategoryId },
+        { dedup_key: "e2e-r-2", assigned_by: "rule", category_id: rentCategoryId },
+        { dedup_key: "e2e-r-3", assigned_by: "rule", category_id: rentCategoryId },
+      ]);
+
+      await page.goto("/budget");
+      await expect(page.getByRole("button", { name: /Show the transactions in Shopping this month/ })).toHaveCount(0);
+      await page.getByRole("button", { name: /Show the transactions in Rent this month/ }).click();
+      await expect(page.getByText("What's in Rent this month")).toBeVisible();
+      await expect(page.getByText("User One Market Updated")).toBeVisible();
+      await expect(page.getByText("Corner Hardware")).toBeVisible();
+      await expect(page.getByText("$690.00")).toBeVisible(); // 520 + 130 + 40
+
+      // AC3: the user's explicit one-off override beats the merchant rule on
+      // this transaction, even after the rule exists.
+      await page.getByRole("button", { name: /Change the category of Corner Hardware/ }).last().click();
+      await page.getByText("+ New category").click();
+      await page.getByLabel("Category name").fill("Utilities");
+      await page.getByRole("button", { name: "Create" }).click();
+      await expect(page.getByText("Moved to Utilities")).toBeVisible();
+
+      await page.goto("/budget");
+      await page.getByRole("button", { name: /Show the transactions in Rent this month/ }).click();
+      await expect(page.getByText("User One Market Updated")).toBeVisible();
+      await expect(page.getByText("$650.00")).toBeVisible(); // 520 + 130
+      await page.getByRole("button", { name: /Show the transactions in Utilities this month/ }).click();
+      await expect(page.getByText("What's in Utilities this month")).toBeVisible();
+      await expect(page.getByText("Corner Hardware")).toBeVisible();
+      await expect(page.getByText("$40.00").first()).toBeVisible();
+
+      // AC2 future half: insert a NEW same-merchant transaction, run the exact
+      // shared sync helper, then confirm the real UI shows it arriving under
+      // Rent while the one-off Utilities override stays put.
+      await db.query(
+        `insert into transactions
+           (user_id, account_id, source, dedup_key, content_hash, amount, direction, currency, description, merchant, category, occurred_on)
+         values
+           ($1,$2,'plaid','e2e-r-4','rh4',70,'debit','USD','x','Corner Hardware','SHOPPING',$3)`,
+        [userId, accountId, todayUtc()],
+      );
+      await applyAllRulesForUser(createServiceSupabase(), userId);
+
+      const postSync = await db.query(
+        "select assigned_by, category_id from transaction_categories where user_id = $1 and dedup_key = 'e2e-r-4'",
+        [userId],
+      );
+      expect(postSync.rows).toEqual([{ assigned_by: "rule", category_id: rentCategoryId }]);
+      const userOverride = await db.query(
+        "select assigned_by from transaction_categories where user_id = $1 and dedup_key = 'e2e-r-3'",
+        [userId],
+      );
+      expect(userOverride.rows).toEqual([{ assigned_by: "user" }]);
+
+      await page.goto("/budget");
+      await page.getByRole("button", { name: /Show the transactions in Rent this month/ }).click();
+      await expect(page.getByText("$720.00")).toBeVisible(); // 520 + 130 + 70
+      await expect(page.getByText("$70.00").first()).toBeVisible();
+      await page.getByRole("button", { name: /Show the transactions in Utilities this month/ }).click();
+      await expect(page.getByText("$40.00").first()).toBeVisible();
+
+      // AC6 negative case: a SECOND authed user with the SAME merchant cannot
+      // read the first user's rule/assignments, and their own remember action
+      // cannot affect the first user's resolved rows.
       otherContext = await browser.newContext();
       const otherPage = await otherContext.newPage();
       await signUpWithPasskey(otherPage, otherContext, otherEmail, password);
@@ -215,34 +314,45 @@ test.describe("budget & spending — recommended/actual render + set + persist (
         `insert into transactions
            (user_id, account_id, source, dedup_key, content_hash, amount, direction, currency, description, merchant, category, occurred_on)
          values
-           ($1,$2,'plaid','e2e-b-4','h4',111.11,'debit','USD','x','User Two Cafe','FOOD_AND_DRINK',$3)`,
+           ($1,$2,'plaid','e2e-b-4','h4',111.11,'debit','USD','x','Corner Hardware','SHOPPING',$3)`,
         [otherUserId, otherAccountId, todayUtc()],
       );
 
       await otherPage.goto("/budget");
       await expect(otherPage.getByRole("heading", { name: "Budget & Spending" })).toBeVisible({ timeout: 15_000 });
       await expect(otherPage.getByText("$111.11")).toBeVisible();
-      await otherPage.getByRole("button", { name: /Show the transactions in Food And Drink this month/ }).click();
-      await expect(otherPage.getByText("What's in Food And Drink this month")).toBeVisible();
-      await expect(otherPage.getByText("User Two Cafe")).toBeVisible();
+      await otherPage.getByRole("button", { name: /Show the transactions in Shopping this month/ }).click();
+      await expect(otherPage.getByText("What's in Shopping this month")).toBeVisible();
+      await expect(otherPage.getByText("Corner Hardware")).toBeVisible();
       await expect(otherPage.getByText("$111.11").first()).toBeVisible();
       await expect(otherPage.getByText("User One Market Updated")).toHaveCount(0);
-      await expect(otherPage.getByText("$520.00")).toHaveCount(0);
-      // The first user's custom "Rent" category does NOT leak into user 2's picker.
-      await otherPage.getByRole("button", { name: /Change the category of User Two Cafe/ }).click();
+      await expect(otherPage.getByText("$720.00")).toHaveCount(0);
+      // The first user's custom "Rent"/"Utilities" categories + remembered rule
+      // do NOT leak into user 2's picker, even for the SAME merchant.
+      await otherPage.getByRole("button", { name: /Change the category of Corner Hardware/ }).click();
       await expect(otherPage.getByText(/^Rent$/)).toHaveCount(0);
+      await expect(otherPage.getByText(/^Utilities$/)).toHaveCount(0);
       await otherPage.getByText("+ New category").click();
-      await otherPage.getByLabel("Category name").fill("Utilities");
+      await otherPage.getByLabel("Category name").fill("Travel");
       await otherPage.getByRole("button", { name: "Create" }).click();
-      await expect(otherPage.getByText("Moved to Utilities")).toBeVisible();
-      await expect(otherPage.getByText("No transactions in Food And Drink this month.")).toBeVisible();
+      await expect(otherPage.getByText("Moved to Travel")).toBeVisible();
 
-      // User 2's recategorization is isolated: reloading user 1 still shows the
-      // revised transaction in Rent, unchanged by the second user's actions.
+      await otherPage.getByRole("button", { name: /Change the category of Corner Hardware/ }).click();
+      await otherPage.getByLabel("Always categorize Corner Hardware this way").check();
+      await otherPage.getByRole("button", { name: /^Travel$/ }).click();
+      await expect(otherPage.getByText("Now categorizing Corner Hardware as Travel — updated 1 transaction")).toBeVisible();
+      await expect(otherPage.getByText("No transactions in Shopping this month.")).toBeVisible();
+
+      // User 2's same-merchant rule is isolated: reloading user 1 still shows
+      // the merchant under Rent, not Travel, and never leaks user 2's row.
       await page.goto("/budget");
       await page.getByRole("button", { name: /Show the transactions in Rent this month/ }).click();
-      await expect(page.getByText("User One Market Updated")).toBeVisible();
-      await expect(page.getByText("User Two Cafe")).toHaveCount(0);
+      await expect(page.getByText("Corner Hardware")).toBeVisible();
+      await expect(page.getByText("$720.00")).toBeVisible();
+      await expect(page.getByText("Travel")).toHaveCount(0);
+      await expect(page.getByText("$111.11")).toHaveCount(0);
+      await page.getByRole("button", { name: /Show the transactions in Utilities this month/ }).click();
+      await expect(page.getByText("$40.00").first()).toBeVisible();
     } finally {
       await otherContext?.close();
       await db.end();

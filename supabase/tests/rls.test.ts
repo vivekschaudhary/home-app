@@ -672,3 +672,118 @@ suite("categories RLS (WLT-22-2): owner CRUD + composite-FK isolation", () => {
     }
   }, 30_000);
 });
+
+// Merchant-rule posture (WLT-22-3): owner CRUD on category_rules with HARD
+// delete, plus the composite FK (category_id, user_id) to categories blocking a
+// forged cross-tenant category reference at the DB boundary.
+suite("category_rules RLS (WLT-22-3): owner CRUD + composite-FK isolation", () => {
+  let client: Client;
+  beforeAll(async () => {
+    client = new Client({ connectionString: DB_URL });
+    await client.connect();
+  });
+  afterAll(async () => {
+    await client?.end();
+  });
+  async function asUser(uid: string, sql: string, params: unknown[] = []) {
+    await client.query("select set_config('request.jwt.claims', $1, true)", [
+      JSON.stringify({ sub: uid, role: "authenticated" }),
+    ]);
+    await client.query("set local role authenticated");
+    const res = await client.query(sql, params);
+    await client.query("reset role");
+    return res;
+  }
+
+  it("owner CRUD on category_rules; cross-tenant read/update/delete denied; clear hard-deletes", async () => {
+    await client.query("begin");
+    try {
+      await client.query("insert into auth.users (id) values ($1),($2) on conflict do nothing", [USER_A, USER_B]);
+
+      const catA1 = await client.query(
+        "insert into categories (user_id, name, kind, source) values ($1,'RENT','essential','custom') returning id",
+        [USER_A],
+      );
+      const catA2 = await client.query(
+        "insert into categories (user_id, name, kind, source) values ($1,'UTILITIES','essential','custom') returning id",
+        [USER_A],
+      );
+      const catB = await client.query(
+        "insert into categories (user_id, name, kind, source) values ($1,'TRAVEL','discretionary','custom') returning id",
+        [USER_B],
+      );
+      const categoryA1 = catA1.rows[0].id as string;
+      const categoryA2 = catA2.rows[0].id as string;
+      const categoryB = catB.rows[0].id as string;
+
+      const ins = await asUser(
+        USER_A,
+        "insert into category_rules (user_id, merchant_norm, category_id) values ($1,'corner hardware',$2) returning id",
+        [USER_A, categoryA1],
+      );
+      const id = ins.rows[0].id as string;
+
+      const owner = await asUser(USER_A, "select count(*)::int as n from category_rules where id=$1", [id]);
+      expect(owner.rows[0].n).toBe(1);
+      const other = await asUser(USER_B, "select count(*)::int as n from category_rules where id=$1", [id]);
+      expect(other.rows[0].n).toBe(0);
+
+      const upd = await asUser(USER_A, "update category_rules set category_id=$2 where id=$1", [id, categoryA2]);
+      expect(upd.rowCount).toBe(1);
+      const crossUpd = await asUser(USER_B, "update category_rules set category_id=$2 where id=$1", [id, categoryB]);
+      expect(crossUpd.rowCount).toBe(0);
+
+      const crossDel = await asUser(USER_B, "delete from category_rules where id=$1", [id]);
+      expect(crossDel.rowCount).toBe(0);
+      const del = await asUser(USER_A, "delete from category_rules where id=$1", [id]);
+      expect(del.rowCount).toBe(1);
+      const afterClear = await asUser(USER_A, "select count(*)::int as n from category_rules where id=$1", [id]);
+      expect(afterClear.rows[0].n).toBe(0);
+
+      await expect(
+        asUser(USER_B, "insert into category_rules (user_id, merchant_norm, category_id) values ($1,'hacked',$2)", [
+          USER_A,
+          categoryB,
+        ]),
+      ).rejects.toThrow();
+    } finally {
+      await client.query("rollback");
+    }
+  }, 30_000);
+
+  it("blocks a forged cross-tenant category_id on insert and update", async () => {
+    await client.query("begin");
+    try {
+      await client.query("insert into auth.users (id) values ($1),($2) on conflict do nothing", [USER_A, USER_B]);
+
+      const catA = await client.query(
+        "insert into categories (user_id, name, kind, source) values ($1,'RENT','essential','custom') returning id",
+        [USER_A],
+      );
+      const catB = await client.query(
+        "insert into categories (user_id, name, kind, source) values ($1,'TRAVEL','discretionary','custom') returning id",
+        [USER_B],
+      );
+      const categoryA = catA.rows[0].id as string;
+      const categoryB = catB.rows[0].id as string;
+
+      const rule = await asUser(
+        USER_A,
+        "insert into category_rules (user_id, merchant_norm, category_id) values ($1,'corner hardware',$2) returning id",
+        [USER_A, categoryA],
+      );
+      const ruleId = rule.rows[0].id as string;
+
+      await expect(
+        asUser(USER_B, "insert into category_rules (user_id, merchant_norm, category_id) values ($1,'foreign',$2)", [
+          USER_B,
+          categoryA,
+        ]),
+      ).rejects.toThrow();
+
+      await expect(asUser(USER_A, "update category_rules set category_id=$2 where id=$1", [ruleId, categoryB])).rejects.toThrow();
+    } finally {
+      await client.query("rollback");
+    }
+  }, 30_000);
+});
