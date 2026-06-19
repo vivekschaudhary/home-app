@@ -130,7 +130,8 @@ _Decomposed via `/create-story WLT-23` (nested numbering). Suggested first slice
 
 ### Issues
 
-- [2026-06-18] [PM] **Pending / transfers / income display** — severity: low — owner: PM/Designer — status: open — area: product — the budget hides transfers; the ledger is "everything" — decide in the story whether to show all directions (with the direction visible) + flag pending.
+- [2026-06-18] [PM] **Pending / transfers / income display** — severity: low — owner: PM/Designer — status: resolved (WLT-23-1: show all directions, credits with `+`, pending flagged).
+- [2026-06-19] [Scanner] **Production-Readiness artifacts absent (runbook/SLO/monitoring/rollback/on-call/cost)** — severity: critical (4) + high (1) + medium (1) — owner: Human — status: open — from `/scan WLT-23` v1 (`docs/bets/WLT-23/scan-report.md`). The bet shipped to prod reusing shipped infra (WLT-2/WLT-20/WLT-22 + OPS-1/OPS-2) **without bet-level ops docs**. Product/Architecture/Build are clean. All six are **suppression candidates** given no new data store / external service / data category (backup + compliance assessed n/a / satisfied-by-inheritance) — decide per finding: add a minimal artifact or suppress with rationale, then re-run `/scan WLT-23`.
 
 ---
 
