@@ -36,13 +36,28 @@ describe("resolveCategory (against an assignment map)", () => {
 });
 
 describe("normalizeMerchant (WLT-22-3 — the rule match key)", () => {
-  it("lowercases, trims, and collapses internal whitespace", () => {
-    expect(normalizeMerchant("  STARBUCKS   #123 ")).toBe("starbucks #123");
-    expect(normalizeMerchant("Starbucks #123")).toBe("starbucks #123");
+  it("lowercases + canonicalizes a merchant to a stable key across Plaid name variants (INC-2026-06-19)", () => {
+    // The bug: Plaid emits varying merchant_name for the same merchant, so the
+    // exact-match rule key missed new transactions. The key now collapses store
+    // numbers, ".com"/format noise, and punctuation so the variants converge.
+    for (const variant of ["Walmart", "Walmart.com", "WAL-MART", "Walmart  Supercenter #1234", "WALMART ONLINE"]) {
+      expect(normalizeMerchant(variant)).toBe("walmart");
+    }
+    expect(normalizeMerchant("  STARBUCKS   #123 ")).toBe("starbucks");
+    expect(normalizeMerchant("Starbucks #456")).toBe("starbucks");
+  });
+  it("keeps genuinely-different merchants distinct (precision — no over-merge)", () => {
+    expect(normalizeMerchant("Walmart Pharmacy")).toBe("walmartpharmacy");
+    expect(normalizeMerchant("Walmart Pharmacy")).not.toBe(normalizeMerchant("Walmart"));
+  });
+  it("is idempotent (safe to re-apply to an already-stored key)", () => {
+    expect(normalizeMerchant(normalizeMerchant("Walmart.com"))).toBe("walmart");
+    expect(normalizeMerchant(normalizeMerchant("Walmart Pharmacy"))).toBe("walmartpharmacy");
   });
   it("null / blank → empty string", () => {
     expect(normalizeMerchant(null)).toBe("");
     expect(normalizeMerchant("   ")).toBe("");
+    expect(normalizeMerchant("#1234")).toBe(""); // a bare store number → no merchant key
   });
 });
 
@@ -77,5 +92,37 @@ describe("matchRuleAssignments (WLT-22-3 — which transactions a rule writes)",
 
   it("returns nothing when no merchant matches a rule", () => {
     expect(matchRuleAssignments([{ dedupKey: "dk-1", merchant: "Costco" }], new Set(), rules)).toEqual([]);
+  });
+
+  it("matches a merchant rule across Plaid name VARIANTS — the INC-2026-06-19 fix", () => {
+    const walmart = [{ merchantNorm: "walmart", categoryId: "cat-grocery", ruleId: "r-wm" }];
+    const out = matchRuleAssignments(
+      [
+        { dedupKey: "dk-1", merchant: "Walmart" },
+        { dedupKey: "dk-2", merchant: "Walmart.com" },
+        { dedupKey: "dk-3", merchant: "WAL-MART" },
+        { dedupKey: "dk-4", merchant: "Walmart Supercenter #1234" },
+        { dedupKey: "dk-5", merchant: "Walmart Pharmacy" }, // a DIFFERENT merchant → must NOT match
+        { dedupKey: "dk-6", merchant: null }, // no name → can't match
+      ],
+      new Set(),
+      walmart,
+    );
+    expect(out.map((m) => m.dedupKey).sort()).toEqual(["dk-1", "dk-2", "dk-3", "dk-4"]);
+    expect(out.every((m) => m.categoryId === "cat-grocery")).toBe(true);
+  });
+
+  it("re-canonicalizes a LEGACY rule key stored before the fix (so old rules match new variants)", () => {
+    // a rule created pre-fix may have stored a variant key like "walmart supercenter"
+    const legacy = [{ merchantNorm: "walmart supercenter", categoryId: "cat-grocery", ruleId: "r-old" }];
+    const out = matchRuleAssignments(
+      [
+        { dedupKey: "dk-1", merchant: "Walmart" },
+        { dedupKey: "dk-2", merchant: "Walmart.com" },
+      ],
+      new Set(),
+      legacy,
+    );
+    expect(out.map((m) => m.dedupKey).sort()).toEqual(["dk-1", "dk-2"]);
   });
 });
