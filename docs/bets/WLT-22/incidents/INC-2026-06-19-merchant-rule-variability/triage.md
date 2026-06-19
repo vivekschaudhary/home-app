@@ -2,7 +2,7 @@
 id: INC-2026-06-19-merchant-rule-variability
 type: incident
 bet: WLT-22
-status: open                # open | mitigated | resolved | postmortem-pending | closed
+status: mitigated           # fix-forward chosen (fuzzy matching) — PR open, awaiting review/merge
 severity: P2                # not an outage — a product limitation in WLT-22-3 rule matching
 detected_at: 2026-06-19T20:55
 declared_by: operator (dogfooding) via /triage
@@ -66,6 +66,13 @@ A user recategorized a **Walmart** transaction to **Groceries** and chose "alway
 ### Decisions
 - [2026-06-19] [Engineer] **Classified P2 (product limitation, not outage); no stop-the-bleed mitigation** — rationale: no data loss / security / worsening; the feature works for consistently-named merchants; rollback would remove a working feature — area: triage — reversibility: n/a
 - [2026-06-19] [Engineer] **Recommend fix-forward via Plaid `merchant_entity_id`, not fuzzy matching** — rationale: the provider-native stable merchant key avoids the precision/recall risk of heuristic name-fuzzing — area: categorization — alternatives: fuzzy normalize (over-match risk), null-fallback (partial) — reversibility: medium
+- [2026-06-19] [Human] **Chose fuzzy name matching** (over the recommended `merchant_entity_id`) — rationale: no migration, ships immediately, the over-match risk is acceptable. **Built conservatively to honor the precision concern:** `normalizeMerchant` strips store NUMBERS + punctuation + a tight format/legal/online NOISE list (`com/online/inc/llc/corp/co/supercenter/superstore`) then concatenates — it does NOT collapse to a first token, so "Walmart Pharmacy" stays distinct from "Walmart". `matchRuleAssignments` re-canonicalizes legacy stored keys (idempotent) → existing rules match new variants with **no migration**. Fix: PR (fix/merchant-rule-fuzzy-match). — area: categorization — reversibility: easy (it's a pure function)
+
+### Notes (fix behavior)
+- **Immediate effect:** the next `apply-category-rules` run (Plaid webhook or the 6h cron `aggregationScheduledRefresh`) re-applies rules with the new key → the user's existing Walmart variants get categorized then; not instant.
+- **Null `merchant_name` still unhandled** — fuzzy matching needs a name to fuzz; a transaction Plaid leaves null can't match (the deferred Option-1 `merchant_entity_id` / Option-3 description-fallback would close that). Logged as a residual.
+- **Residual over-match knob:** the noise list is the precision/recall dial; intentionally tight. Widen only with evidence.
+- **[Codex BLOCKER, fixed] Legacy canonical-key collisions are now deterministic.** Pre-fix the DB was unique on the OLD raw key, so two rows (`walmart.com`, `walmart supercenter #1234`) could coexist and both now canonicalize to `"walmart"`. `matchRuleAssignments` now keeps the **newest** rule per canonical key (ties by `ruleId`) — order-independent, matching the user's last explicit write; `readRules` supplies `updated_at`. Regression test covers both load orders → same winner. **Residual (inert):** the losing legacy row still exists in `category_rules` (harmless — the matcher deterministically ignores it); a future cleanup (or the deferred `merchant_entity_id` rework) could merge legacy duplicates. Rule deletion isn't built yet, so the dead row can't resurface.
 
 ### Risks
 - [2026-06-19] [Engineer] **Silent under-delivery erodes trust in "remember the merchant"** — likelihood: medium — impact: medium — mitigation: fix-forward (Option 1) + set expectations in copy; the feature is most-promised for exactly the big-box merchants Plaid names inconsistently — area: product/trust

@@ -31,15 +31,36 @@ export function resolveCategory(txn: ResolvableTxn, assignments: ReadonlyMap<str
   return effectiveCategory(txn.category, assignments.get(txn.dedupKey));
 }
 
+// WLT-22-3 / INC-2026-06-19 — noise tokens that denote the SAME merchant across
+// Plaid's name variants (online vs in-store vs format/legal suffix). Conservative
+// on purpose: stripping a real distinguishing word (e.g. "pharmacy") would
+// over-merge two merchants, so only format/legal/online noise lives here — NOT
+// category words.
+const MERCHANT_NOISE = new Set(["com", "online", "inc", "llc", "corp", "co", "supercenter", "superstore"]);
+
 /**
- * WLT-22-3 — normalize a merchant name into the stable match key for a "remember
- * the merchant" rule: lowercase + trim + collapse internal whitespace. The SAME
- * function keys the rule (`category_rules.merchant_norm`) AND matches it against
- * a transaction's merchant at backfill + sync, so the two can never drift.
- * "STARBUCKS  #123" and "Starbucks #123" → the same key. `null`/blank → "".
+ * WLT-22-3 — canonical merchant key for a "remember the merchant" rule. The SAME
+ * function keys the rule (`category_rules.merchant_norm`) AND matches it against a
+ * transaction's merchant at backfill + sync, so the two can never drift.
+ *
+ * INC-2026-06-19: Plaid emits the same real merchant under varying `merchant_name`
+ * ("Walmart", "Walmart.com", "WAL-MART", "Walmart Supercenter #1234"), so the old
+ * exact key (lowercase + collapse-whitespace) treated every variant as a different
+ * merchant → new transactions missed the rule. Now: lowercase → punctuation to
+ * spaces → drop store/location NUMBERS + format/legal/online NOISE tokens →
+ * concatenate the rest. The Walmart variants all key to `"walmart"`, while
+ * `"Walmart Pharmacy"` stays `"walmartpharmacy"` (distinct). `null`/blank/
+ * number-only → `""`. **Idempotent** — re-applying to an already-stored key is a
+ * no-op, so the matcher can re-canonicalize legacy rule keys on the fly.
  */
 export function normalizeMerchant(merchant: string | null | undefined): string {
-  return (merchant ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  const tokens = (merchant ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter((tok) => tok && !MERCHANT_NOISE.has(tok) && !/^\d+$/.test(tok));
+  return tokens.join("");
 }
 
 export interface RuleMatchTxn {
@@ -50,6 +71,15 @@ export interface MerchantRuleSpec {
   merchantNorm: string;
   categoryId: string;
   ruleId: string;
+  updatedAt?: string; // ISO; on a canonical-key collision the NEWEST rule wins (deterministic)
+}
+
+// `a` is newer than `b`: later updatedAt, ties broken by the larger ruleId so the
+// outcome is fully deterministic regardless of the order rules were loaded.
+function ruleIsNewer(a: MerchantRuleSpec, b: MerchantRuleSpec): boolean {
+  const au = a.updatedAt ?? "";
+  const bu = b.updatedAt ?? "";
+  return au !== bu ? au > bu : a.ruleId > b.ruleId;
 }
 
 /**
@@ -63,7 +93,24 @@ export function matchRuleAssignments(
   userOwnedDedupKeys: ReadonlySet<string>,
   rules: readonly MerchantRuleSpec[],
 ): { dedupKey: string; categoryId: string; ruleId: string }[] {
-  const byNorm = new Map(rules.map((r) => [r.merchantNorm, r]));
+  // Re-canonicalize each stored rule key (INC-2026-06-19): a rule written before
+  // the fix may hold a pre-canonical key (e.g. "walmart supercenter"); running it
+  // back through normalizeMerchant (idempotent) makes legacy rules match the new
+  // canonical transaction keys without a data migration.
+  //
+  // Collision resolution (review BLOCKER): the legacy DB was unique on the OLD raw
+  // key, so two rows ("walmart.com", "walmart supercenter #1234") can now collapse
+  // to the same canonical key. `readRules` has no ordering, so a raw Map overwrite
+  // would pick an arbitrary winner that varies across syncs. Instead keep the
+  // NEWEST rule per canonical key (ties by ruleId) — deterministic + matches the
+  // user's last explicit write, independent of load order.
+  const byNorm = new Map<string, MerchantRuleSpec>();
+  for (const r of rules) {
+    const key = normalizeMerchant(r.merchantNorm);
+    if (!key) continue; // a rule whose key canonicalizes to "" can't match anything
+    const cur = byNorm.get(key);
+    if (!cur || ruleIsNewer(r, cur)) byNorm.set(key, r);
+  }
   const out: { dedupKey: string; categoryId: string; ruleId: string }[] = [];
   const seen = new Set<string>();
   for (const t of txns) {

@@ -42,14 +42,18 @@ export interface MerchantRule {
   merchantNorm: string;
   categoryId: string;
   ruleId: string;
+  updatedAt?: string; // INC-2026-06-19 — newest wins on a canonical-key collision
 }
 
 /** The user's merchant rules (for the sync-time apply). */
 export async function readRules(client: SupabaseClientT, userId: string): Promise<MerchantRule[]> {
-  const { data } = await client.from("category_rules").select("id, merchant_norm, category_id").eq("user_id", userId);
+  const { data } = await client
+    .from("category_rules")
+    .select("id, merchant_norm, category_id, updated_at")
+    .eq("user_id", userId);
   return (data ?? []).map((r) => {
-    const row = r as { id: string; merchant_norm: string; category_id: string };
-    return { merchantNorm: row.merchant_norm, categoryId: row.category_id, ruleId: row.id };
+    const row = r as { id: string; merchant_norm: string; category_id: string; updated_at: string };
+    return { merchantNorm: row.merchant_norm, categoryId: row.category_id, ruleId: row.id, updatedAt: row.updated_at };
   });
 }
 
