@@ -2,7 +2,7 @@
 id: WLT-23-2
 bet: WLT-23
 type: story
-status: in-review
+status: shipped
 priority: P2
 created: 2026-06-18
 author: PM
@@ -55,7 +55,7 @@ Add an **account** filter and a **category** filter to the shipped Transactions 
 
 ## PRs
 
-- PR #68 — implementation (account + category filters, read scan, route, event, tests) — in-review (Codex owns the gated owner-isolation + page-boundary E2E)
+- PR #68 — implementation (account + category filters, read scan, route, event, tests) — **merged** (squash `457734b`, 2026-06-18). Codex caught a real BLOCKER (sparse-filter scan stranding matches behind the cap cursor) + an ISSUE (unconditional "Other") — both engineer-fixed (`26942ed`); Codex authored the gated real-path E2E (`7d4dbef`: account + moved-category filters reconcile, **filtered page-boundary keyset paging exactly once**, second-user isolation). Security clean. CLEAR tied to HEAD `26942ed`.
 
 ## Tests
 
