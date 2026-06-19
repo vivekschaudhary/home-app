@@ -2,7 +2,7 @@
 id: WLT-23-3
 bet: WLT-23
 type: story
-status: in-review
+status: shipped
 priority: P2
 created: 2026-06-18
 author: PM
@@ -52,7 +52,7 @@ Let a user **fix a transaction's category directly from the Transactions ledger*
 
 ## PRs
 
-- PR #69 — implementation (the WLT-22 `CategoryPicker` in each ledger row + reconcile; `dedupKey` on the row; `recatSaved` copy; tests) — in-review (Codex owns the gated recategorize-from-the-ledger + isolation E2E)
+- PR #69 — implementation (the WLT-22 `CategoryPicker` in each ledger row + reconcile; `dedupKey` on the row; `recatSaved` copy; tests) — **merged** (squash `478a16c`, 2026-06-19). Two self-caught CI failures first (test-mock typecheck then lint — both from pushing without re-running the full `tsc`+lint gate; fixed `a88130c`→`060d2b1`). **CLEAR tied to HEAD `060d2b1`.**
 
 ## Tests
 
@@ -78,6 +78,8 @@ _If post-merge bugs are found, story is re-opened and fixes live under `fixes/`.
 
 ### Issues
 - [2026-06-18] [PM] **Jira sub-ticket mirror** — severity: low — owner: PM — status: open — no Jira connector on host; create WLT-23-3 manually under the WLT-23 epic (per precedent).
+- [2026-06-19] [Human + Engineer] **E2E coverage: accepted existing, no new browser E2E** — severity: n/a (decision) — owner: Human — status: resolved — the recategorize write path (session→RLS→render + second-user isolation) is already E2E-proven by WLT-22 (same routes + the same `CategoryPicker`); the WLT-23-3 delta is the picker's placement + the reconcile, covered by the new component tests. Human accepted this coverage rather than add a near-duplicate ledger E2E. Reviewer code-review clean.
+- [2026-06-19] [Engineer] **Process miss — pushed twice without the full local gate** — severity: low — owner: Engineer — status: resolved — a test-mock change failed CI Typecheck, then the fix failed CI Lint (unused `_`-prefixed params), because I re-ran only part of the checks after each edit. Corrected by running lint + typecheck + full suite + build before the final push. Lesson: run the **complete** gate (esp. `tsc --noEmit`, which `next build` doesn't fully replicate for test files) after every edit, not a subset.
 
 ---
 

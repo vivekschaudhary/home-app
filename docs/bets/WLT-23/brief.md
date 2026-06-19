@@ -1,7 +1,7 @@
 ---
 id: WLT-23
 type: feature
-status: Approved
+status: shipped
 priority: P2
 parent: FOUNDATION-PRODUCT
 portfolio_stub: false
@@ -112,7 +112,7 @@ _Decomposed via `/create-story WLT-23` (nested numbering). Suggested first slice
 
 - **WLT-23-1 — The Transactions ledger** → the nav item + the owner-scoped, paginated, searchable all-accounts list (date · merchant · amount · resolved category · account), honest states, instrumentation. Read-only. — **shipped** (PR #66, `fd1094f`).
 - **WLT-23-2 — Filter the ledger (account + category)** → an account filter + a resolved-category filter alongside the search, composing with keyset paging; honest no-match + Clear; `transactions_filtered`. — **ready**.
-- **WLT-23-3 — Recategorize from the ledger** → reuse the WLT-22 `CategoryPicker` **as a popover off the row** (not an inline-expanding row — per the popover preference) to correct a transaction's category (and optionally "remember the merchant") directly from the list; exposes the row's `dedup_key` (the write target), reuses the AAL2 routes + events. — **ready** (the bet's final slice).
+- **WLT-23-3 — Recategorize from the ledger** → reuse the WLT-22 `CategoryPicker` **as a popover off the row** (not an inline-expanding row — per the popover preference) to correct a transaction's category (and optionally "remember the merchant") directly from the list; exposes the row's `dedup_key` (the write target), reuses the AAL2 routes + events. — **shipped** (PR #69, `478a16c`). **Bet COMPLETE.**
 
 ## DRI Log
 
