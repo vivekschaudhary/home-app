@@ -28,6 +28,7 @@ export interface TransactionsPageDTO {
   nextCursor: string | null; // opaque keyset cursor; null = no more pages
   hasAccount: boolean; // false = the user has no connected account (drives the connect nudge)
   accounts: LedgerAccountDTO[]; // WLT-23-2 — the account-filter options (owner-scoped)
+  hasOther: boolean; // WLT-23-2 — the null-category "Other" bucket exists (gates the filter option)
 }
 
 /**

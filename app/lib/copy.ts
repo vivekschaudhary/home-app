@@ -549,6 +549,7 @@ export const COPY = {
     allCategories: "All categories",
     clearFilters: "Clear filters",
     emptyFiltered: "No transactions match these filters.",
+    emptyMoreToScan: "No matches yet in what we've loaded — keep looking.",
   },
   transactionsA11y: {
     region: "Transactions",

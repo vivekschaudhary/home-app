@@ -20,6 +20,11 @@ const A = COPY.transactionsA11y;
 // Select sentinel for the "all" (unfiltered) option — distinct from a real account
 // id (uuid) and from the "" category value (the null-category "Other" bucket).
 const ALL = "__all__";
+// Auto-continue through empty filtered pages (the resolved-category scan can return
+// an empty page with a continuation cursor when its scan cap is hit) so matches are
+// never stranded behind an unreachable cursor — bounded so a zero-match filter can't
+// fetch forever; beyond it the user keeps paging manually.
+const AUTO_SCAN_LIMIT = 8;
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -61,6 +66,7 @@ export function TransactionsClient({
   const [nextCursor, setNextCursor] = useState<string | null>(initial?.nextCursor ?? null);
   const [hasAccount, setHasAccount] = useState<boolean>(initial?.hasAccount ?? false);
   const [accounts, setAccounts] = useState<LedgerAccountDTO[]>(initial?.accounts ?? []);
+  const [hasOther, setHasOther] = useState<boolean>(initial?.hasOther ?? false);
   const [categories, setCategories] = useState<CategoryDTO[]>([]);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -73,41 +79,62 @@ export function TransactionsClient({
   const didMount = useRef(false);
 
   // Replace the list with a fresh first page for the current filters + search.
+  // Auto-continues through empty filtered pages (bounded) so a sparse category
+  // filter never strands matches behind the scan cap's continuation cursor.
   const loadPage = useCallback(
     async (f: { accountId: string | null; category: string | null; q: string }) => {
       setMode("loadingPage");
       setPageError(false);
       setMoreError(false);
-      const res = await fetchTransactions({ accountId: f.accountId, category: f.category, q: f.q });
-      if (!res.ok) {
-        setMode("idle");
-        setPageError(true);
-        return;
+      let cursor: string | null = null;
+      for (let i = 0; i < AUTO_SCAN_LIMIT; i++) {
+        const res = await fetchTransactions({ cursor, accountId: f.accountId, category: f.category, q: f.q });
+        if (!res.ok) {
+          setMode("idle");
+          setPageError(true);
+          return;
+        }
+        // Stop on the first non-empty page, when the data is exhausted, or at the cap.
+        if (res.page.rows.length > 0 || res.page.nextCursor === null || i === AUTO_SCAN_LIMIT - 1) {
+          setRows(res.page.rows);
+          setNextCursor(res.page.nextCursor);
+          setHasAccount(res.page.hasAccount);
+          setAccounts(res.page.accounts ?? []);
+          setHasOther(res.page.hasOther ?? false);
+          setMode("idle");
+          return;
+        }
+        cursor = res.page.nextCursor; // empty page but more to scan → keep going
       }
-      setRows(res.page.rows);
-      setNextCursor(res.page.nextCursor);
-      setHasAccount(res.page.hasAccount);
-      setAccounts(res.page.accounts ?? []);
-      setMode("idle");
     },
     [],
   );
 
   // Append the next keyset page (within the active filters); focus the first new row.
+  // Same bounded auto-continue past empty filtered pages.
   const loadMore = useCallback(async () => {
     if (!nextCursor) return;
     setMode("loadingMore");
     setMoreError(false);
-    const res = await fetchTransactions({ cursor: nextCursor, accountId, category: categoryFilter, q: debouncedQuery });
-    if (!res.ok) {
-      setMode("idle");
-      setMoreError(true);
-      return;
+    let cursor: string | null = nextCursor;
+    for (let i = 0; i < AUTO_SCAN_LIMIT; i++) {
+      const res = await fetchTransactions({ cursor, accountId, category: categoryFilter, q: debouncedQuery });
+      if (!res.ok) {
+        setMode("idle");
+        setMoreError(true);
+        return;
+      }
+      if (res.page.rows.length > 0 || res.page.nextCursor === null || i === AUTO_SCAN_LIMIT - 1) {
+        if (res.page.rows.length > 0) {
+          setRows((prev) => [...prev, ...res.page.rows]);
+          setFocusRowId(res.page.rows[0]?.id ?? null);
+        }
+        setNextCursor(res.page.nextCursor);
+        setMode("idle");
+        return;
+      }
+      cursor = res.page.nextCursor;
     }
-    setRows((prev) => [...prev, ...res.page.rows]);
-    setNextCursor(res.page.nextCursor);
-    setFocusRowId(res.page.rows[0]?.id ?? null);
-    setMode("idle");
   }, [nextCursor, accountId, categoryFilter, debouncedQuery]);
 
   // Debounce the search box → a settled value the load effect watches.
@@ -194,7 +221,7 @@ export function TransactionsClient({
           {categories.map((c) => (
             <option key={c.id} value={c.name}>{humanizeCategory(c.name)}</option>
           ))}
-          <option value="">{humanizeCategory("")}</option>
+          {hasOther ? <option value="">{humanizeCategory("")}</option> : null}
         </select>
         {anyActive ? (
           <button
@@ -303,6 +330,34 @@ export function TransactionsClient({
             )}
           </div>
         </>
+      ) : nextCursor !== null ? (
+        // No matches in what we've scanned so far, but more history remains (the
+        // bounded category scan stopped at its cap) — keep the cursor reachable so
+        // matches farther down are never stranded (never a false "no matches").
+        <div className="py-8 text-center">
+          <p className="text-sm text-gray-600">{C.emptyMoreToScan}</p>
+          <div className="mt-4">
+            {moreError ? (
+              <p role="alert" className="text-sm text-red-600">
+                {C.error}{" "}
+                <button type="button" onClick={() => void loadMore()} className="underline">
+                  {C.retry}
+                </button>
+              </p>
+            ) : (
+              <Button
+                variant="secondary"
+                onClick={() => void loadMore()}
+                loading={mode === "loadingMore"}
+                loadingLabel={C.loadingMore}
+                aria-label={A.loadMore}
+                className="w-auto"
+              >
+                {C.loadMore}
+              </Button>
+            )}
+          </div>
+        </div>
       ) : filtersActive ? (
         // Empty — an account/category filter (± search) matched nothing.
         <p className="py-8 text-center text-sm text-gray-600">{C.emptyFiltered}</p>

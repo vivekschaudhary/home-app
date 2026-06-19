@@ -22,6 +22,7 @@ export interface TransactionsPage {
   nextCursor: string | null;
   hasAccount: boolean;
   accounts: LedgerAccountDTO[];
+  hasOther: boolean; // WLT-23-2 — the null-category "Other" bucket exists for this user (gates the filter option)
 }
 export type TransactionsPageResult = { ok: true; page: TransactionsPage } | { ok: false };
 
@@ -114,10 +115,12 @@ export async function readTransactionsPage(
   const category = opts.category ?? null;
 
   // Shared owner-scoped reads: the saved-category map + the account names (also the
-  // account-filter options + `hasAccount` for the empty state).
-  const [assignments, accountsRes] = await Promise.all([
+  // account-filter options + `hasAccount` for the empty state) + a bounded probe for
+  // whether the null-category "Other" bucket exists (gates that filter option, AC2).
+  const [assignments, accountsRes, otherProbe] = await Promise.all([
     readCategoryAssignments(supabase, userId),
     supabase.from("financial_accounts").select("id, name").eq("user_id", userId),
+    supabase.from("transactions").select("dedup_key").eq("user_id", userId).is("category", null).limit(200),
   ]);
   const accountName = new Map<string, string>();
   for (const a of (accountsRes.data ?? []) as { id: string; name: string }[]) accountName.set(a.id, a.name);
@@ -125,6 +128,10 @@ export async function readTransactionsPage(
     .map(([id, name]) => ({ id, name }))
     .sort((a, b) => a.name.localeCompare(b.name));
   const hasAccount = accountName.size > 0;
+  // A transaction resolves to "Other" iff plaid category is null AND it has no saved
+  // assignment (a saved row always names a real category). So: a category-null row
+  // whose dedup_key isn't in the assignment map.
+  const hasOther = ((otherProbe.data ?? []) as { dedup_key: string }[]).some((r) => !assignments.has(r.dedup_key));
 
   const mapRow = (r: TxnRow): TransactionRowDTO => ({
     id: r.id,
@@ -163,7 +170,7 @@ export async function readTransactionsPage(
     const pageRows = hasMore ? fetched.slice(0, limit) : fetched;
     const last = pageRows[pageRows.length - 1];
     const nextCursor = hasMore && last ? encodeCursor({ occurredOn: last.occurred_on, id: last.id }) : null;
-    return { ok: true, page: { rows: pageRows.map(mapRow), nextCursor, hasAccount, accounts } };
+    return { ok: true, page: { rows: pageRows.map(mapRow), nextCursor, hasAccount, accounts, hasOther } };
   }
 
   // Resolved-category filter → a BOUNDED over-fetch-and-filter keyset scan: read
@@ -199,5 +206,5 @@ export async function readTransactionsPage(
   // Unless the data was exhausted (a filled page or the scan cap → hand back the
   // cursor so Load-more continues), there may be more matches.
   const nextCursor = !exhausted && cursor ? encodeCursor(cursor) : null;
-  return { ok: true, page: { rows: matched, nextCursor, hasAccount, accounts } };
+  return { ok: true, page: { rows: matched, nextCursor, hasAccount, accounts, hasOther } };
 }
