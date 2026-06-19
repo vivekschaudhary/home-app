@@ -544,11 +544,21 @@ export const COPY = {
     emptySearch: "No transactions match “{query}”.",
     error: "We couldn't load your transactions just now — try again.",
     retry: "Try again",
+    // WLT-23-2 — filters
+    allAccounts: "All accounts",
+    allCategories: "All categories",
+    clearFilters: "Clear filters",
+    emptyFiltered: "No transactions match these filters.",
+    emptyMoreToScan: "No matches yet in what we've loaded — keep looking.",
   },
   transactionsA11y: {
     region: "Transactions",
     list: "Your transactions",
     search: "Search your transactions by merchant or description",
+    // WLT-23-2 — filters
+    accountFilter: "Filter by account",
+    categoryFilter: "Filter by category",
+    clearFilters: "Clear all filters",
     resultCount: "Showing {count} transactions",
     loadMore: "Load more transactions",
     itemLabel: "{date}, {merchant}, {amount}, {category}, {account}",

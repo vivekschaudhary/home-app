@@ -95,6 +95,7 @@ jobs:
             "/api/budget/route",
             "/(app)/transactions/page",
             "/api/transactions/route",
+            "/api/transactions/filtered/route",
             "/sign-in/page",
             "/sign-up/page",
             "/unsupported/page",

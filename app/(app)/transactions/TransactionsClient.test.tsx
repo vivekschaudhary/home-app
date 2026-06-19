@@ -1,11 +1,19 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TransactionRowDTO, TransactionsPageDTO } from "@/app/lib/transactions-client";
 
 const fetchTransactionsMock = vi.fn();
+const recordTransactionsFilteredMock = vi.fn();
 vi.mock("@/app/lib/transactions-client", () => ({
   fetchTransactions: (p: unknown) => fetchTransactionsMock(p),
+  recordTransactionsFiltered: () => recordTransactionsFilteredMock(),
+}));
+const fetchCategoriesMock = vi.fn(() =>
+  Promise.resolve({ ok: true, categories: [{ id: "c1", name: "FOOD_AND_DRINK", kind: "discretionary", source: "seed" }] }),
+);
+vi.mock("@/app/lib/budget-client", () => ({
+  fetchCategories: () => fetchCategoriesMock(),
 }));
 
 import { TransactionsClient } from "./TransactionsClient";
@@ -28,12 +36,19 @@ const ROWS: TransactionRowDTO[] = [
   r({ id: "t3", merchant: "Amazon", description: "AMZN", amount: 42, category: "", account: "Visa", pending: true }),
 ];
 
+const ACCOUNTS = [
+  { id: "11111111-1111-4111-8111-111111111111", name: "Everyday Checking" },
+  { id: "22222222-2222-4222-8222-222222222222", name: "Visa" },
+];
+
 function page(over: Partial<TransactionsPageDTO> = {}): TransactionsPageDTO {
-  return { rows: ROWS, nextCursor: "CUR1", hasAccount: true, ...over };
+  return { rows: ROWS, nextCursor: "CUR1", hasAccount: true, accounts: ACCOUNTS, hasOther: true, ...over };
 }
 
 afterEach(() => {
   fetchTransactionsMock.mockReset();
+  recordTransactionsFilteredMock.mockReset();
+  fetchCategoriesMock.mockClear();
 });
 
 describe("TransactionsClient — ledger render (AC2/AC3)", () => {
@@ -46,13 +61,15 @@ describe("TransactionsClient — ledger render (AC2/AC3)", () => {
     // debit bare, credit with "+"
     expect(screen.getByText("$5.50")).toBeTruthy();
     expect(screen.getByText("+$2,000.00")).toBeTruthy();
-    // resolved category humanized; "" → Other
-    expect(screen.getByText("Food And Drink")).toBeTruthy();
-    expect(screen.getByText("Income")).toBeTruthy();
-    expect(screen.getByText("Other")).toBeTruthy();
+    // resolved category humanized; "" → Other (scope to the table — "Other"/"Visa"
+    // also appear as filter-dropdown options)
+    const table = screen.getByRole("table", { name: "Your transactions" });
+    expect(within(table).getByText("Food And Drink")).toBeTruthy();
+    expect(within(table).getByText("Income")).toBeTruthy();
+    expect(within(table).getByText("Other")).toBeTruthy();
     // account name
-    expect(screen.getAllByText("Everyday Checking").length).toBeGreaterThan(0);
-    expect(screen.getByText("Visa")).toBeTruthy();
+    expect(within(table).getAllByText("Everyday Checking").length).toBeGreaterThan(0);
+    expect(within(table).getByText("Visa")).toBeTruthy();
     // pending badge on the pending row
     expect(screen.getByText("Pending")).toBeTruthy();
     // result count
@@ -76,7 +93,7 @@ describe("TransactionsClient — pagination (AC4)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Load more transactions" }));
 
     await waitFor(() => expect(screen.getByText("Costco")).toBeTruthy());
-    expect(fetchTransactionsMock).toHaveBeenCalledWith({ cursor: "CUR1", q: "" });
+    expect(fetchTransactionsMock).toHaveBeenCalledWith({ cursor: "CUR1", accountId: null, category: null, q: "" });
     // nextCursor now null → the end marker replaces the button
     expect(screen.getByText("You're all caught up — that's everything.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Load more transactions" })).toBeNull();
@@ -109,7 +126,7 @@ describe("TransactionsClient — search (AC5)", () => {
       target: { value: "amazon" },
     });
 
-    await waitFor(() => expect(fetchTransactionsMock).toHaveBeenCalledWith({ q: "amazon" }));
+    await waitFor(() => expect(fetchTransactionsMock).toHaveBeenCalledWith({ cursor: null, accountId: null, category: null, q: "amazon" }));
     await waitFor(() => expect(screen.getByText("Amazon")).toBeTruthy());
     expect(screen.queryByText("Blue Bottle")).toBeNull();
   });
@@ -147,7 +164,84 @@ describe("TransactionsClient — empty + error states (AC6)", () => {
 
     expect(screen.getByRole("alert")).toBeTruthy();
     fireEvent.click(screen.getByText("Try again"));
-    await waitFor(() => expect(fetchTransactionsMock).toHaveBeenCalledWith({ q: "" }));
+    await waitFor(() => expect(fetchTransactionsMock).toHaveBeenCalledWith({ cursor: null, accountId: null, category: null, q: "" }));
     await waitFor(() => expect(screen.getByText("Blue Bottle")).toBeTruthy());
+  });
+});
+
+describe("TransactionsClient — filters (AC1/AC3/AC5/AC7)", () => {
+  it("the account filter scopes the read; the category filter scopes by resolved category; both fire transactions_filtered", async () => {
+    render(<TransactionsClient initial={page()} initialError={false} />);
+
+    // Account filter → refetch with the selected accountId.
+    fetchTransactionsMock.mockResolvedValueOnce({
+      ok: true,
+      page: { rows: [r({ id: "v1", merchant: "Costco", description: "C", account: "Visa" })], nextCursor: null, hasAccount: true, accounts: ACCOUNTS },
+    });
+    fireEvent.change(screen.getByLabelText("Filter by account"), {
+      target: { value: "22222222-2222-4222-8222-222222222222" },
+    });
+    await waitFor(() =>
+      expect(fetchTransactionsMock).toHaveBeenCalledWith({ cursor: null, accountId: "22222222-2222-4222-8222-222222222222", category: null, q: "" }),
+    );
+    expect(recordTransactionsFilteredMock).toHaveBeenCalledTimes(1);
+
+    // Category filter → refetch with the resolved category name (raw, not humanized).
+    fetchTransactionsMock.mockResolvedValueOnce({
+      ok: true,
+      page: { rows: [r({ id: "f1" })], nextCursor: null, hasAccount: true, accounts: ACCOUNTS },
+    });
+    fireEvent.change(screen.getByLabelText("Filter by category"), { target: { value: "FOOD_AND_DRINK" } });
+    await waitFor(() =>
+      expect(fetchTransactionsMock).toHaveBeenCalledWith({ cursor: null, accountId: "22222222-2222-4222-8222-222222222222", category: "FOOD_AND_DRINK", q: "" }),
+    );
+    expect(recordTransactionsFilteredMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("an active filter with no matches shows the filtered-empty state (distinct from search-empty)", async () => {
+    render(<TransactionsClient initial={page()} initialError={false} />);
+    fetchTransactionsMock.mockResolvedValueOnce({ ok: true, page: { rows: [], nextCursor: null, hasAccount: true, accounts: ACCOUNTS } });
+    fireEvent.change(screen.getByLabelText("Filter by category"), { target: { value: "FOOD_AND_DRINK" } });
+    await waitFor(() => expect(screen.getByText("No transactions match these filters.")).toBeTruthy());
+  });
+
+  it("a sparse category filter does NOT strand matches: auto-continues past an empty page with a cursor (BLOCKER)", async () => {
+    render(<TransactionsClient initial={page()} initialError={false} />);
+    await screen.findByRole("option", { name: "Food And Drink" }); // wait for the category options to load
+    // First filtered page: empty but MORE to scan (the scan cap was hit) → must not
+    // show a false "no matches"; the client auto-continues to the next page.
+    fetchTransactionsMock.mockResolvedValueOnce({ ok: true, page: { rows: [], nextCursor: "C2", hasAccount: true, accounts: ACCOUNTS, hasOther: true } });
+    fetchTransactionsMock.mockResolvedValueOnce({
+      ok: true,
+      page: { rows: [r({ id: "deep1", merchant: "Deep Match", description: "D" })], nextCursor: null, hasAccount: true, accounts: ACCOUNTS, hasOther: true },
+    });
+    fireEvent.change(screen.getByLabelText("Filter by category"), { target: { value: "FOOD_AND_DRINK" } });
+    // the row from page 2 renders; the false "no matches" never shows
+    await waitFor(() => expect(screen.getByText("Deep Match")).toBeTruthy());
+    expect(screen.queryByText("No transactions match these filters.")).toBeNull();
+    // the second fetch used the continuation cursor C2
+    expect(fetchTransactionsMock).toHaveBeenCalledWith({ cursor: "C2", accountId: null, category: "FOOD_AND_DRINK", q: "" });
+  });
+
+  it("renders the 'Other' category option only when the user has a null-category bucket (hasOther)", () => {
+    const { unmount } = render(<TransactionsClient initial={page({ hasOther: false })} initialError={false} />);
+    const select = screen.getByLabelText("Filter by category") as HTMLSelectElement;
+    expect([...select.options].some((o) => o.value === "")).toBe(false); // no "Other" option
+    unmount();
+    render(<TransactionsClient initial={page({ hasOther: true })} initialError={false} />);
+    const select2 = screen.getByLabelText("Filter by category") as HTMLSelectElement;
+    expect([...select2.options].some((o) => o.value === "" && o.text === "Other")).toBe(true);
+  });
+
+  it("Clear resets the filters and refetches the unfiltered first page", async () => {
+    render(<TransactionsClient initial={page()} initialError={false} />);
+    // apply a filter
+    fetchTransactionsMock.mockResolvedValueOnce({ ok: true, page: { rows: [r({ id: "f1" })], nextCursor: null, hasAccount: true, accounts: ACCOUNTS } });
+    fireEvent.change(screen.getByLabelText("Filter by category"), { target: { value: "FOOD_AND_DRINK" } });
+    await waitFor(() => expect(screen.getByText("Clear filters")).toBeTruthy());
+    // clear → unfiltered refetch
+    fetchTransactionsMock.mockResolvedValueOnce({ ok: true, page: page({ nextCursor: null }) });
+    fireEvent.click(screen.getByText("Clear filters"));
+    await waitFor(() => expect(fetchTransactionsMock).toHaveBeenLastCalledWith({ cursor: null, accountId: null, category: null, q: "" }));
   });
 });

@@ -50,6 +50,9 @@ export const FUNNEL_EVENTS = {
   // WLT-23-1 — a user opened the Transactions ledger (the all-accounts activity
   // surface). transactions_viewed = a visit to /transactions (return-surface signal).
   TRANSACTIONS_VIEWED: "transactions_viewed",
+  // WLT-23-2 — a user applied an account/category filter on the ledger (the
+  // "find a charge" engagement signal — whether filters get used).
+  TRANSACTIONS_FILTERED: "transactions_filtered",
 } as const;
 
 export type FunnelEvent = (typeof FUNNEL_EVENTS)[keyof typeof FUNNEL_EVENTS];

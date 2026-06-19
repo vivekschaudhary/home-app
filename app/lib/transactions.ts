@@ -10,14 +10,19 @@
 import { createServerSupabase } from "@vc1023/passkey-2fa";
 import { effectiveCategory } from "@wealth/core";
 import { readCategoryAssignments } from "@wealth/db/categories";
-import type { TransactionRowDTO } from "./transactions-client";
+import type { LedgerAccountDTO, TransactionRowDTO } from "./transactions-client";
 
 export const PAGE_SIZE = 50; // keeps each keyset query well under the 1000-row cap
+// WLT-23-2 — bound the resolved-category filter's over-fetch scan (≤ this many
+// rows read per request) so a selective filter can never become an unbounded scan.
+const MAX_SCAN_ROWS = 20 * PAGE_SIZE;
 
 export interface TransactionsPage {
   rows: TransactionRowDTO[];
   nextCursor: string | null;
   hasAccount: boolean;
+  accounts: LedgerAccountDTO[];
+  hasOther: boolean; // WLT-23-2 — the null-category "Other" bucket exists for this user (gates the filter option)
 }
 export type TransactionsPageResult = { ok: true; page: TransactionsPage } | { ok: false };
 
@@ -81,61 +86,54 @@ export function clampLimit(n: number | null | undefined): number {
  * `readCategoryAssignments`); `hasAccount` distinguishes "no connected account"
  * from "connected, no transactions" for the empty states.
  */
+type TxnRow = {
+  id: string;
+  occurred_on: string;
+  merchant: string | null;
+  description: string;
+  amount: number | string;
+  direction: "debit" | "credit";
+  category: string | null;
+  dedup_key: string;
+  pending: boolean | null;
+  account_id: string | null;
+};
+const SELECT_COLS = "id, occurred_on, merchant, description, amount, direction, category, dedup_key, pending, account_id";
+
 export async function readTransactionsPage(
   userId: string,
-  opts: { cursor?: string | null; search?: string | null; limit?: number } = {},
+  opts: { cursor?: string | null; search?: string | null; accountId?: string | null; category?: string | null; limit?: number } = {},
 ): Promise<TransactionsPageResult> {
   const supabase = await createServerSupabase();
   const limit = clampLimit(opts.limit);
-  const cursor = decodeCursor(opts.cursor);
   const search = sanitizeSearch(opts.search);
+  // Account filter: a uuid (validated like the cursor id) or ignored — no raw
+  // value reaches the filter grammar.
+  const accountId = opts.accountId && CURSOR_ID_RE.test(opts.accountId) ? opts.accountId : null;
+  // Category filter (RESOLVED name): present (incl. "" = the Other bucket) = a
+  // filter; null/undefined = all categories.
+  const category = opts.category ?? null;
 
-  let query = supabase
-    .from("transactions")
-    .select("id, occurred_on, merchant, description, amount, direction, category, dedup_key, pending, account_id")
-    .eq("user_id", userId)
-    .order("occurred_on", { ascending: false })
-    .order("id", { ascending: false })
-    .limit(limit + 1); // +1 row → detect "has more" without a count
-
-  // Keyset: occurred_on < c.date OR (occurred_on = c.date AND id < c.id).
-  if (cursor) {
-    query = query.or(
-      `occurred_on.lt.${cursor.occurredOn},and(occurred_on.eq.${cursor.occurredOn},id.lt.${cursor.id})`,
-    );
-  }
-  // Search ANDs with the keyset (separate .or() calls combine with AND).
-  if (search) {
-    query = query.or(`merchant.ilike.%${search}%,description.ilike.%${search}%`);
-  }
-
-  const [{ data, error }, assignments, accounts] = await Promise.all([
-    query,
+  // Shared owner-scoped reads: the saved-category map + the account names (also the
+  // account-filter options + `hasAccount` for the empty state) + a bounded probe for
+  // whether the null-category "Other" bucket exists (gates that filter option, AC2).
+  const [assignments, accountsRes, otherProbe] = await Promise.all([
     readCategoryAssignments(supabase, userId),
     supabase.from("financial_accounts").select("id, name").eq("user_id", userId),
+    supabase.from("transactions").select("dedup_key").eq("user_id", userId).is("category", null).limit(200),
   ]);
-  if (error) return { ok: false }; // a query/RLS/db failure must NOT masquerade as "no transactions"
-
   const accountName = new Map<string, string>();
-  for (const a of (accounts.data ?? []) as { id: string; name: string }[]) accountName.set(a.id, a.name);
+  for (const a of (accountsRes.data ?? []) as { id: string; name: string }[]) accountName.set(a.id, a.name);
+  const accounts: LedgerAccountDTO[] = [...accountName.entries()]
+    .map(([id, name]) => ({ id, name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const hasAccount = accountName.size > 0;
+  // A transaction resolves to "Other" iff plaid category is null AND it has no saved
+  // assignment (a saved row always names a real category). So: a category-null row
+  // whose dedup_key isn't in the assignment map.
+  const hasOther = ((otherProbe.data ?? []) as { dedup_key: string }[]).some((r) => !assignments.has(r.dedup_key));
 
-  const fetched = (data ?? []) as {
-    id: string;
-    occurred_on: string;
-    merchant: string | null;
-    description: string;
-    amount: number | string;
-    direction: "debit" | "credit";
-    category: string | null;
-    dedup_key: string;
-    pending: boolean | null;
-    account_id: string | null;
-  }[];
-
-  const hasMore = fetched.length > limit;
-  const pageRows = hasMore ? fetched.slice(0, limit) : fetched;
-
-  const rows: TransactionRowDTO[] = pageRows.map((r) => ({
+  const mapRow = (r: TxnRow): TransactionRowDTO => ({
     id: r.id,
     occurredOn: r.occurred_on,
     merchant: r.merchant,
@@ -145,10 +143,68 @@ export async function readTransactionsPage(
     category: effectiveCategory(r.category, assignments.get(r.dedup_key)) ?? "",
     account: (r.account_id && accountName.get(r.account_id)) || "",
     pending: r.pending === true,
-  }));
+  });
 
-  const last = pageRows[pageRows.length - 1];
-  const nextCursor = hasMore && last ? encodeCursor({ occurredOn: last.occurred_on, id: last.id }) : null;
+  // One keyset chunk starting strictly after `from` — account + search applied in
+  // SQL (keyset-safe; `from` is a validated date+uuid).
+  const fetchChunk = (from: { occurredOn: string; id: string } | null, take: number) => {
+    let q = supabase
+      .from("transactions")
+      .select(SELECT_COLS)
+      .eq("user_id", userId)
+      .order("occurred_on", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(take);
+    if (accountId) q = q.eq("account_id", accountId);
+    if (from) q = q.or(`occurred_on.lt.${from.occurredOn},and(occurred_on.eq.${from.occurredOn},id.lt.${from.id})`);
+    if (search) q = q.or(`merchant.ilike.%${search}%,description.ilike.%${search}%`);
+    return q;
+  };
 
-  return { ok: true, page: { rows, nextCursor, hasAccount: accountName.size > 0 } };
+  // No category filter → the simple keyset path (the common case; the WLT-23-1 shape).
+  if (category === null) {
+    const { data, error } = await fetchChunk(decodeCursor(opts.cursor), limit + 1);
+    if (error) return { ok: false };
+    const fetched = (data ?? []) as TxnRow[];
+    const hasMore = fetched.length > limit;
+    const pageRows = hasMore ? fetched.slice(0, limit) : fetched;
+    const last = pageRows[pageRows.length - 1];
+    const nextCursor = hasMore && last ? encodeCursor({ occurredOn: last.occurred_on, id: last.id }) : null;
+    return { ok: true, page: { rows: pageRows.map(mapRow), nextCursor, hasAccount, accounts, hasOther } };
+  }
+
+  // Resolved-category filter → a BOUNDED over-fetch-and-filter keyset scan: read
+  // chunks (account + search already narrowed in SQL), resolve each row's category
+  // in JS (NO category/dedup_key value reaches the filter grammar — injection-safe),
+  // keep matches until the page is full, the data is exhausted, or the scan cap is
+  // hit. The cursor advances by the LAST ROW SCANNED so Load-more resumes exactly
+  // where scanning stopped.
+  const matched: TransactionRowDTO[] = [];
+  let cursor = decodeCursor(opts.cursor);
+  let scanned = 0;
+  let exhausted = false;
+  while (matched.length < limit && scanned < MAX_SCAN_ROWS) {
+    const { data, error } = await fetchChunk(cursor, PAGE_SIZE);
+    if (error) return { ok: false };
+    const chunk = (data ?? []) as TxnRow[];
+    if (chunk.length === 0) {
+      exhausted = true;
+      break;
+    }
+    for (const r of chunk) {
+      scanned++;
+      cursor = { occurredOn: r.occurred_on, id: r.id }; // advance past this row
+      const row = mapRow(r);
+      if (row.category === category) matched.push(row);
+      if (matched.length >= limit) break;
+    }
+    if (chunk.length < PAGE_SIZE) {
+      exhausted = true;
+      break;
+    }
+  }
+  // Unless the data was exhausted (a filled page or the scan cap → hand back the
+  // cursor so Load-more continues), there may be more matches.
+  const nextCursor = !exhausted && cursor ? encodeCursor(cursor) : null;
+  return { ok: true, page: { rows: matched, nextCursor, hasAccount, accounts, hasOther } };
 }

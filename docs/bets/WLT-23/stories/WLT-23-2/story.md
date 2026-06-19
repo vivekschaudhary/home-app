@@ -2,7 +2,7 @@
 id: WLT-23-2
 bet: WLT-23
 type: story
-status: ready
+status: in-review
 priority: P2
 created: 2026-06-18
 author: PM
@@ -55,7 +55,7 @@ Add an **account** filter and a **category** filter to the shipped Transactions 
 
 ## PRs
 
-_Auto-populated as PRs open._
+- PR #68 — implementation (account + category filters, read scan, route, event, tests) — in-review (Codex owns the gated owner-isolation + page-boundary E2E)
 
 ## Tests
 
@@ -74,6 +74,11 @@ _If post-merge bugs are found, story is re-opened and fixes live under `fixes/`.
 - [2026-06-18] [PM] **Slice WLT-23-2 = both filters (account + category); recategorize is WLT-23-3** — rationale: the two fast-follows are independent; filters finish the "find" value and build directly on the shipped search/keyset; one story at a time — area: scope — reversibility: easy
 - [2026-06-18] [PM] **Category filter on the RESOLVED category, keyset-safe in the query** — rationale: must agree with the ledger column + the budget; post-filtering a page would break pagination; the engineer picks the exact query shape per the tech-note contract — area: correctness/perf — reversibility: medium
 - [2026-06-18] [Designer] **Native selects + Clear; filters AND + reset to page 1** — see design.md DRI — area: ux — reversibility: easy
+- [2026-06-18] [Engineer] **Resolved-category filter via a BOUNDED over-fetch-and-filter keyset scan, NOT SQL-set interpolation** — rationale: pushing the category name + saved/`dedup_key` sets into the PostgREST `.or()`/`.in()` grammar would re-create the injection surface Codex flagged on the cursor; instead the scan applies account + search in SQL, resolves each row's category in JS (`effectiveCategory`), and keeps matches — no category/dedup_key value ever reaches the filter grammar. Bounded by `MAX_SCAN_ROWS = 20×PAGE_SIZE`; the cursor advances by the **last row scanned** so Load-more resumes exactly where it stopped — area: data/security/perf — alternatives: SQL set filter (rejected — escaping surface), post-filter a page (rejected — breaks page size) — reversibility: medium
+- [2026-06-18] [Engineer] **Account filter `.eq("account_id")` with uuid validation; category value `null`=all / `""`=Other** — rationale: account id is validated like the cursor id (no raw value to the grammar); the `category` param distinguishes "no filter" (absent→null) from the null-category "Other" bucket (present-empty→"") — area: data — reversibility: easy
+- [2026-06-18] [Engineer] **`transactions_filtered` via a fire-and-forget route (`/api/transactions/filtered`), fired on filter change only** — rationale: the existing client-event pattern (drilldown-viewed/spread-viewed); firing on the filter onChange (not Load-more or search) keeps the event from being over-counted by pagination — area: instrumentation — reversibility: easy
+- [2026-06-18] [Engineer] **Codex BLOCKER fix — a sparse category filter no longer strands matches** — the scan can return an empty page with a continuation cursor (cap hit); the client now (a) **auto-continues** past empty filtered pages (bounded `AUTO_SCAN_LIMIT=8`) in both `loadPage` + `loadMore`, and (b) renders a **"keep looking" + Load more** state when rows are empty but a cursor remains — so the terminal "no matches" only shows when `nextCursor === null`. Regression test covers the auto-continue — area: correctness — reversibility: easy
+- [2026-06-18] [Engineer] **Codex ISSUE fix — the "Other" category option is now gated on `hasOther`** — the read returns `hasOther` (a bounded probe: a category-null transaction not in the assignment map); the dropdown renders "Other" only when the bucket actually exists (AC2's "if present"). Test covers both states — area: ux — reversibility: easy
 
 ### Risks
 - [2026-06-18] [PM] **Resolved-category filter query complexity / large saved sets** — likelihood: low — impact: medium — mitigation: the keyset-safe SQL set filter (sparse assignments keep `.in()` lists short); a bounded over-fetch-scan fallback with a logged cap if it ever surfaces — area: data/perf
