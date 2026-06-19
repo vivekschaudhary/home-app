@@ -2,7 +2,7 @@
 id: INC-2026-06-19-merchant-rule-variability
 type: incident
 bet: WLT-22
-status: mitigated           # fix-forward chosen (fuzzy matching) — PR open, awaiting review/merge
+status: resolved            # fix shipped (PR #70, squash a9fb155); Codex clear at d4e1af0
 severity: P2                # not an outage — a product limitation in WLT-22-3 rule matching
 detected_at: 2026-06-19T20:55
 declared_by: operator (dogfooding) via /triage
@@ -23,6 +23,10 @@ A user recategorized a **Walmart** transaction to **Groceries** and chose "alway
 | 2026-06-19T20:55 | Reported via `/triage`: Walmart→Groceries rule backfilled history, but a new Walmart txn shows Plaid "General Merchandise" | Operator |
 | 20:55 | Engineer investigation: traced the sync wiring + the rule-match key | Engineer |
 | 21:00 | Root cause identified (exact-`merchant_name` rule matching; Plaid name variability/null) — see below | Engineer |
+| 21:20 | Fix-forward chosen: fuzzy matching (Human, over the entity-id recommendation) | Human |
+| 21:40 | PR #70 opened (failing-test-first → canonical key + legacy re-canonicalization) | Engineer |
+| 22:05 | Codex BLOCKER: legacy canonical-key collisions had a nondeterministic winner → fixed (newest-wins, order-independent) | Engineer/Codex |
+| 22:20 | Codex clear at `d4e1af0`; **merged** (PR #70, squash `a9fb155`) → **resolved** | Human |
 
 ## Investigation
 
