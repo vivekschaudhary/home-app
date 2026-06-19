@@ -18,8 +18,8 @@ const fetchCategoriesMock = vi.fn(() =>
     ],
   }),
 );
-const recategorizeTransactionMock = vi.fn((_p: unknown) => Promise.resolve({ ok: true, count: 1 }));
-const createCategoryMock = vi.fn((..._a: unknown[]) => Promise.resolve({ ok: false }));
+const recategorizeTransactionMock = vi.fn<(p: unknown) => Promise<{ ok: boolean; count?: number }>>();
+const createCategoryMock = vi.fn<(...a: unknown[]) => Promise<{ ok: boolean }>>();
 vi.mock("@/app/lib/budget-client", () => ({
   fetchCategories: () => fetchCategoriesMock(),
   recategorizeTransaction: (p: unknown) => recategorizeTransactionMock(p),
@@ -86,8 +86,7 @@ afterEach(() => {
   fetchTransactionsMock.mockReset();
   recordTransactionsFilteredMock.mockReset();
   fetchCategoriesMock.mockClear();
-  recategorizeTransactionMock.mockClear();
-  recategorizeTransactionMock.mockResolvedValue({ ok: true, count: 1 });
+  recategorizeTransactionMock.mockReset();
   createCategoryMock.mockReset();
 });
 
@@ -288,6 +287,7 @@ describe("TransactionsClient — filters (AC1/AC3/AC5/AC7)", () => {
 
 describe("TransactionsClient — recategorize from the row (WLT-23-3)", () => {
   it("picking a category POSTs the row's dedupKey, updates the row, and acknowledges (AC1/AC4)", async () => {
+    recategorizeTransactionMock.mockResolvedValue({ ok: true, count: 1 });
     render(<TransactionsClient initial={page()} initialError={false} />);
     // open the picker on row t1 (Blue Bottle, currently Food And Drink)
     const trigger = await screen.findByRole("button", { name: /Change the category of Blue Bottle/ });
