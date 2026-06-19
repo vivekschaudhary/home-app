@@ -2,7 +2,7 @@
 id: WLT-23-2
 bet: WLT-23
 type: story
-status: in-build
+status: in-review
 priority: P2
 created: 2026-06-18
 author: PM
@@ -55,7 +55,7 @@ Add an **account** filter and a **category** filter to the shipped Transactions 
 
 ## PRs
 
-_Auto-populated as PRs open._
+- PR #68 — implementation (account + category filters, read scan, route, event, tests) — in-review (Codex owns the gated owner-isolation + page-boundary E2E)
 
 ## Tests
 
