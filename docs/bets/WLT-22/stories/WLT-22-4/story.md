@@ -2,7 +2,7 @@
 id: WLT-22-4
 bet: WLT-22
 type: story
-status: ready
+status: in-review
 priority: P2
 created: 2026-06-19
 author: PM

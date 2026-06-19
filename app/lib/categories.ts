@@ -138,23 +138,28 @@ export async function recategorizeTransaction(
   if (applyToMerchant) {
     const { data: tx } = await supabase
       .from("transactions")
-      .select("merchant")
+      .select("merchant, merchant_entity_id")
       .eq("user_id", userId)
       .eq("dedup_key", dedupKey)
       .is("superseded_by", null)
       .limit(1)
       .maybeSingle();
-    const merchant = (tx as { merchant: string | null } | null)?.merchant ?? null;
+    const txRow = tx as { merchant: string | null; merchant_entity_id: string | null } | null;
+    const merchant = txRow?.merchant ?? null;
+    const merchantEntityId = txRow?.merchant_entity_id ?? null; // WLT-22-4 — capture Plaid's stable id
     if (merchant) {
       const merchantNorm = normalizeMerchant(merchant);
       const { data: rule, error: rErr } = await supabase
         .from("category_rules")
-        .upsert({ user_id: userId, merchant_norm: merchantNorm, category_id: categoryId }, { onConflict: "user_id,merchant_norm" })
+        .upsert(
+          { user_id: userId, merchant_norm: merchantNorm, merchant_entity_id: merchantEntityId, category_id: categoryId },
+          { onConflict: "user_id,merchant_norm" },
+        )
         .select("id")
         .single();
       if (rErr || !rule) return { ok: false, error: "save_failed" }; // incl. a forged cross-tenant categoryId (FK)
       const ruleId = (rule as { id: string }).id;
-      const count = await applyRulesToTransactions(supabase, userId, [{ merchantNorm, categoryId, ruleId }]);
+      const count = await applyRulesToTransactions(supabase, userId, [{ merchantNorm, categoryId, ruleId, merchantEntityId }]);
       await emitFunnel(FUNNEL_EVENTS.CATEGORY_RULE_CREATED, userId, {});
       return { ok: true, count };
     }

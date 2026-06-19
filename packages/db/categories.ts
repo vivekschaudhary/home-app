@@ -42,18 +42,31 @@ export interface MerchantRule {
   merchantNorm: string;
   categoryId: string;
   ruleId: string;
-  updatedAt?: string; // INC-2026-06-19 — newest wins on a canonical-key collision
+  merchantEntityId?: string | null; // WLT-22-4 — Plaid's stable merchant id (primary match key)
+  updatedAt?: string; // INC-2026-06-19 — newest wins on a key collision
 }
 
 /** The user's merchant rules (for the sync-time apply). */
 export async function readRules(client: SupabaseClientT, userId: string): Promise<MerchantRule[]> {
   const { data } = await client
     .from("category_rules")
-    .select("id, merchant_norm, category_id, updated_at")
+    .select("id, merchant_norm, merchant_entity_id, category_id, updated_at")
     .eq("user_id", userId);
   return (data ?? []).map((r) => {
-    const row = r as { id: string; merchant_norm: string; category_id: string; updated_at: string };
-    return { merchantNorm: row.merchant_norm, categoryId: row.category_id, ruleId: row.id, updatedAt: row.updated_at };
+    const row = r as {
+      id: string;
+      merchant_norm: string;
+      merchant_entity_id: string | null;
+      category_id: string;
+      updated_at: string;
+    };
+    return {
+      merchantNorm: row.merchant_norm,
+      categoryId: row.category_id,
+      ruleId: row.id,
+      merchantEntityId: row.merchant_entity_id,
+      updatedAt: row.updated_at,
+    };
   });
 }
 
@@ -77,11 +90,13 @@ export async function applyRulesToTransactions(
   const [{ data: txns }, { data: userAssigns }] = await Promise.all([
     client
       .from("transactions")
-      .select("dedup_key, merchant")
+      .select("dedup_key, merchant, merchant_entity_id")
       .eq("user_id", userId)
       .is("superseded_by", null)
       .is("removed_at", null)
-      .not("merchant", "is", null),
+      // WLT-22-4 — a row is matchable if it has a merchant NAME or a Plaid entity id
+      // (entity-first matching); only rows with neither are unmatchable.
+      .or("merchant.not.is.null,merchant_entity_id.not.is.null"),
     client.from("transaction_categories").select("dedup_key").eq("user_id", userId).eq("assigned_by", "user"),
   ]);
   const userOwned = new Set((userAssigns ?? []).map((a) => (a as { dedup_key: string }).dedup_key));
@@ -89,9 +104,10 @@ export async function applyRulesToTransactions(
   // Pure matching (which transactions get a 'rule' assignment, user-wins) lives
   // in @wealth/core; map the matches to upsert rows here.
   const matched = matchRuleAssignments(
-    ((txns ?? []) as { dedup_key: string; merchant: string | null }[]).map((t) => ({
+    ((txns ?? []) as { dedup_key: string; merchant: string | null; merchant_entity_id: string | null }[]).map((t) => ({
       dedupKey: t.dedup_key,
       merchant: t.merchant,
+      merchantEntityId: t.merchant_entity_id,
     })),
     userOwned,
     rules,
