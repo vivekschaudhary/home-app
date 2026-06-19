@@ -2,7 +2,7 @@
 id: FIX-budget-popovers
 type: fix
 hygiene: true
-status: in-review
+status: shipped
 severity: P3
 affects_bets: [WLT-22, WLT-21]
 area_tags: [frontend, ux, accessibility]
@@ -48,4 +48,4 @@ Convert both inline `<tr>` expansions to **Headless UI `Popover`** panels anchor
 
 ### Issues
 - [2026-06-18] [Engineer] **jsdom can't assert popover positioning** — severity: low — owner: Codex — status: open — anchoring/overflow is visual; the unit guard asserts portaling + open/close, not pixel placement.
-- [2026-06-18] [Codex→Engineer] **Nested-popover real-path E2E missing (BLOCKER)** — severity: blocker — owner: **Codex (Reviewer)** — status: open — routed back per cross-model independence (the WLT-22 / WLT-23-1 pattern; fix workflow Phase 3 step 16). Codex to extend `e2e/budget.spec.ts`: open drill popover → open the nested picker inside it → parent stays open → recategorize reconciles through session→RLS→render.
+- [2026-06-18] [Codex→Engineer] **Nested-popover real-path E2E missing (BLOCKER)** — severity: blocker — owner: **Codex (Reviewer)** — status: **resolved** — Codex extended `e2e/budget.spec.ts` (`794e0db`): opens the nested picker inside the drill popover and asserts the drill content (`"What's in Food And Drink this month"` + a line item) stays visible while the picker is open, then recategorizes through the real path. Cleared at HEAD `616ce19`. **Merged** (PR #67, squash `ab20d91`).
