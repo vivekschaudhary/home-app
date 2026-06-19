@@ -14,6 +14,9 @@ export async function GET(req: Request) {
   const result = await readTransactionsPage(userId, {
     cursor: params.get("cursor"),
     search: params.get("q"),
+    accountId: params.get("account"),
+    // null (absent) = all categories; "" (present) = the null-category "Other" bucket.
+    category: params.get("category"),
   });
   if (!result.ok) return Response.json({ error: "server" }, { status: 502 });
   return Response.json(result.page);

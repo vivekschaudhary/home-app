@@ -5,14 +5,21 @@ import Link from "next/link";
 import { humanizeCategory } from "@wealth/core";
 import { Button } from "@wealth/ui";
 import { COPY } from "@/app/lib/copy";
+import { type CategoryDTO, fetchCategories } from "@/app/lib/budget-client";
 import {
+  type LedgerAccountDTO,
   type TransactionRowDTO,
   type TransactionsPageDTO,
   fetchTransactions,
+  recordTransactionsFiltered,
 } from "@/app/lib/transactions-client";
 
 const C = COPY.transactions;
 const A = COPY.transactionsA11y;
+
+// Select sentinel for the "all" (unfiltered) option — distinct from a real account
+// id (uuid) and from the "" category value (the null-category "Other" bucket).
+const ALL = "__all__";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -33,9 +40,6 @@ function fill(template: string, vars: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
 }
 
-// The amount as the user sees it: a credit (income / refund / transfer-in) renders
-// with a leading "+"; a debit is the bare amount. The accessible label appends
-// "credit" so a screen reader never hears an ambiguous number.
 function amountDisplay(row: TransactionRowDTO): string {
   return row.direction === "credit" ? `+${money(row.amount)}` : money(row.amount);
 }
@@ -56,36 +60,45 @@ export function TransactionsClient({
   const [rows, setRows] = useState<TransactionRowDTO[]>(initial?.rows ?? []);
   const [nextCursor, setNextCursor] = useState<string | null>(initial?.nextCursor ?? null);
   const [hasAccount, setHasAccount] = useState<boolean>(initial?.hasAccount ?? false);
+  const [accounts, setAccounts] = useState<LedgerAccountDTO[]>(initial?.accounts ?? []);
+  const [categories, setCategories] = useState<CategoryDTO[]>([]);
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [accountId, setAccountId] = useState<string | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null); // null = all, "" = Other
   const [mode, setMode] = useState<Mode>("idle");
   const [pageError, setPageError] = useState<boolean>(initialError);
   const [moreError, setMoreError] = useState(false);
   const [focusRowId, setFocusRowId] = useState<string | null>(null);
   const didMount = useRef(false);
 
-  // Replace the list with a fresh first page for the current search.
-  const loadPage = useCallback(async (q: string) => {
-    setMode("loadingPage");
-    setPageError(false);
-    setMoreError(false);
-    const res = await fetchTransactions({ q });
-    if (!res.ok) {
+  // Replace the list with a fresh first page for the current filters + search.
+  const loadPage = useCallback(
+    async (f: { accountId: string | null; category: string | null; q: string }) => {
+      setMode("loadingPage");
+      setPageError(false);
+      setMoreError(false);
+      const res = await fetchTransactions({ accountId: f.accountId, category: f.category, q: f.q });
+      if (!res.ok) {
+        setMode("idle");
+        setPageError(true);
+        return;
+      }
+      setRows(res.page.rows);
+      setNextCursor(res.page.nextCursor);
+      setHasAccount(res.page.hasAccount);
+      setAccounts(res.page.accounts ?? []);
       setMode("idle");
-      setPageError(true);
-      return;
-    }
-    setRows(res.page.rows);
-    setNextCursor(res.page.nextCursor);
-    setHasAccount(res.page.hasAccount);
-    setMode("idle");
-  }, []);
+    },
+    [],
+  );
 
-  // Append the next keyset page; move focus to the first newly-loaded row.
+  // Append the next keyset page (within the active filters); focus the first new row.
   const loadMore = useCallback(async () => {
     if (!nextCursor) return;
     setMode("loadingMore");
     setMoreError(false);
-    const res = await fetchTransactions({ cursor: nextCursor, q: query });
+    const res = await fetchTransactions({ cursor: nextCursor, accountId, category: categoryFilter, q: debouncedQuery });
     if (!res.ok) {
       setMode("idle");
       setMoreError(true);
@@ -95,45 +108,110 @@ export function TransactionsClient({
     setNextCursor(res.page.nextCursor);
     setFocusRowId(res.page.rows[0]?.id ?? null);
     setMode("idle");
-  }, [nextCursor, query]);
+  }, [nextCursor, accountId, categoryFilter, debouncedQuery]);
 
-  // Debounced search — skip the very first run (the server-rendered initial page).
+  // Debounce the search box → a settled value the load effect watches.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(query), 300);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  // One effect drives page-1 reloads: filters change → fires immediately (the
+  // debounced query is unchanged); search → fires when the debounce settles. Skips
+  // the first run (the server-rendered initial page).
   useEffect(() => {
     if (!didMount.current) {
       didMount.current = true;
       return;
     }
-    const t = setTimeout(() => void loadPage(query), 300);
-    return () => clearTimeout(t);
-  }, [query, loadPage]);
+    void loadPage({ accountId, category: categoryFilter, q: debouncedQuery });
+  }, [accountId, categoryFilter, debouncedQuery, loadPage]);
+
+  // The category-filter options (the user's categories) — fetched once on mount.
+  useEffect(() => {
+    void (async () => {
+      const res = await fetchCategories();
+      if (res.ok) setCategories(res.categories);
+    })();
+  }, []);
 
   // After Load-more appends, move keyboard focus into the first new row.
   useEffect(() => {
     if (focusRowId) document.getElementById(`txn-cell-${focusRowId}`)?.focus();
   }, [focusRowId]);
 
-  const searching = query.trim().length > 0;
+  function onAccountChange(value: string) {
+    setAccountId(value === ALL ? null : value);
+    recordTransactionsFiltered();
+  }
+  function onCategoryChange(value: string) {
+    setCategoryFilter(value === ALL ? null : value);
+    recordTransactionsFiltered();
+  }
+  function clearFilters() {
+    setAccountId(null);
+    setCategoryFilter(null);
+    setQuery("");
+    setDebouncedQuery("");
+  }
+
+  const filtersActive = accountId !== null || categoryFilter !== null;
+  const searchActive = debouncedQuery.trim().length > 0;
+  const anyActive = filtersActive || searchActive;
   const showList = rows.length > 0;
   const showLoading = mode === "loadingPage";
 
   return (
     <div className="mt-6">
-      {/* Search */}
-      <div className="mb-4">
+      {/* Filters + search */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <input
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={C.searchPlaceholder}
           aria-label={A.search}
-          className="w-full max-w-sm rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400"
+          className="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 sm:max-w-xs"
         />
-        {showList ? (
-          <p aria-live="polite" className="mt-1 text-xs text-gray-500">
-            {fill(C.resultCount, { count: String(rows.length) })}
-          </p>
+        <select
+          value={accountId ?? ALL}
+          onChange={(e) => onAccountChange(e.target.value)}
+          aria-label={A.accountFilter}
+          className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900"
+        >
+          <option value={ALL}>{C.allAccounts}</option>
+          {accounts.map((a) => (
+            <option key={a.id} value={a.id}>{a.name}</option>
+          ))}
+        </select>
+        <select
+          value={categoryFilter ?? ALL}
+          onChange={(e) => onCategoryChange(e.target.value)}
+          aria-label={A.categoryFilter}
+          className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900"
+        >
+          <option value={ALL}>{C.allCategories}</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.name}>{humanizeCategory(c.name)}</option>
+          ))}
+          <option value="">{humanizeCategory("")}</option>
+        </select>
+        {anyActive ? (
+          <button
+            type="button"
+            onClick={clearFilters}
+            aria-label={A.clearFilters}
+            className="text-sm text-gray-500 underline"
+          >
+            {C.clearFilters}
+          </button>
         ) : null}
       </div>
+      {showList ? (
+        <p aria-live="polite" className="mb-2 text-xs text-gray-500">
+          {fill(C.resultCount, { count: String(rows.length) })}
+        </p>
+      ) : null}
 
       {showLoading ? (
         <p aria-busy="true" className="py-8 text-center text-sm text-gray-500">
@@ -142,7 +220,7 @@ export function TransactionsClient({
       ) : pageError ? (
         <p role="alert" className="py-8 text-center text-sm text-red-600">
           {C.error}{" "}
-          <button type="button" onClick={() => void loadPage(query)} className="underline">
+          <button type="button" onClick={() => void loadPage({ accountId, category: categoryFilter, q: debouncedQuery })} className="underline">
             {C.retry}
           </button>
         </p>
@@ -225,9 +303,12 @@ export function TransactionsClient({
             )}
           </div>
         </>
-      ) : searching ? (
+      ) : filtersActive ? (
+        // Empty — an account/category filter (± search) matched nothing.
+        <p className="py-8 text-center text-sm text-gray-600">{C.emptyFiltered}</p>
+      ) : searchActive ? (
         // Empty — search returned nothing (the search stays editable to recover).
-        <p className="py-8 text-center text-sm text-gray-600">{fill(C.emptySearch, { query: query.trim() })}</p>
+        <p className="py-8 text-center text-sm text-gray-600">{fill(C.emptySearch, { query: debouncedQuery.trim() })}</p>
       ) : !hasAccount ? (
         // Empty — no connected account (the only state with a call-to-action).
         <div className="mt-8 rounded-md border border-dashed border-gray-300 bg-white px-6 py-10 text-center">
