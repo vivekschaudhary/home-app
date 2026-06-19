@@ -8,8 +8,9 @@ import { Client } from "pg";
 //
 // The load-bearing edges here are:
 //   • all-accounts render (the page reads transactions + financial_accounts)
-//   • keyset pagination across a page boundary (no dropped/duplicated row)
-//   • second-user isolation (no transaction/account-name leakage)
+//   • account + resolved-category filters reconcile through the real read path
+//   • keyset pagination across a FILTERED page boundary (no dropped/duplicated row)
+//   • second-user isolation (no account/category-option or row leakage)
 const RUN = process.env.E2E_PASSKEY === "1";
 const DB_URL = process.env.SUPABASE_DB_URL;
 const PAGE_SIZE = 50; // mirrors app/lib/transactions.ts
@@ -44,10 +45,10 @@ async function signUpWithPasskey(page: Page, context: BrowserContext, email: str
   await expect(page).toHaveURL(/\/onboarding\/intent/, { timeout: 15_000 });
 }
 
-test.describe("transactions ledger — owner-scoped all-accounts read + keyset paging (WLT-23-1)", () => {
+test.describe("transactions ledger — owner-scoped reads + filters + keyset paging (WLT-23-1 / WLT-23-2)", () => {
   test.skip(!RUN || !DB_URL, "Set E2E_PASSKEY=1 + SUPABASE_DB_URL + a real Supabase project to run.");
 
-  test("real session → all-accounts rows render, load-more crosses the page boundary exactly once, second user is isolated", async ({
+  test("real session → account + moved-category filters reconcile, filtered load-more crosses the page boundary exactly once, second user is isolated", async ({
     browser,
     page,
     context,
@@ -84,26 +85,41 @@ test.describe("transactions ledger — owner-scoped all-accounts read + keyset p
       const checkingId = accts.rows.find((r) => r.name === "Ledger Checking")?.id as string;
       const cardId = accts.rows.find((r) => r.name === "Travel Card")?.id as string;
 
-      // 51 rows → page 1 = 50, page 2 = 1. Distinct occurred_on values make the
-      // order deterministic; alternating accounts proves the all-accounts read.
+      const rentCategory = await db.query(
+        `insert into categories (user_id, name, kind, source)
+         values ($1, 'Rent', 'essential', 'custom')
+         returning id`,
+        [userId],
+      );
+      const rentCategoryId = rentCategory.rows[0].id as string;
+
+      // One newest checking row proves the all-accounts read. The card then gets
+      // 102 rows; odd-numbered rows are MOVED to Rent via transaction_categories,
+      // so the resolved-category filter has 51 matches: page 1 = 50, page 2 = 1.
+      await db.query(
+        `insert into transactions
+           (user_id, account_id, source, dedup_key, content_hash, amount, direction, currency, merchant, description, category, pending, occurred_on)
+         values
+           ($1,$2,'plaid','e2e-transactions-checking','txn-checking',2500,'credit','USD','Checking Deposit','Paycheck deposit','INCOME',false,$3)`,
+        [userId, checkingId, isoDay(0)],
+      );
       const values: string[] = [];
       const params: Array<string | number> = [];
       let i = 1;
-      for (let n = 1; n <= PAGE_SIZE + 1; n += 1) {
-        const accountId = n % 2 === 0 ? checkingId : cardId;
+      for (let n = 1; n <= PAGE_SIZE * 2 + 2; n += 1) {
         values.push(
           `($${i++},$${i++},'plaid',$${i++},$${i++},$${i++},'debit','USD',$${i++},$${i++},$${i++},false,$${i++})`,
         );
         params.push(
           userId,
-          accountId,
+          cardId,
           `e2e-transactions-${n}`,
           `txn-hash-${n}`,
           10 + n,
-          `User One Merchant ${String(n).padStart(2, "0")}`,
+          `User One Merchant ${String(n).padStart(3, "0")}`,
           `User one description ${n}`,
           "FOOD_AND_DRINK",
-          isoDay(-((PAGE_SIZE + 1) - n)),
+          isoDay(-((PAGE_SIZE * 2 + 2) - n)),
         );
       }
       await db.query(
@@ -112,29 +128,63 @@ test.describe("transactions ledger — owner-scoped all-accounts read + keyset p
          values ${values.join(",")}`,
         params,
       );
+      const movedValues: string[] = [];
+      const movedParams: Array<string | number> = [];
+      let j = 1;
+      for (let n = 1; n <= PAGE_SIZE * 2 + 2; n += 2) {
+        movedValues.push(`($${j++},$${j++},$${j++},'user')`);
+        movedParams.push(userId, `e2e-transactions-${n}`, rentCategoryId);
+      }
+      await db.query(
+        `insert into transaction_categories (user_id, dedup_key, category_id, assigned_by)
+         values ${movedValues.join(",")}`,
+        movedParams,
+      );
 
       // Real read path: /transactions RSC under the authenticated session.
       await page.goto("/transactions");
       await expect(page.getByRole("heading", { name: "Transactions" })).toBeVisible({ timeout: 15_000 });
       await expect(page.getByText("Everything across your accounts, newest first.")).toBeVisible();
+      const table = page.getByRole("table", { name: "Your transactions" });
       await expect(page.getByText(`Showing ${PAGE_SIZE} transactions`)).toBeVisible();
-      await expect(page.getByText("User One Merchant 51")).toBeVisible();
-      await expect(page.getByText("User One Merchant 02")).toBeVisible();
-      await expect(page.getByText("User One Merchant 01")).toHaveCount(0);
-      // Across accounts: both owner account names render in the ledger.
-      await expect(page.getByText("Ledger Checking")).toBeVisible();
-      await expect(page.getByText("Travel Card")).toBeVisible();
+      await expect(table.getByText("Checking Deposit")).toBeVisible();
+      await expect(table.getByText("User One Merchant 102")).toBeVisible();
+      await expect(table.getByText("User One Merchant 054")).toBeVisible();
+      await expect(table.getByText("User One Merchant 053")).toHaveCount(0);
+      // Across accounts: both owner account names render in the ledger, and the
+      // owner's filter options stay owner-scoped.
+      await expect(table.getByText("Ledger Checking")).toBeVisible();
+      await expect(table.getByText("Travel Card")).toBeVisible();
+      await expect(page.getByLabel("Filter by account")).toContainText("Ledger Checking");
+      await expect(page.getByLabel("Filter by account")).toContainText("Travel Card");
+      await expect(page.getByLabel("Filter by category")).toContainText("Rent");
 
-      // AC7 page-boundary keyset guardrail: appending page 2 must surface the
-      // one missing row exactly once, without dropping/duplicating the boundary row.
+      // Account filter → only the selected account's rows survive the real read.
+      await page.getByLabel("Filter by account").selectOption(cardId);
+      await expect(table.getByText("Checking Deposit")).toHaveCount(0);
+      await expect(table.getByText("Ledger Checking")).toHaveCount(0);
+      await expect(table.getByText("Travel Card")).toBeVisible();
+
+      // Compose with the MOVED category: the resolved-category filter must surface
+      // the reassigned rows and hide the unchanged FOOD_AND_DRINK rows.
+      await page.getByLabel("Filter by category").selectOption("Rent");
+      await expect(page.getByText(`Showing ${PAGE_SIZE} transactions`)).toBeVisible({ timeout: 15_000 });
+      await expect(table.getByText("User One Merchant 101")).toBeVisible();
+      await expect(table.getByText("User One Merchant 003")).toBeVisible();
+      await expect(table.getByText("User One Merchant 001")).toHaveCount(0);
+      await expect(table.getByText("User One Merchant 102")).toHaveCount(0);
+
+      // Filtered page-boundary guardrail: page 2 must surface the one missing row
+      // exactly once, without dropping/duplicating the boundary row.
       await page.getByRole("button", { name: "Load more transactions" }).click();
       await expect(page.getByText(`Showing ${PAGE_SIZE + 1} transactions`)).toBeVisible({ timeout: 15_000 });
-      await expect(page.getByText("User One Merchant 01")).toBeVisible();
-      await expect(page.getByText("User One Merchant 02")).toHaveCount(1);
+      await expect(table.getByText("User One Merchant 001")).toBeVisible();
+      await expect(table.getByText("User One Merchant 003")).toHaveCount(1);
       await expect(page.getByText("You're all caught up — that's everything.")).toBeVisible();
       await expect(page.getByRole("button", { name: "Load more transactions" })).toHaveCount(0);
 
-      // Second user: same surface, but only their own row/account name can render.
+      // Second user: same surface, but only their own filter options + filtered row
+      // can render.
       otherContext = await browser.newContext();
       const otherPage = await otherContext.newPage();
       await signUpWithPasskey(otherPage, otherContext, otherEmail, password);
@@ -157,23 +207,46 @@ test.describe("transactions ledger — owner-scoped all-accounts read + keyset p
         [otherUserId, otherConnectionId],
       );
       const otherAccountId = otherAcct.rows[0].id as string;
+      const otherCategory = await db.query(
+        `insert into categories (user_id, name, kind, source)
+         values ($1, 'Travel', 'discretionary', 'custom')
+         returning id`,
+        [otherUserId],
+      );
+      const otherCategoryId = otherCategory.rows[0].id as string;
       await db.query(
         `insert into transactions
            (user_id, account_id, source, dedup_key, content_hash, amount, direction, currency, merchant, description, category, pending, occurred_on)
          values
-           ($1,$2,'plaid','e2e-transactions-other','other-hash',88,'debit','USD','Other User Merchant','Other user description','INCOME',false,$3)`,
-        [otherUserId, otherAccountId, isoDay(0)],
+           ($1,$2,'plaid','e2e-transactions-other','other-hash',88,'debit','USD','Other User Merchant','Other user description','SHOPPING',false,$3)`,
+        [otherUserId, otherAccountId, isoDay(1)],
+      );
+      await db.query(
+        `insert into transaction_categories (user_id, dedup_key, category_id, assigned_by)
+         values ($1,'e2e-transactions-other',$2,'user')`,
+        [otherUserId, otherCategoryId],
       );
 
       await otherPage.goto("/transactions");
       await expect(otherPage.getByRole("heading", { name: "Transactions" })).toBeVisible({ timeout: 15_000 });
+      const otherTable = otherPage.getByRole("table", { name: "Your transactions" });
       await expect(otherPage.getByText("Showing 1 transactions")).toBeVisible();
-      await expect(otherPage.getByText("Other User Merchant")).toBeVisible();
-      await expect(otherPage.getByText("Other User Checking")).toBeVisible();
-      await expect(otherPage.getByText("User One Merchant 51")).toHaveCount(0);
-      await expect(otherPage.getByText("User One Merchant 01")).toHaveCount(0);
-      await expect(otherPage.getByText("Ledger Checking")).toHaveCount(0);
-      await expect(otherPage.getByText("Travel Card")).toHaveCount(0);
+      await expect(otherTable.getByText("Other User Merchant")).toBeVisible();
+      await expect(otherTable.getByText("Other User Checking")).toBeVisible();
+      await expect(otherPage.getByLabel("Filter by account")).toContainText("Other User Checking");
+      await expect(otherPage.getByLabel("Filter by account")).not.toContainText("Ledger Checking");
+      await expect(otherPage.getByLabel("Filter by account")).not.toContainText("Travel Card");
+      await expect(otherPage.getByLabel("Filter by category")).toContainText("Travel");
+      await expect(otherPage.getByLabel("Filter by category")).not.toContainText("Rent");
+
+      await otherPage.getByLabel("Filter by account").selectOption(otherAccountId);
+      await otherPage.getByLabel("Filter by category").selectOption("Travel");
+      await expect(otherPage.getByText("Showing 1 transactions")).toBeVisible({ timeout: 15_000 });
+      await expect(otherTable.getByText("Other User Merchant")).toBeVisible();
+      await expect(otherTable.getByText("User One Merchant 101")).toHaveCount(0);
+      await expect(otherTable.getByText("User One Merchant 001")).toHaveCount(0);
+      await expect(otherTable.getByText("Ledger Checking")).toHaveCount(0);
+      await expect(otherTable.getByText("Travel Card")).toHaveCount(0);
     } finally {
       await otherContext?.close();
       await db.end();
