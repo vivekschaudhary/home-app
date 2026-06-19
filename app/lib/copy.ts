@@ -550,6 +550,8 @@ export const COPY = {
     clearFilters: "Clear filters",
     emptyFiltered: "No transactions match these filters.",
     emptyMoreToScan: "No matches yet in what we've loaded — keep looking.",
+    // WLT-23-3 — single-move recategorize acknowledgment (a rule shows the picker's counted success)
+    recatSaved: "Moved to {category}",
   },
   transactionsA11y: {
     region: "Transactions",

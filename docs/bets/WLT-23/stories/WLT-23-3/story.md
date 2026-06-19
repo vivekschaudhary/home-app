@@ -2,7 +2,7 @@
 id: WLT-23-3
 bet: WLT-23
 type: story
-status: ready
+status: in-review
 priority: P2
 created: 2026-06-18
 author: PM
@@ -52,7 +52,7 @@ Let a user **fix a transaction's category directly from the Transactions ledger*
 
 ## PRs
 
-_Auto-populated as PRs open._
+- PR #69 — implementation (the WLT-22 `CategoryPicker` in each ledger row + reconcile; `dedupKey` on the row; `recatSaved` copy; tests) — in-review (Codex owns the gated recategorize-from-the-ledger + isolation E2E)
 
 ## Tests
 
