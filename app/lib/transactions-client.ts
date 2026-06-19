@@ -7,6 +7,7 @@
 // bucket); `account` is the account display name ("" = unknown).
 export interface TransactionRowDTO {
   id: string;
+  dedupKey: string; // WLT-23-3 — the stable key the recategorize write targets
   occurredOn: string; // 'YYYY-MM-DD'
   merchant: string | null;
   description: string;

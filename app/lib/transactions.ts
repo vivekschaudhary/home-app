@@ -135,6 +135,7 @@ export async function readTransactionsPage(
 
   const mapRow = (r: TxnRow): TransactionRowDTO => ({
     id: r.id,
+    dedupKey: r.dedup_key,
     occurredOn: r.occurred_on,
     merchant: r.merchant,
     description: r.description,

@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { humanizeCategory } from "@wealth/core";
-import { Button } from "@wealth/ui";
+import { Button, Toast } from "@wealth/ui";
 import { COPY } from "@/app/lib/copy";
-import { type CategoryDTO, fetchCategories } from "@/app/lib/budget-client";
+import { type CategoryDTO, createCategory, fetchCategories, recategorizeTransaction } from "@/app/lib/budget-client";
+import { CategoryPicker, type CreateResult, type RecatResult } from "@/app/(app)/budget/CategoryPicker";
 import {
   type LedgerAccountDTO,
   type TransactionRowDTO,
@@ -76,6 +77,7 @@ export function TransactionsClient({
   const [pageError, setPageError] = useState<boolean>(initialError);
   const [moreError, setMoreError] = useState(false);
   const [focusRowId, setFocusRowId] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   const didMount = useRef(false);
 
   // Replace the list with a fresh first page for the current filters + search.
@@ -155,11 +157,46 @@ export function TransactionsClient({
   }, [accountId, categoryFilter, debouncedQuery, loadPage]);
 
   // The category-filter options (the user's categories) — fetched once on mount.
+  // Also the option set the in-row recategorize picker (WLT-23-3) chooses from.
   useEffect(() => {
     void (async () => {
       const res = await fetchCategories();
       if (res.ok) setCategories(res.categories);
     })();
+  }, []);
+
+  // WLT-23-3 — recategorize a transaction from its row (the reused WLT-22 picker).
+  // Keep the prior category until success (the picker shows saving/error); on
+  // success reconcile: a single move updates the row in place (and drops it if it
+  // no longer matches an active category filter); a "remember the merchant" rule
+  // can move many rows → refetch the current page.
+  const handleRecat = useCallback(
+    async (row: TransactionRowDTO, categoryId: string, applyToMerchant: boolean): Promise<RecatResult> => {
+      const res = await recategorizeTransaction({ dedupKey: row.dedupKey, categoryId, applyToMerchant });
+      if (!res.ok) return res;
+      if (applyToMerchant) {
+        await loadPage({ accountId, category: categoryFilter, q: debouncedQuery });
+      } else {
+        const newName = categories.find((c) => c.id === categoryId)?.name ?? "";
+        setToast(fill(C.recatSaved, { category: humanizeCategory(newName || null) }));
+        setRows((prev) =>
+          prev.flatMap((rrow) => {
+            if (rrow.id !== row.id) return [rrow];
+            // Drop the row if it no longer matches an active category filter.
+            if (categoryFilter !== null && newName !== categoryFilter) return [];
+            return [{ ...rrow, category: newName }];
+          }),
+        );
+      }
+      return res;
+    },
+    [categories, accountId, categoryFilter, debouncedQuery, loadPage],
+  );
+
+  const createCat = useCallback(async (name: string, kind: "essential" | "discretionary"): Promise<CreateResult> => {
+    const res = await createCategory(name, kind);
+    if (res.ok) setCategories((cs) => [...cs, res.category].sort((a, b) => a.name.localeCompare(b.name)));
+    return res;
   }, []);
 
   // After Load-more appends, move keyboard focus into the first new row.
@@ -294,7 +331,16 @@ export function TransactionsClient({
                   </td>
                   <td className="block py-0.5 text-gray-600 md:table-cell md:py-3 md:pr-4">
                     <span className="mr-2 text-xs uppercase text-gray-400 md:hidden">{C.colCategory}</span>
-                    {humanizeCategory(r.category || null)}
+                    {/* WLT-23-3 — the reused WLT-22 picker (popover): move · create · remember. */}
+                    <CategoryPicker
+                      current={r.category}
+                      merchantLabel={r.merchant || r.description}
+                      amount={money(r.amount)}
+                      categories={categories}
+                      canRemember={!!r.merchant}
+                      onPick={(categoryId, applyToMerchant) => handleRecat(r, categoryId, applyToMerchant)}
+                      onCreate={createCat}
+                    />
                   </td>
                   <td className="block py-0.5 text-gray-600 md:table-cell md:py-3">
                     <span className="mr-2 text-xs uppercase text-gray-400 md:hidden">{C.colAccount}</span>
@@ -380,6 +426,8 @@ export function TransactionsClient({
           <p className="mx-auto mt-1 max-w-sm text-sm text-gray-600">{C.emptyNoneBody}</p>
         </div>
       )}
+
+      {toast ? <Toast message={toast} /> : null}
     </div>
   );
 }

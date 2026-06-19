@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { TransactionRowDTO, TransactionsPageDTO } from "@/app/lib/transactions-client";
 
 const fetchTransactionsMock = vi.fn();
@@ -10,15 +10,52 @@ vi.mock("@/app/lib/transactions-client", () => ({
   recordTransactionsFiltered: () => recordTransactionsFilteredMock(),
 }));
 const fetchCategoriesMock = vi.fn(() =>
-  Promise.resolve({ ok: true, categories: [{ id: "c1", name: "FOOD_AND_DRINK", kind: "discretionary", source: "seed" }] }),
+  Promise.resolve({
+    ok: true,
+    categories: [
+      { id: "c1", name: "FOOD_AND_DRINK", kind: "discretionary", source: "seed" },
+      { id: "c2", name: "GROCERIES", kind: "essential", source: "seed" },
+    ],
+  }),
 );
+const recategorizeTransactionMock = vi.fn<(p: unknown) => Promise<{ ok: boolean; count?: number }>>();
+const createCategoryMock = vi.fn<(...a: unknown[]) => Promise<{ ok: boolean }>>();
 vi.mock("@/app/lib/budget-client", () => ({
   fetchCategories: () => fetchCategoriesMock(),
+  recategorizeTransaction: (p: unknown) => recategorizeTransactionMock(p),
+  createCategory: (...a: unknown[]) => createCategoryMock(...a),
 }));
 
 import { TransactionsClient } from "./TransactionsClient";
 
+// Headless UI (v2) — the WLT-23-3 in-row recategorize picker reaches for these
+// browser APIs jsdom lacks (mirrors BudgetClient.test / shell.test).
+beforeAll(() => {
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    value: (q: string) => ({
+      matches: false,
+      media: q,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }),
+  });
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+});
+
 const r = (over: Partial<TransactionRowDTO> & { id: string }): TransactionRowDTO => ({
+  dedupKey: `dk-${over.id}`,
   occurredOn: "2026-06-15",
   merchant: "Blue Bottle",
   description: "BLUE BOTTLE COFFEE",
@@ -49,6 +86,8 @@ afterEach(() => {
   fetchTransactionsMock.mockReset();
   recordTransactionsFilteredMock.mockReset();
   fetchCategoriesMock.mockClear();
+  recategorizeTransactionMock.mockReset();
+  createCategoryMock.mockReset();
 });
 
 describe("TransactionsClient — ledger render (AC2/AC3)", () => {
@@ -243,5 +282,35 @@ describe("TransactionsClient — filters (AC1/AC3/AC5/AC7)", () => {
     fetchTransactionsMock.mockResolvedValueOnce({ ok: true, page: page({ nextCursor: null }) });
     fireEvent.click(screen.getByText("Clear filters"));
     await waitFor(() => expect(fetchTransactionsMock).toHaveBeenLastCalledWith({ cursor: null, accountId: null, category: null, q: "" }));
+  });
+});
+
+describe("TransactionsClient — recategorize from the row (WLT-23-3)", () => {
+  it("picking a category POSTs the row's dedupKey, updates the row, and acknowledges (AC1/AC4)", async () => {
+    recategorizeTransactionMock.mockResolvedValue({ ok: true, count: 1 });
+    render(<TransactionsClient initial={page()} initialError={false} />);
+    // open the picker on row t1 (Blue Bottle, currently Food And Drink)
+    const trigger = await screen.findByRole("button", { name: /Change the category of Blue Bottle/ });
+    fireEvent.click(trigger);
+    // move it to Groceries
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Groceries" }));
+    await waitFor(() =>
+      expect(recategorizeTransactionMock).toHaveBeenCalledWith({ dedupKey: "dk-t1", categoryId: "c2", applyToMerchant: false }),
+    );
+    // single-move acknowledgment + the row now reads Groceries (no full refetch needed)
+    await waitFor(() => expect(screen.getByText("Moved to Groceries")).toBeTruthy());
+    expect(fetchTransactionsMock).not.toHaveBeenCalled(); // a single move reconciles in place, no page refetch
+  });
+
+  it("offers 'Always categorize this merchant' only when the row has a merchant (AC3 edge)", async () => {
+    // a row WITH a merchant → the remember control is offered
+    const { unmount } = render(<TransactionsClient initial={page({ rows: [r({ id: "t1" })] })} initialError={false} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Change the category of Blue Bottle/ }));
+    expect(screen.getByText(/Always categorize/)).toBeTruthy();
+    unmount();
+    // a null-merchant row (labelled by its description) → no remember control
+    render(<TransactionsClient initial={page({ rows: [r({ id: "t2", merchant: null, description: "PAYROLL DEPOSIT" })] })} initialError={false} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Change the category of PAYROLL DEPOSIT/ }));
+    expect(screen.queryByText(/Always categorize/)).toBeNull();
   });
 });
