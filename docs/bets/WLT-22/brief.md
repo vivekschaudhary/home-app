@@ -106,6 +106,7 @@ _Decomposed via `/create-story WLT-22` (nested numbering), suggested:_
 
 - **WLT-22-1 — Drill into a category** → see its real transactions (verify the number). No re-sync; ships fast; delivers the immediate trust win.
 - **WLT-22-2 — User-owned categories + correction** → user-defined categories + recategorize (saved per-transaction assignments + merchant rules that write their matches), read via the one shared saved-`??`-Plaid helper across budget/recap/anomaly (the saved-category spine from architecture). Plaid stays the cold-start default; its `detailed` seed is optional.
+- **WLT-22-4 — Robust merchant identity for rules** (hardening follow-on, post-`INC-2026-06-19`) → match "remember the merchant" rules on Plaid's stable `merchant_entity_id` (entity-first) with the fuzzy name as fallback, so new transactions auto-categorize even when Plaid's display name varies. Backend only; expand-only migration. — **ready**.
 
 ## DRI Log
 
