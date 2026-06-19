@@ -1,7 +1,8 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import { BUDGETABLE_CATEGORIES, type BudgetRow, humanizeCategory } from "@wealth/core";
 import { Banner, Button, TextField, Toast } from "@wealth/ui";
 import { COPY } from "@/app/lib/copy";
@@ -48,9 +49,7 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
   const [toast, setToast] = useState<string | null>(null);
   const [added, setAdded] = useState<string[]>([]); // ephemeral picker-added (until saved)
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [openYears, setOpenYears] = useState<Set<string>>(new Set()); // expanded year-spreads (WLT-21-2)
   const spreadViewed = useRef<Set<string>>(new Set()); // fire budget_spread_viewed once per category per load
-  const [openDrill, setOpenDrill] = useState<Set<string>>(new Set()); // expanded line-item drill-downs (WLT-22-1)
   const [drillCache, setDrillCache] = useState<Record<string, DrillState>>({}); // fetch once per category per load
   const drillViewed = useRef<Set<string>>(new Set()); // categories already counted for category_drilldown_viewed this load (AC6)
   const [categories, setCategories] = useState<CategoryDTO[]>([]); // the user's category set for the recategorize picker (WLT-22-2)
@@ -167,23 +166,6 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
     setRowError(null);
   }
 
-  // WLT-21-2 — expand/collapse a category's 12-month spread; record the view once.
-  function toggleYear(category: string) {
-    setOpenYears((prev) => {
-      const next = new Set(prev);
-      if (next.has(category)) {
-        next.delete(category);
-      } else {
-        next.add(category);
-        if (!spreadViewed.current.has(category)) {
-          spreadViewed.current.add(category);
-          recordSpreadViewed();
-        }
-      }
-      return next;
-    });
-  }
-
   const C_Y = COPY.budgetYear;
   const A_Y = COPY.budgetYearA11y;
   const A_D = COPY.budgetDrillA11y;
@@ -211,48 +193,25 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
     })();
   }, []);
 
-  // A recategorization MOVES a transaction between categories. Reconcile every
-  // affected surface (AC4): refetch the source + destination drills (the item
-  // leaves one panel, joins the other) and the budget rows (the totals shift).
-  const reloadOrDropDrill = useCallback(
-    async (category: string) => {
-      if (openDrill.has(category)) {
-        await loadDrill(category);
-      } else {
-        setDrillCache((c) => {
-          if (!(category in c)) return c;
-          const next = { ...c };
-          delete next[category];
-          return next; // next open refetches
-        });
-      }
-    },
-    [openDrill, loadDrill],
-  );
-
   const recategorize = useCallback(
     async (sourceCategory: string, dedupKey: string, categoryId: string, applyToMerchant: boolean): Promise<RecatResult> => {
       const res = await recategorizeTransaction({ dedupKey, categoryId, applyToMerchant });
       if (!res.ok) return res;
       await refresh(); // budget rows reconcile (source drops, destination rises)
-      if (applyToMerchant) {
-        // A rule (WLT-22-3) can move MANY transactions across many categories —
-        // refetch every open drill + drop the rest so reopening refetches. The
-        // picker shows the counted success; no toast here (avoid double feedback).
-        const open = [...openDrill];
-        setDrillCache({});
-        await Promise.all(open.map((cat) => loadDrill(cat)));
-      } else {
+      if (!applyToMerchant) {
+        // The single-move success is the "Moved to…" toast (a rule shows the
+        // picker's own counted success — no toast, to avoid double feedback).
         const destName = categories.find((c) => c.id === categoryId)?.name ?? "";
         setToast(fill(COPY.budgetRecat.saved, { category: humanizeCategory(destName || null) }));
-        await Promise.all([
-          reloadOrDropDrill(sourceCategory),
-          destName && destName !== sourceCategory ? reloadOrDropDrill(destName) : Promise.resolve(),
-        ]);
       }
+      // Reconcile the line-item popovers: drop every cached drill (so any reopened
+      // one refetches the moved item) and refetch the source — the popover the
+      // user acted in — so it updates live.
+      setDrillCache({});
+      await loadDrill(sourceCategory);
       return { ok: true, count: res.count };
     },
-    [categories, reloadOrDropDrill, refresh, openDrill, loadDrill],
+    [categories, refresh, loadDrill],
   );
 
   const createCat = useCallback(
@@ -264,20 +223,18 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
     [],
   );
 
-  function toggleDrill(category: string) {
-    if (openDrill.has(category)) {
-      setOpenDrill((prev) => {
-        const next = new Set(prev);
-        next.delete(category);
-        return next;
-      });
-      return;
+  // Open handlers — fire the view event once per category per load (idempotent, so
+  // the Popover's toggle-click closing again never re-fires); lazy-load the drill
+  // on first open (cached after).
+  function onYearOpen(category: string) {
+    if (!spreadViewed.current.has(category)) {
+      spreadViewed.current.add(category);
+      recordSpreadViewed();
     }
-    setOpenDrill((prev) => new Set(prev).add(category));
+  }
+  function onDrillOpen(category: string) {
     const cached = drillCache[category];
     if (!cached || cached.status === "error") void loadDrill(category);
-    // Count the OPEN once per category per load — independent of fetch outcome,
-    // so an error+retry (which refetches) never double-counts the event (AC6).
     if (!drillViewed.current.has(category)) {
       drillViewed.current.add(category);
       recordDrilldownViewed();
@@ -328,24 +285,33 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
           {rows.map((row) => {
             const series = view.series[row.category];
             const hasSeries = Array.isArray(series) && series.some((v) => v > 0);
-            const yearOpen = openYears.has(row.category);
-            const panelId = `year-${row.category}`;
             return (
-            <Fragment key={row.category}>
-            <tr className="block border-b border-gray-200 py-3 md:table-row md:py-0">
+            <tr key={row.category} className="block border-b border-gray-200 py-3 md:table-row md:py-0">
               <td className="block py-0.5 text-base font-medium text-gray-900 md:table-cell md:py-3 md:pr-4 md:text-sm md:font-normal">
                 {row.label}
                 {hasSeries ? (
-                  <button
-                    type="button"
-                    onClick={() => toggleYear(row.category)}
-                    aria-expanded={yearOpen}
-                    aria-controls={panelId}
-                    aria-label={fill(yearOpen ? A_Y.toggleCollapse : A_Y.toggle, { category: row.label })}
-                    className="ml-2 align-middle text-xs font-normal text-gray-500 underline"
-                  >
-                    {yearOpen ? C_Y.hideYear : C_Y.viewYear}
-                  </button>
+                  // WLT-21-2 — the 12-month spread, in a popover (not an inline
+                  // table-row expansion); Headless UI handles focus/Esc/outside-click.
+                  <Popover className="relative ml-2 inline-block">
+                    <PopoverButton
+                      onClick={() => onYearOpen(row.category)}
+                      className="align-middle text-xs font-normal text-gray-500 underline"
+                    >
+                      {({ open }) => (
+                        <>
+                          {open ? C_Y.hideYear : C_Y.viewYear}
+                          <span className="sr-only"> {fill(open ? A_Y.toggleCollapse : A_Y.toggle, { category: row.label })}</span>
+                        </>
+                      )}
+                    </PopoverButton>
+                    <PopoverPanel
+                      anchor="bottom start"
+                      aria-label={fill(A_Y.seriesCaption, { category: row.label })}
+                      className="z-50 w-[min(36rem,92vw)] rounded-md border border-gray-200 bg-white p-3 shadow-lg"
+                    >
+                      <YearSpread label={row.label} points={series} months={view.seriesMonths} cap={row.effectiveCap} />
+                    </PopoverPanel>
+                  </Popover>
                 ) : null}
               </td>
               <td className="block py-0.5 text-gray-600 md:table-cell md:py-3 md:pr-4">
@@ -370,19 +336,34 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
               <td className="block py-0.5 text-gray-900 md:table-cell md:py-3 md:pr-4">
                 <span className="mr-2 text-xs text-gray-500 md:hidden">{C.colActual}</span>
                 {row.actualThisMonth > 0 ? (
-                  <button
-                    type="button"
-                    onClick={() => toggleDrill(row.category)}
-                    aria-expanded={openDrill.has(row.category)}
-                    aria-controls={`drill-${row.category}`}
-                    aria-label={fill(openDrill.has(row.category) ? A_D.closeItems : A_D.openItems, {
-                      category: row.label,
-                      amount: money(row.actualThisMonth),
-                    })}
-                    className="underline decoration-dotted decoration-gray-400 underline-offset-2"
-                  >
-                    {money(row.actualThisMonth)}
-                  </button>
+                  // WLT-22-1 — the line items behind the number, in a popover (not an
+                  // inline table-row expansion). The recategorize picker lives inside;
+                  // Headless UI Popover is portal-aware so the nested Menu won't close it.
+                  <Popover className="relative inline-block">
+                    <PopoverButton
+                      onClick={() => onDrillOpen(row.category)}
+                      aria-label={fill(A_D.openItems, { category: row.label, amount: money(row.actualThisMonth) })}
+                      className="underline decoration-dotted decoration-gray-400 underline-offset-2"
+                    >
+                      {money(row.actualThisMonth)}
+                    </PopoverButton>
+                    <PopoverPanel
+                      anchor="bottom end"
+                      aria-label={fill(A_D.list, { category: row.label })}
+                      className="z-50 max-h-[60vh] w-[min(28rem,92vw)] overflow-auto rounded-md border border-gray-200 bg-white p-3 text-left shadow-lg"
+                    >
+                      <CategoryTransactions
+                        label={row.label}
+                        state={drillCache[row.category] ?? { status: "loading" }}
+                        onRetry={() => loadDrill(row.category)}
+                        categories={categories}
+                        onRecategorize={(dedupKey, categoryId, applyToMerchant) =>
+                          recategorize(row.category, dedupKey, categoryId, applyToMerchant)
+                        }
+                        onCreateCategory={createCat}
+                      />
+                    </PopoverPanel>
+                  </Popover>
                 ) : (
                   money(row.actualThisMonth)
                 )}
@@ -480,35 +461,6 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
                 )}
               </td>
             </tr>
-            {hasSeries && yearOpen ? (
-              <tr className="block md:table-row">
-                <td id={panelId} colSpan={4} className="block pb-3 md:table-cell">
-                  <YearSpread
-                    label={row.label}
-                    points={series}
-                    months={view.seriesMonths}
-                    cap={row.effectiveCap}
-                  />
-                </td>
-              </tr>
-            ) : null}
-            {openDrill.has(row.category) ? (
-              <tr className="block md:table-row">
-                <td id={`drill-${row.category}`} colSpan={4} className="block pb-3 md:table-cell">
-                  <CategoryTransactions
-                    label={row.label}
-                    state={drillCache[row.category] ?? { status: "loading" }}
-                    onRetry={() => loadDrill(row.category)}
-                    categories={categories}
-                    onRecategorize={(dedupKey, categoryId, applyToMerchant) =>
-                      recategorize(row.category, dedupKey, categoryId, applyToMerchant)
-                    }
-                    onCreateCategory={createCat}
-                  />
-                </td>
-              </tr>
-            ) : null}
-            </Fragment>
             );
           })}
         </tbody>

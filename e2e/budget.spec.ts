@@ -167,7 +167,13 @@ test.describe("budget & spending — recommended/actual render + set + persist (
       // month transaction into it through the real UI path. The source drill drops
       // to empty; reload proves the budget row + destination drill reconcile.
       await page.getByRole("button", { name: /Change the category of User One Market/ }).click();
+      await expect(page.getByText("+ New category")).toBeVisible();
+      await expect(page.getByText("What's in Food And Drink this month")).toBeVisible();
+      await expect(page.getByText("User One Market")).toBeVisible();
       await page.getByText("+ New category").click();
+      await expect(page.getByLabel("Category name")).toBeVisible();
+      await expect(page.getByText("What's in Food And Drink this month")).toBeVisible();
+      await expect(page.getByText("User One Market")).toBeVisible();
       await page.getByLabel("Category name").fill("Rent");
       await page.getByRole("button", { name: "Create" }).click();
       await expect(page.getByText("Moved to Rent")).toBeVisible();
