@@ -18,8 +18,8 @@ const fetchCategoriesMock = vi.fn(() =>
     ],
   }),
 );
-const recategorizeTransactionMock = vi.fn(() => Promise.resolve({ ok: true, count: 1 }));
-const createCategoryMock = vi.fn();
+const recategorizeTransactionMock = vi.fn((_p: unknown) => Promise.resolve({ ok: true, count: 1 }));
+const createCategoryMock = vi.fn((..._a: unknown[]) => Promise.resolve({ ok: false }));
 vi.mock("@/app/lib/budget-client", () => ({
   fetchCategories: () => fetchCategoriesMock(),
   recategorizeTransaction: (p: unknown) => recategorizeTransactionMock(p),
