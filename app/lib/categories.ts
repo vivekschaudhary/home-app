@@ -147,8 +147,13 @@ export async function recategorizeTransaction(
     const txRow = tx as { merchant: string | null; merchant_entity_id: string | null } | null;
     const merchant = txRow?.merchant ?? null;
     const merchantEntityId = txRow?.merchant_entity_id ?? null; // WLT-22-4 — capture Plaid's stable id
-    if (merchant) {
-      const merchantNorm = normalizeMerchant(merchant);
+    // A rule needs SOMETHING to match on — a merchant name OR Plaid's stable entity
+    // id (WLT-22-4 AC2/AC4). When only the entity is present (Plaid named no
+    // merchant), use the entity id as the synthetic `merchant_norm` so the NOT-NULL
+    // + unique-per-merchant constraint holds; it never matches a real transaction
+    // name, and matching is entity-first regardless.
+    if (merchant || merchantEntityId) {
+      const merchantNorm = merchant ? normalizeMerchant(merchant) : (merchantEntityId as string);
       const { data: rule, error: rErr } = await supabase
         .from("category_rules")
         .upsert(
@@ -163,7 +168,8 @@ export async function recategorizeTransaction(
       await emitFunnel(FUNNEL_EVENTS.CATEGORY_RULE_CREATED, userId, {});
       return { ok: true, count };
     }
-    // merchant null → no rule possible; fall through to a single override.
+    // No merchant name AND no entity id → nothing to match on; fall through to a
+    // single per-transaction override (the irreducible floor, WLT-22-4 AC6).
   }
 
   // The single per-transaction override (WLT-22-2 path).
