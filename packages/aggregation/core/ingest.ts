@@ -31,6 +31,7 @@ function rowFor(userId: string, accountId: string, t: NormalizedTransaction) {
     currency: t.currency,
     description: t.description,
     merchant: t.merchant,
+    merchant_entity_id: t.merchantEntityId ?? null, // WLT-22-4 — Plaid's stable merchant id
     category: t.category,
     occurred_on: t.occurredOn,
     pending: t.pending,

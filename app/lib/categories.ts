@@ -138,27 +138,38 @@ export async function recategorizeTransaction(
   if (applyToMerchant) {
     const { data: tx } = await supabase
       .from("transactions")
-      .select("merchant")
+      .select("merchant, merchant_entity_id")
       .eq("user_id", userId)
       .eq("dedup_key", dedupKey)
       .is("superseded_by", null)
       .limit(1)
       .maybeSingle();
-    const merchant = (tx as { merchant: string | null } | null)?.merchant ?? null;
-    if (merchant) {
-      const merchantNorm = normalizeMerchant(merchant);
+    const txRow = tx as { merchant: string | null; merchant_entity_id: string | null } | null;
+    const merchant = txRow?.merchant ?? null;
+    const merchantEntityId = txRow?.merchant_entity_id ?? null; // WLT-22-4 — capture Plaid's stable id
+    // A rule needs SOMETHING to match on — a merchant name OR Plaid's stable entity
+    // id (WLT-22-4 AC2/AC4). When only the entity is present (Plaid named no
+    // merchant), use the entity id as the synthetic `merchant_norm` so the NOT-NULL
+    // + unique-per-merchant constraint holds; it never matches a real transaction
+    // name, and matching is entity-first regardless.
+    if (merchant || merchantEntityId) {
+      const merchantNorm = merchant ? normalizeMerchant(merchant) : (merchantEntityId as string);
       const { data: rule, error: rErr } = await supabase
         .from("category_rules")
-        .upsert({ user_id: userId, merchant_norm: merchantNorm, category_id: categoryId }, { onConflict: "user_id,merchant_norm" })
+        .upsert(
+          { user_id: userId, merchant_norm: merchantNorm, merchant_entity_id: merchantEntityId, category_id: categoryId },
+          { onConflict: "user_id,merchant_norm" },
+        )
         .select("id")
         .single();
       if (rErr || !rule) return { ok: false, error: "save_failed" }; // incl. a forged cross-tenant categoryId (FK)
       const ruleId = (rule as { id: string }).id;
-      const count = await applyRulesToTransactions(supabase, userId, [{ merchantNorm, categoryId, ruleId }]);
+      const count = await applyRulesToTransactions(supabase, userId, [{ merchantNorm, categoryId, ruleId, merchantEntityId }]);
       await emitFunnel(FUNNEL_EVENTS.CATEGORY_RULE_CREATED, userId, {});
       return { ok: true, count };
     }
-    // merchant null → no rule possible; fall through to a single override.
+    // No merchant name AND no entity id → nothing to match on; fall through to a
+    // single per-transaction override (the irreducible floor, WLT-22-4 AC6).
   }
 
   // The single per-transaction override (WLT-22-2 path).

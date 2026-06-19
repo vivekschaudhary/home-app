@@ -230,6 +230,7 @@ describe("TransactionsClient — filters (AC1/AC3/AC5/AC7)", () => {
       ok: true,
       page: { rows: [r({ id: "f1" })], nextCursor: null, hasAccount: true, accounts: ACCOUNTS },
     });
+    await screen.findByRole("option", { name: "Food And Drink" }); // wait for the async category options (flaky in CI otherwise)
     fireEvent.change(screen.getByLabelText("Filter by category"), { target: { value: "FOOD_AND_DRINK" } });
     await waitFor(() =>
       expect(fetchTransactionsMock).toHaveBeenCalledWith({ cursor: null, accountId: "22222222-2222-4222-8222-222222222222", category: "FOOD_AND_DRINK", q: "" }),

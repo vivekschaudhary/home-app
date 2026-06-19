@@ -66,12 +66,14 @@ export function normalizeMerchant(merchant: string | null | undefined): string {
 export interface RuleMatchTxn {
   dedupKey: string;
   merchant: string | null;
+  merchantEntityId?: string | null; // WLT-22-4 — Plaid's stable merchant id (primary match)
 }
 export interface MerchantRuleSpec {
   merchantNorm: string;
   categoryId: string;
   ruleId: string;
-  updatedAt?: string; // ISO; on a canonical-key collision the NEWEST rule wins (deterministic)
+  merchantEntityId?: string | null; // WLT-22-4 — entity id captured at rule creation (primary key)
+  updatedAt?: string; // ISO; on a key collision the NEWEST rule wins (deterministic)
 }
 
 // `a` is newer than `b`: later updatedAt, ties broken by the larger ruleId so the
@@ -83,39 +85,46 @@ function ruleIsNewer(a: MerchantRuleSpec, b: MerchantRuleSpec): boolean {
 }
 
 /**
- * WLT-22-3 (pure) — which transactions a set of merchant rules should write a
- * `'rule'` assignment to: every transaction whose normalized merchant matches a
- * rule, EXCLUDING any with a `'user'` override (the user's explicit choice always
- * wins) and de-duplicated by `dedupKey`. The DB layer maps these to upsert rows.
+ * WLT-22-3 / WLT-22-4 (pure) — which transactions a set of merchant rules should
+ * write a `'rule'` assignment to. A transaction matches a rule **entity-first**
+ * (Plaid's stable `merchant_entity_id` — consistent across the merchant's name
+ * variants), falling back to the **canonical name** (INC-2026-06-19). Excludes any
+ * transaction with a `'user'` override (the user's explicit choice wins) and
+ * de-duplicates by `dedupKey`. The DB layer maps these to upsert rows.
  */
 export function matchRuleAssignments(
   txns: readonly RuleMatchTxn[],
   userOwnedDedupKeys: ReadonlySet<string>,
   rules: readonly MerchantRuleSpec[],
 ): { dedupKey: string; categoryId: string; ruleId: string }[] {
-  // Re-canonicalize each stored rule key (INC-2026-06-19): a rule written before
-  // the fix may hold a pre-canonical key (e.g. "walmart supercenter"); running it
-  // back through normalizeMerchant (idempotent) makes legacy rules match the new
-  // canonical transaction keys without a data migration.
-  //
-  // Collision resolution (review BLOCKER): the legacy DB was unique on the OLD raw
-  // key, so two rows ("walmart.com", "walmart supercenter #1234") can now collapse
-  // to the same canonical key. `readRules` has no ordering, so a raw Map overwrite
-  // would pick an arbitrary winner that varies across syncs. Instead keep the
-  // NEWEST rule per canonical key (ties by ruleId) — deterministic + matches the
-  // user's last explicit write, independent of load order.
+  // Two newest-wins indices: Plaid's stable entity id (PRIMARY) + the canonical
+  // name (FALLBACK). Why newest-wins per key — the legacy DB was unique on the OLD
+  // raw name key, so two rows ("walmart.com", "walmart supercenter #1234") can now
+  // collapse to the same canonical key (or share one entity id); `readRules` has no
+  // ordering, so a raw Map overwrite would pick a winner that varies across syncs.
+  // Keeping the NEWEST rule (ties by ruleId) is deterministic + matches the user's
+  // last explicit write, independent of load order. Legacy name keys are re-
+  // canonicalized on the fly (normalizeMerchant is idempotent) so old rules match
+  // new variants without a data migration.
+  const byEntity = new Map<string, MerchantRuleSpec>();
   const byNorm = new Map<string, MerchantRuleSpec>();
   for (const r of rules) {
+    if (r.merchantEntityId) {
+      const cur = byEntity.get(r.merchantEntityId);
+      if (!cur || ruleIsNewer(r, cur)) byEntity.set(r.merchantEntityId, r);
+    }
     const key = normalizeMerchant(r.merchantNorm);
-    if (!key) continue; // a rule whose key canonicalizes to "" can't match anything
-    const cur = byNorm.get(key);
-    if (!cur || ruleIsNewer(r, cur)) byNorm.set(key, r);
+    if (key) {
+      const cur = byNorm.get(key);
+      if (!cur || ruleIsNewer(r, cur)) byNorm.set(key, r);
+    }
   }
   const out: { dedupKey: string; categoryId: string; ruleId: string }[] = [];
   const seen = new Set<string>();
   for (const t of txns) {
     if (userOwnedDedupKeys.has(t.dedupKey) || seen.has(t.dedupKey)) continue;
-    const rule = byNorm.get(normalizeMerchant(t.merchant));
+    // entity-first, then the canonical-name fallback
+    const rule = (t.merchantEntityId ? byEntity.get(t.merchantEntityId) : undefined) ?? byNorm.get(normalizeMerchant(t.merchant));
     if (!rule) continue;
     seen.add(t.dedupKey);
     out.push({ dedupKey: t.dedupKey, categoryId: rule.categoryId, ruleId: rule.ruleId });

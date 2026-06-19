@@ -23,6 +23,11 @@ export interface NormalizedTransaction {
   currency: string;
   description: string;
   merchant: string | null;
+  /** WLT-22-4 — the provider's STABLE merchant id (Plaid `merchant_entity_id`),
+   * consistent across a merchant's transactions regardless of display name. Null/
+   * absent when the provider can't identify a merchant (or a non-Plaid source).
+   * The primary rule-match key. */
+  merchantEntityId?: string | null;
   category: string | null;
   occurredOn: string; // ISO date (YYYY-MM-DD) — provider posted date, no TZ
   pending: boolean;

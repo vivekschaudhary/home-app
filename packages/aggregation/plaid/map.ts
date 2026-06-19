@@ -47,6 +47,7 @@ export function mapTransaction(t: PlaidTransaction): NormalizedTransaction {
     currency: t.iso_currency_code ?? "USD",
     description: t.name ?? t.merchant_name ?? "Transaction",
     merchant: t.merchant_name ?? null,
+    merchantEntityId: t.merchant_entity_id ?? null, // WLT-22-4 — Plaid's stable merchant id
     category,
     occurredOn: t.date, // already YYYY-MM-DD
     pending: Boolean(t.pending),

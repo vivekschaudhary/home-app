@@ -58,6 +58,11 @@ describe("mapTransaction", () => {
     expect(r.category).toBe("FOOD_AND_DRINK");
   });
 
+  it("maps Plaid merchant_entity_id (WLT-22-4 — the stable rule-match key); null when absent", () => {
+    expect(mapTransaction({ ...txn, merchant_entity_id: "ent-123" } as unknown as PlaidTransaction).merchantEntityId).toBe("ent-123");
+    expect(mapTransaction(txn).merchantEntityId).toBeNull(); // fixture has none → null
+  });
+
   it("negative amount ⇒ credit (money in)", () => {
     const r = mapTransaction({ ...txn, amount: -50 } as unknown as PlaidTransaction);
     expect(r.direction).toBe("credit");

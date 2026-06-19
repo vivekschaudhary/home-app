@@ -94,6 +94,36 @@ describe("matchRuleAssignments (WLT-22-3 — which transactions a rule writes)",
     expect(matchRuleAssignments([{ dedupKey: "dk-1", merchant: "Costco" }], new Set(), rules)).toEqual([]);
   });
 
+  it("matches ENTITY-first (Plaid merchant_entity_id) across any name, with the name as fallback (WLT-22-4)", () => {
+    const walmart = [{ merchantNorm: "walmart", categoryId: "cat-grocery", ruleId: "r-wm", merchantEntityId: "ent-wm" }];
+    const out = matchRuleAssignments(
+      [
+        // entity matches even though the NAME would never normalize to "walmart"
+        { dedupKey: "dk-1", merchant: "WM SUPERCTR 88 LLC", merchantEntityId: "ent-wm" },
+        // no entity → falls back to the canonical name (still matches)
+        { dedupKey: "dk-2", merchant: "Walmart.com", merchantEntityId: null },
+        // a different entity + a non-matching name → no match
+        { dedupKey: "dk-3", merchant: "Costco", merchantEntityId: "ent-costco" },
+        // neither entity nor a matching name → unmatchable (the irreducible floor)
+        { dedupKey: "dk-4", merchant: null, merchantEntityId: null },
+      ],
+      new Set(),
+      walmart,
+    );
+    expect(out.map((m) => m.dedupKey).sort()).toEqual(["dk-1", "dk-2"]);
+    expect(out.every((m) => m.categoryId === "cat-grocery")).toBe(true);
+  });
+
+  it("entity match wins even when the transaction's NAME would match a different rule", () => {
+    const rulesMixed = [
+      { merchantNorm: "walmart", categoryId: "cat-grocery", ruleId: "r-wm", merchantEntityId: "ent-wm" },
+      { merchantNorm: "target", categoryId: "cat-shopping", ruleId: "r-tg" }, // name-only rule
+    ];
+    // a txn whose entity is Walmart's but whose (mislabeled) name normalizes to "target"
+    const out = matchRuleAssignments([{ dedupKey: "dk-1", merchant: "Target", merchantEntityId: "ent-wm" }], new Set(), rulesMixed);
+    expect(out).toEqual([{ dedupKey: "dk-1", categoryId: "cat-grocery", ruleId: "r-wm" }]);
+  });
+
   it("matches a merchant rule across Plaid name VARIANTS — the INC-2026-06-19 fix", () => {
     const walmart = [{ merchantNorm: "walmart", categoryId: "cat-grocery", ruleId: "r-wm" }];
     const out = matchRuleAssignments(

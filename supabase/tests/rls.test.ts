@@ -676,7 +676,7 @@ suite("categories RLS (WLT-22-2): owner CRUD + composite-FK isolation", () => {
 // Merchant-rule posture (WLT-22-3): owner CRUD on category_rules with HARD
 // delete, plus the composite FK (category_id, user_id) to categories blocking a
 // forged cross-tenant category reference at the DB boundary.
-suite("category_rules RLS (WLT-22-3): owner CRUD + composite-FK isolation", () => {
+suite("category_rules RLS (WLT-22-3/4): owner CRUD + composite-FK isolation", () => {
   let client: Client;
   beforeAll(async () => {
     client = new Client({ connectionString: DB_URL });
@@ -695,7 +695,7 @@ suite("category_rules RLS (WLT-22-3): owner CRUD + composite-FK isolation", () =
     return res;
   }
 
-  it("owner CRUD on category_rules; cross-tenant read/update/delete denied; clear hard-deletes", async () => {
+  it("owner CRUD on category_rules (including merchant_entity_id); cross-tenant read/update/delete denied; clear hard-deletes", async () => {
     await client.query("begin");
     try {
       await client.query("insert into auth.users (id) values ($1),($2) on conflict do nothing", [USER_A, USER_B]);
@@ -718,18 +718,29 @@ suite("category_rules RLS (WLT-22-3): owner CRUD + composite-FK isolation", () =
 
       const ins = await asUser(
         USER_A,
-        "insert into category_rules (user_id, merchant_norm, category_id) values ($1,'corner hardware',$2) returning id",
+        "insert into category_rules (user_id, merchant_norm, merchant_entity_id, category_id) values ($1,'corner hardware','ent-corner',$2) returning id",
         [USER_A, categoryA1],
       );
       const id = ins.rows[0].id as string;
 
-      const owner = await asUser(USER_A, "select count(*)::int as n from category_rules where id=$1", [id]);
+      const owner = await asUser(
+        USER_A,
+        "select count(*)::int as n, min(merchant_entity_id) as merchant_entity_id from category_rules where id=$1",
+        [id],
+      );
       expect(owner.rows[0].n).toBe(1);
+      expect(owner.rows[0].merchant_entity_id).toBe("ent-corner");
       const other = await asUser(USER_B, "select count(*)::int as n from category_rules where id=$1", [id]);
       expect(other.rows[0].n).toBe(0);
 
-      const upd = await asUser(USER_A, "update category_rules set category_id=$2 where id=$1", [id, categoryA2]);
+      const upd = await asUser(
+        USER_A,
+        "update category_rules set category_id=$2, merchant_entity_id='ent-corner-updated' where id=$1",
+        [id, categoryA2],
+      );
       expect(upd.rowCount).toBe(1);
+      const afterUpdate = await asUser(USER_A, "select merchant_entity_id from category_rules where id=$1", [id]);
+      expect(afterUpdate.rows[0].merchant_entity_id).toBe("ent-corner-updated");
       const crossUpd = await asUser(USER_B, "update category_rules set category_id=$2 where id=$1", [id, categoryB]);
       expect(crossUpd.rowCount).toBe(0);
 
