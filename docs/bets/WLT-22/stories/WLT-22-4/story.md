@@ -62,6 +62,8 @@ Tags: `regression: true`, `e2e: true` (Codex E2E).
 
 ### Issues
 - [2026-06-19] [PM] **Jira sub-ticket mirror** — severity: low — owner: PM — status: open — no connector on host; create WLT-22-4 manually under the WLT-22 epic.
+- [2026-06-19] [Codex→Engineer] **Entity-only transactions couldn't create a rule (BLOCKER)** — severity: blocker — owner: Engineer — status: **resolved** — the create path required a non-null merchant; now allows `merchant OR merchant_entity_id`, using the entity id as a synthetic `merchant_norm` placeholder (non-null/unique, never matches a real name; entity-first matching). Migration-free.
+- [2026-06-19] [Codex→Engineer] **RLS + gated E2E for the new columns missing (BLOCKER)** — severity: blocker — owner: **Codex (Reviewer)** — status: open — routed back per cross-model independence (the story Tests contract assigns Codex the RLS suite + the gated "same entity, very different name" E2E + isolation; also covers the entity-only create path).
 
 ---
 
