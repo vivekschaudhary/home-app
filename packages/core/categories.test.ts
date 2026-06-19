@@ -112,6 +112,21 @@ describe("matchRuleAssignments (WLT-22-3 — which transactions a rule writes)",
     expect(out.every((m) => m.categoryId === "cat-grocery")).toBe(true);
   });
 
+  it("on a canonical-key collision (two legacy rows) the NEWEST rule wins — deterministically, regardless of load order (review BLOCKER)", () => {
+    // The pre-fix DB was unique on the OLD raw key, so these two rows coexisted;
+    // both now canonicalize to "walmart". The newest updated_at must win, and the
+    // outcome must NOT depend on the order readRules() returned the rows.
+    const older = { merchantNorm: "walmart.com", categoryId: "cat-old", ruleId: "r-a", updatedAt: "2026-06-01T00:00:00Z" };
+    const newer = { merchantNorm: "walmart supercenter #1234", categoryId: "cat-new", ruleId: "r-b", updatedAt: "2026-06-18T00:00:00Z" };
+    const txns = [{ dedupKey: "dk-1", merchant: "Walmart" }];
+    expect(matchRuleAssignments(txns, new Set(), [older, newer])).toEqual([{ dedupKey: "dk-1", categoryId: "cat-new", ruleId: "r-b" }]);
+    expect(matchRuleAssignments(txns, new Set(), [newer, older])).toEqual([{ dedupKey: "dk-1", categoryId: "cat-new", ruleId: "r-b" }]);
+  });
+
+  it("ignores a rule whose key canonicalizes to empty (e.g. a number-only legacy key)", () => {
+    expect(matchRuleAssignments([{ dedupKey: "dk-1", merchant: "Walmart" }], new Set(), [{ merchantNorm: "#9999", categoryId: "x", ruleId: "r" }])).toEqual([]);
+  });
+
   it("re-canonicalizes a LEGACY rule key stored before the fix (so old rules match new variants)", () => {
     // a rule created pre-fix may have stored a variant key like "walmart supercenter"
     const legacy = [{ merchantNorm: "walmart supercenter", categoryId: "cat-grocery", ruleId: "r-old" }];

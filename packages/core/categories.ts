@@ -71,6 +71,15 @@ export interface MerchantRuleSpec {
   merchantNorm: string;
   categoryId: string;
   ruleId: string;
+  updatedAt?: string; // ISO; on a canonical-key collision the NEWEST rule wins (deterministic)
+}
+
+// `a` is newer than `b`: later updatedAt, ties broken by the larger ruleId so the
+// outcome is fully deterministic regardless of the order rules were loaded.
+function ruleIsNewer(a: MerchantRuleSpec, b: MerchantRuleSpec): boolean {
+  const au = a.updatedAt ?? "";
+  const bu = b.updatedAt ?? "";
+  return au !== bu ? au > bu : a.ruleId > b.ruleId;
 }
 
 /**
@@ -88,7 +97,20 @@ export function matchRuleAssignments(
   // the fix may hold a pre-canonical key (e.g. "walmart supercenter"); running it
   // back through normalizeMerchant (idempotent) makes legacy rules match the new
   // canonical transaction keys without a data migration.
-  const byNorm = new Map(rules.map((r) => [normalizeMerchant(r.merchantNorm), r]));
+  //
+  // Collision resolution (review BLOCKER): the legacy DB was unique on the OLD raw
+  // key, so two rows ("walmart.com", "walmart supercenter #1234") can now collapse
+  // to the same canonical key. `readRules` has no ordering, so a raw Map overwrite
+  // would pick an arbitrary winner that varies across syncs. Instead keep the
+  // NEWEST rule per canonical key (ties by ruleId) — deterministic + matches the
+  // user's last explicit write, independent of load order.
+  const byNorm = new Map<string, MerchantRuleSpec>();
+  for (const r of rules) {
+    const key = normalizeMerchant(r.merchantNorm);
+    if (!key) continue; // a rule whose key canonicalizes to "" can't match anything
+    const cur = byNorm.get(key);
+    if (!cur || ruleIsNewer(r, cur)) byNorm.set(key, r);
+  }
   const out: { dedupKey: string; categoryId: string; ruleId: string }[] = [];
   const seen = new Set<string>();
   for (const t of txns) {
