@@ -2,6 +2,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BudgetViewDTO } from "@/app/lib/budget-client";
+import { COPY } from "@/app/lib/copy";
 
 const fetchBudgetMock = vi.fn();
 const saveBudgetMock = vi.fn();
@@ -206,6 +207,28 @@ describe("BudgetClient", () => {
     expect(screen.getByText("Safeway")).toBeTruthy(); // null merchant fell back to description
     // the panel Total ($520.00) reconciles to the row's "This month so far" ($520.00) → ≥2 on screen
     expect(screen.getAllByText("$520.00").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("opens the line-items + year spread as popovers (portaled out of the table), not inline rows", async () => {
+    fetchCategoryTransactionsMock.mockResolvedValue({
+      ok: true,
+      items: [{ dedupKey: "dk", occurredOn: "2026-06-14", merchant: "Trader Joe's", description: "x", amount: 520, category: "FOOD_AND_DRINK" }],
+      total: 520,
+    });
+    render(<BudgetClient initial={VIEW} />);
+    // The amount is a popover trigger: aria-expanded toggles on open.
+    const amountTrigger = screen.getByRole("button", { name: /Show the transactions in Food And Drink this month/ });
+    expect(amountTrigger.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(amountTrigger);
+    expect(amountTrigger.getAttribute("aria-expanded")).toBe("true");
+    // The popover content is portaled OUT of the budget table — the inline table-row
+    // pattern kept it inside the budget <table>; this guards against regressing to that.
+    const budgetTable = screen.getByRole("table", { name: COPY.budgetA11y.table });
+    const item = await screen.findByText("Trader Joe's");
+    expect(budgetTable.contains(item)).toBe(false);
+    // Same for the year spread.
+    fireEvent.click(screen.getByRole("button", { name: /Show the last 12 months/ }));
+    expect(budgetTable.contains(screen.getByText("Monthly Food And Drink spend — last 12 months"))).toBe(false);
   });
 
   it("recategorize a transaction → POSTs {dedupKey, categoryId}, acknowledges, refetches (WLT-22-2)", async () => {
