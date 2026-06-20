@@ -12,6 +12,23 @@ import { matchRuleAssignments } from "@wealth/core";
 // SupabaseClient shape; type the param off the synchronous one.
 type SupabaseClientT = ReturnType<typeof createServiceSupabase>;
 
+// Read EVERY row of a query, paginating past PostgREST's 1000-row response cap.
+// `page(from, to)` builds the query for one inclusive `.range()` window.
+async function readAllPaged<T>(
+  page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+): Promise<T[]> {
+  const SIZE = 1000;
+  const out: T[] = [];
+  for (let from = 0; ; from += SIZE) {
+    const { data, error } = await page(from, from + SIZE - 1);
+    if (error) throw new Error(`[apply-rules] paged read failed: ${error.message}`);
+    const batch = data ?? [];
+    out.push(...batch);
+    if (batch.length < SIZE) break;
+  }
+  return out;
+}
+
 /**
  * `dedupKey → saved category NAME` for the user's transactions the user has
  * recategorized. Absent key ⇒ no saved category ⇒ the reader falls back to
@@ -89,32 +106,45 @@ export async function applyRulesToTransactions(
 ): Promise<number> {
   if (rules.length === 0) return 0;
 
-  const [{ data: txns }, userAssignsRes] = await Promise.all([
-    client
-      .from("transactions")
-      .select("dedup_key, merchant, merchant_entity_id")
-      .eq("user_id", userId)
-      .is("superseded_by", null)
-      .is("removed_at", null)
-      // WLT-22-4 — a row is matchable if it has a merchant NAME or a Plaid entity id
-      // (entity-first matching); only rows with neither are unmatchable.
-      .or("merchant.not.is.null,merchant_entity_id.not.is.null"),
-    // An explicit "always categorize this merchant" overrides the user's OWN prior
-    // choices for that merchant, so we don't fetch (or exclude) the user-owned set.
+  // Read ALL matchable transactions, paginating past PostgREST's 1000-row response
+  // cap (FIX-2026-06-20b). A single uncapped read returns only ~1000 rows, so a
+  // rule silently skipped a >1000-transaction user's older rows — e.g. 2025 "Flc
+  // Dining" rows beyond the cap never got the rule while 2026 ones did.
+  const txns = await readAllPaged<{ dedup_key: string; merchant: string | null; merchant_entity_id: string | null }>(
+    (from, to) =>
+      client
+        .from("transactions")
+        .select("dedup_key, merchant, merchant_entity_id")
+        .eq("user_id", userId)
+        .is("superseded_by", null)
+        .is("removed_at", null)
+        // WLT-22-4 — matchable if it has a merchant NAME or a Plaid entity id.
+        .or("merchant.not.is.null,merchant_entity_id.not.is.null")
+        .order("dedup_key", { ascending: true })
+        .range(from, to),
+  );
+  // The user's explicit per-transaction overrides (also paged). Skipped on an
+  // explicit "always categorize this merchant", which deliberately overrides them.
+  const userOwned = new Set<string>(
     opts.overrideUserAssignments
-      ? Promise.resolve({ data: [] as { dedup_key: string }[] })
-      : client.from("transaction_categories").select("dedup_key").eq("user_id", userId).eq("assigned_by", "user"),
-  ]);
-  const userOwned = new Set((userAssignsRes.data ?? []).map((a) => (a as { dedup_key: string }).dedup_key));
+      ? []
+      : (
+          await readAllPaged<{ dedup_key: string }>((from, to) =>
+            client
+              .from("transaction_categories")
+              .select("dedup_key")
+              .eq("user_id", userId)
+              .eq("assigned_by", "user")
+              .order("dedup_key", { ascending: true })
+              .range(from, to),
+          )
+        ).map((a) => a.dedup_key),
+  );
 
-  // Pure matching (which transactions get a 'rule' assignment, user-wins) lives
-  // in @wealth/core; map the matches to upsert rows here.
+  // Pure matching (which transactions get a 'rule' assignment, user-wins) lives in
+  // @wealth/core; map the matches to upsert rows here.
   const matched = matchRuleAssignments(
-    ((txns ?? []) as { dedup_key: string; merchant: string | null; merchant_entity_id: string | null }[]).map((t) => ({
-      dedupKey: t.dedup_key,
-      merchant: t.merchant,
-      merchantEntityId: t.merchant_entity_id,
-    })),
+    txns.map((t) => ({ dedupKey: t.dedup_key, merchant: t.merchant, merchantEntityId: t.merchant_entity_id })),
     userOwned,
     rules,
   );
@@ -126,12 +156,14 @@ export async function applyRulesToTransactions(
     assigned_by: "rule" as const,
     rule_id: m.ruleId,
   }));
-  // onConflict UPDATE (not ignore) → a new rule overwrites a stale 'rule' row;
-  // 'user' rows were already excluded above, so they're never touched.
-  const { error } = await client
-    .from("transaction_categories")
-    .upsert(toWrite, { onConflict: "user_id,dedup_key" });
-  if (error) throw new Error(`[apply-rules] insert failed for ${userId}: ${error.message}`);
+  // Upsert in chunks so a high-frequency merchant over a long history doesn't blow
+  // a single request. onConflict UPDATE → a new rule overwrites a stale 'rule' row.
+  for (let i = 0; i < toWrite.length; i += 500) {
+    const { error } = await client
+      .from("transaction_categories")
+      .upsert(toWrite.slice(i, i + 500), { onConflict: "user_id,dedup_key" });
+    if (error) throw new Error(`[apply-rules] insert failed for ${userId}: ${error.message}`);
+  }
   return toWrite.length;
 }
 
