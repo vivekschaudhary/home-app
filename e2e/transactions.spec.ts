@@ -1,5 +1,7 @@
 import { type BrowserContext, type CDPSession, type Page, expect, test } from "@playwright/test";
 import { Client } from "pg";
+import { createServiceSupabase } from "@vc1023/passkey-2fa";
+import { applyAllRulesForUser } from "@wealth/db/categories";
 
 // WLT-23-1 — the Transactions ledger, REAL-PATH (the
 // [real-path-integration-coverage] mandate; AC7 owner isolation). Drives the
@@ -14,6 +16,7 @@ import { Client } from "pg";
 const RUN = process.env.E2E_PASSKEY === "1";
 const DB_URL = process.env.SUPABASE_DB_URL;
 const PAGE_SIZE = 50; // mirrors app/lib/transactions.ts
+const RULE_TXN_TOTAL = 1001; // one row must exist beyond the first 1000 PostgREST-read cap
 
 function isoDay(offsetDays: number): string {
   return new Date(Date.now() + offsetDays * 86_400_000).toISOString().slice(0, 10);
@@ -297,11 +300,22 @@ test.describe("transactions ledger — owner-scoped reads + filters + keyset pag
       await db.query(
         `insert into transactions
            (user_id, account_id, source, dedup_key, content_hash, amount, direction, currency, merchant, description, category, pending, occurred_on)
-         values
-           ($1,$2,'plaid','e2e-ledger-recat-1','txn-recat-1',25,'debit','USD','Rule Hardware','Ledger recat one','SHOPPING',false,$3),
-           ($1,$2,'plaid','e2e-ledger-recat-2','txn-recat-2',40,'debit','USD','Rule Hardware','Ledger recat two','SHOPPING',false,$4),
-           ($1,$2,'plaid','e2e-ledger-recat-3','txn-recat-3',15,'debit','USD','Rule Hardware','Ledger recat three','SHOPPING',false,$5)`,
-        [userId, accountId, isoDay(0), isoDay(-1), isoDay(-2)],
+         select
+           $1,
+           $2,
+           'plaid',
+           format('e2e-ledger-recat-%s', n),
+           format('txn-recat-%s', n),
+           n,
+           'debit',
+           'USD',
+           'Rule Hardware',
+           format('Ledger recat %s', n),
+           'SHOPPING',
+           false,
+           ($4::date - ($3 - n))::date
+         from generate_series(1, $3) as n`,
+        [userId, accountId, RULE_TXN_TOTAL, isoDay(0)],
       );
 
       await page.goto("/transactions");
@@ -312,53 +326,107 @@ test.describe("transactions ledger — owner-scoped reads + filters + keyset pag
       await expect(page.getByLabel("Filter by category")).toContainText("Utilities");
 
       await page.getByLabel("Filter by category").selectOption("Shopping");
-      await expect(page.getByText("Showing 3 transactions")).toBeVisible({ timeout: 15_000 });
+      const newestShopping = page.getByRole("button", {
+        name: /Change the category of Rule Hardware \(\$1,001\.00\).*Shopping/i,
+      });
+      const secondNewestShopping = page.getByRole("button", {
+        name: /Change the category of Rule Hardware \(\$1,000\.00\).*Shopping/i,
+      });
+      const oldestUtilities = page.getByRole("button", {
+        name: /Change the category of Rule Hardware \(\$1\.00\).*Utilities/i,
+      });
+      const oldestRent = page.getByRole("button", {
+        name: /Change the category of Rule Hardware \(\$1\.00\).*Rent/i,
+      });
+      await expect(page.getByText(`Showing ${PAGE_SIZE} transactions`)).toBeVisible({ timeout: 15_000 });
 
-      await page.getByRole("button", { name: /Change the category of Rule Hardware \(\$25\.00\).*Shopping/i }).click();
+      await newestShopping.click();
       await page.getByRole("button", { name: /^Rent$/ }).click();
       await expect(page.getByText("Moved to Rent")).toBeVisible({ timeout: 15_000 });
-      await expect(page.getByText("Showing 2 transactions")).toBeVisible({ timeout: 15_000 });
-      await expect(page.getByRole("button", { name: /Change the category of Rule Hardware \(\$25\.00\).*Shopping/i })).toHaveCount(0);
-      await expect(page.getByRole("button", { name: /Change the category of Rule Hardware \(\$40\.00\).*Shopping/i })).toBeVisible();
-      await expect(page.getByRole("button", { name: /Change the category of Rule Hardware \(\$15\.00\).*Shopping/i })).toBeVisible();
+      await expect(newestShopping).toHaveCount(0);
+      await expect(secondNewestShopping).toBeVisible();
 
       await page.getByLabel("Filter by category").selectOption("Rent");
       await expect(page.getByText("Showing 1 transactions")).toBeVisible({ timeout: 15_000 });
-      await expect(page.getByRole("button", { name: /Change the category of Rule Hardware \(\$25\.00\).*Rent/i })).toBeVisible();
-      await expect(page.getByRole("button", { name: /Change the category of Rule Hardware \(\$40\.00\).*Utilities/i })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: /Change the category of Rule Hardware \(\$1,001\.00\).*Rent/i })).toBeVisible();
+      await expect(page.getByRole("button", { name: /Change the category of Rule Hardware \(\$1,000\.00\).*Utilities/i })).toHaveCount(0);
 
       await page.getByLabel("Filter by category").selectOption("Shopping");
-      await expect(page.getByText("Showing 2 transactions")).toBeVisible({ timeout: 15_000 });
-      await page.getByRole("button", { name: /Change the category of Rule Hardware \(\$40\.00\).*Shopping/i }).click();
+      await expect(page.getByText(`Showing ${PAGE_SIZE} transactions`)).toBeVisible({ timeout: 15_000 });
+      await secondNewestShopping.click();
       await page.getByLabel("Always categorize Rule Hardware this way").check();
       await page.getByRole("button", { name: /^Utilities$/ }).click();
-      await expect(page.getByText("Now categorizing Rule Hardware as Utilities — updated 2 transactions")).toBeVisible({
+      await expect(page.getByText("Now categorizing Rule Hardware as Utilities — updated 1001 transactions")).toBeVisible({
         timeout: 15_000,
       });
       await expect(page.getByText("No transactions match these filters.")).toBeVisible({ timeout: 15_000 });
 
       await page.getByLabel("Filter by category").selectOption("Utilities");
-      await expect(page.getByText("Showing 2 transactions")).toBeVisible({ timeout: 15_000 });
-      await expect(page.getByRole("button", { name: /Change the category of Rule Hardware \(\$40\.00\).*Utilities/i })).toBeVisible();
-      await expect(page.getByRole("button", { name: /Change the category of Rule Hardware \(\$15\.00\).*Utilities/i })).toBeVisible();
+      await expect(page.getByText(`Showing ${PAGE_SIZE} transactions`)).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByRole("button", { name: /Change the category of Rule Hardware \(\$1,001\.00\).*Utilities/i })).toBeVisible();
+      await expect(page.getByRole("button", { name: /Change the category of Rule Hardware \(\$1,000\.00\).*Utilities/i })).toBeVisible();
+      for (let i = 0; i < 25; i += 1) {
+        if ((await oldestUtilities.count()) > 0) break;
+        await page.getByRole("button", { name: "Load more transactions" }).click();
+      }
+      await expect(page.getByText("Showing 1001 transactions")).toBeVisible({ timeout: 15_000 });
+      await expect(oldestUtilities).toBeVisible();
+      await expect(page.getByText("You're all caught up — that's everything.")).toBeVisible();
 
-      await page.getByLabel("Filter by category").selectOption("Rent");
-      await expect(page.getByText("Showing 1 transactions")).toBeVisible({ timeout: 15_000 });
-      await expect(page.getByRole("button", { name: /Change the category of Rule Hardware \(\$25\.00\).*Rent/i })).toBeVisible();
-      await expect(page.getByRole("button", { name: /Change the category of Rule Hardware \(\$40\.00\).*Utilities/i })).toHaveCount(0);
+      const rememberedAssignments = await db.query(
+        `select count(*)::int as count
+           from transaction_categories
+          where user_id = $1
+            and assigned_by = 'rule'
+            and category_id = $2
+            and dedup_key like 'e2e-ledger-recat-%'`,
+        [userId, utilitiesCategoryId],
+      );
+      expect(rememberedAssignments.rows).toEqual([{ count: RULE_TXN_TOTAL }]);
+      const oldestAssignment = await db.query(
+        `select assigned_by, category_id
+           from transaction_categories
+          where user_id = $1 and dedup_key = 'e2e-ledger-recat-1'`,
+        [userId],
+      );
+      expect(oldestAssignment.rows).toEqual([{ assigned_by: "rule", category_id: utilitiesCategoryId }]);
 
-      const assignments = await db.query(
+      await oldestUtilities.click();
+      await page.getByRole("button", { name: /^Rent$/ }).click();
+      await expect(page.getByText("Moved to Rent")).toBeVisible({ timeout: 15_000 });
+      await expect(oldestUtilities).toHaveCount(0);
+
+      await db.query(
+        `insert into transactions
+           (user_id, account_id, source, dedup_key, content_hash, amount, direction, currency, merchant, description, category, pending, occurred_on)
+         values
+           ($1,$2,'plaid','e2e-ledger-recat-new','txn-recat-new',77,'debit','USD','Rule Hardware','Ledger recat new','SHOPPING',false,$3)`,
+        [userId, accountId, isoDay(1)],
+      );
+      await applyAllRulesForUser(createServiceSupabase(), userId);
+
+      const postSyncAssignments = await db.query(
         `select dedup_key, assigned_by, category_id
            from transaction_categories
-          where user_id = $1 and dedup_key like 'e2e-ledger-recat-%'
+          where user_id = $1
+            and dedup_key in ('e2e-ledger-recat-1', 'e2e-ledger-recat-new')
           order by dedup_key`,
         [userId],
       );
-      expect(assignments.rows).toEqual([
+      expect(postSyncAssignments.rows).toEqual([
         { dedup_key: "e2e-ledger-recat-1", assigned_by: "user", category_id: rentCategoryId },
-        { dedup_key: "e2e-ledger-recat-2", assigned_by: "rule", category_id: utilitiesCategoryId },
-        { dedup_key: "e2e-ledger-recat-3", assigned_by: "rule", category_id: utilitiesCategoryId },
+        { dedup_key: "e2e-ledger-recat-new", assigned_by: "rule", category_id: utilitiesCategoryId },
       ]);
+
+      await page.getByLabel("Filter by category").selectOption("Rent");
+      await expect(page.getByText("Showing 1 transactions")).toBeVisible({ timeout: 15_000 });
+      await expect(oldestRent).toBeVisible();
+      await expect(page.getByRole("button", { name: /Change the category of Rule Hardware \(\$1,000\.00\).*Utilities/i })).toHaveCount(0);
+
+      await page.getByLabel("Filter by category").selectOption("Utilities");
+      await expect(page.getByText(`Showing ${PAGE_SIZE} transactions`)).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByRole("button", { name: /Change the category of Rule Hardware \(\$77\.00\).*Utilities/i })).toBeVisible();
+      await expect(oldestRent).toHaveCount(0);
 
       otherContext = await browser.newContext();
       const otherPage = await otherContext.newPage();
@@ -416,7 +484,7 @@ test.describe("transactions ledger — owner-scoped reads + filters + keyset pag
       await page.goto("/transactions");
       await expect(page.getByLabel("Filter by category")).not.toContainText("Travel");
       await page.getByLabel("Filter by category").selectOption("Utilities");
-      await expect(page.getByText("Showing 2 transactions")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText(`Showing ${PAGE_SIZE} transactions`)).toBeVisible({ timeout: 15_000 });
       await expect(table.getByText("Other Recat Checking")).toHaveCount(0);
       await expect(table.getByText("$88.00")).toHaveCount(0);
       await page.getByLabel("Filter by category").selectOption("Rent");
