@@ -132,9 +132,11 @@ export async function recategorizeTransaction(
   if (!dedupKey || !categoryId) return { ok: false, error: "invalid" };
   const supabase = await createServerSupabase();
 
-  // WLT-22-3 — "remember the merchant": create a rule + backfill ALL the user's
-  // matching transactions as 'rule' (incl. this one, since it has no 'user'
-  // override). Returns how many were written. A merchant is required to match on.
+  // WLT-22-3 — "remember the merchant": create a rule + (re)assign ALL the user's
+  // matching transactions as 'rule'. This is an EXPLICIT "always categorize this
+  // merchant" action, so it overrides the user's OWN prior per-transaction choices
+  // for that merchant — including the one being edited (FIX-2026-06-20). Sync-time
+  // re-application still respects user overrides. Returns how many were written.
   if (applyToMerchant) {
     const { data: tx } = await supabase
       .from("transactions")
@@ -164,7 +166,12 @@ export async function recategorizeTransaction(
         .single();
       if (rErr || !rule) return { ok: false, error: "save_failed" }; // incl. a forged cross-tenant categoryId (FK)
       const ruleId = (rule as { id: string }).id;
-      const count = await applyRulesToTransactions(supabase, userId, [{ merchantNorm, categoryId, ruleId, merchantEntityId }]);
+      const count = await applyRulesToTransactions(
+        supabase,
+        userId,
+        [{ merchantNorm, categoryId, ruleId, merchantEntityId }],
+        { overrideUserAssignments: true }, // the explicit "always …" overrides prior user choices for this merchant
+      );
       await emitFunnel(FUNNEL_EVENTS.CATEGORY_RULE_CREATED, userId, {});
       return { ok: true, count };
     }
