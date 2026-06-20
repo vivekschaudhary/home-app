@@ -18,6 +18,7 @@ import {
   seriesMonthKeys,
 } from "@wealth/core";
 import { readCategoryAssignments } from "@wealth/db/categories";
+import { readAllPaged } from "@wealth/db/paged";
 import { readCategoryKinds } from "./categories";
 
 // ~13 months: 12 full calendar months for the year-spread (WLT-21-2) — also
@@ -59,15 +60,32 @@ async function readSpendingForBudgets(userId: string, supabase: Supa): Promise<S
   // WLT-22-2: resolve each txn's category through the ONE shared helper
   // (saved ?? Plaid) so the budget groups by the user's category, not Plaid's raw
   // one — consistent with recap + anomaly (the brief's #1 guardrail).
-  const [{ data }, assignments] = await Promise.all([
-    supabase
-      .from("transactions")
-      .select("dedup_key, direction, category, amount, occurred_on")
-      .eq("user_id", userId)
-      .gte("occurred_on", since),
+  // FIX-2026-06-20b: page past PostgREST's 1000-row cap. ~400 days for a
+  // high-volume account is well over 1000 transactions; a single uncapped read
+  // returned only the first 1000, so every budget total (this month + the 12-month
+  // year-spread) silently undercounted. Ordered by dedup_key (stable, unique per
+  // user) so the windows tile cleanly.
+  const [rows, assignments] = await Promise.all([
+    readAllPaged<{
+      dedup_key: string;
+      direction: string;
+      category: string | null;
+      amount: number | string;
+      occurred_on: string;
+    }>(
+      (from, to) =>
+        supabase
+          .from("transactions")
+          .select("dedup_key, direction, category, amount, occurred_on")
+          .eq("user_id", userId)
+          .gte("occurred_on", since)
+          .order("dedup_key", { ascending: true })
+          .range(from, to),
+      "budget-spending",
+    ),
     readCategoryAssignments(supabase, userId),
   ]);
-  return (data ?? []).map((r) => {
+  return rows.map((r) => {
     const row = r as {
       dedup_key: string;
       direction: string;
@@ -216,20 +234,37 @@ export async function readCategoryTransactions(
   // debits + the assignment map, resolve each, then filter to the target category
   // — so a transaction MOVED into this category appears and one moved OUT drops
   // (the AC4 reconcile: drill total stays equal to the budget row).
-  const [{ data, error }, assignments] = await Promise.all([
-    supabase
-      .from("transactions")
-      .select("dedup_key, occurred_on, merchant, description, amount, category")
-      .eq("user_id", userId)
-      .eq("direction", "debit")
-      .gte("occurred_on", `${month}-01`)
-      .lt("occurred_on", nextMonthStart(month))
-      .lte("occurred_on", asOf)
-      .order("occurred_on", { ascending: false }),
-    readCategoryAssignments(supabase, userId),
-  ]);
-  if (error) return { ok: false }; // a query/RLS/db failure must NOT masquerade as "no transactions" (AC3)
-  const items: CategoryTransaction[] = (data ?? [])
+  // FIX-2026-06-20b: page past PostgREST's 1000-row cap so a heavy single month
+  // still reconciles EXACTLY to the (now also paged) budget row — drilling a
+  // >1000-debit month would otherwise list a truncated, smaller-than-the-row total.
+  // occurred_on alone isn't a total order (ties), so add dedup_key as the stable
+  // tiebreaker for clean window tiling. readAllPaged THROWS on a db error, so the
+  // try/catch preserves AC3 (a failure must NOT masquerade as "no transactions").
+  let data: unknown[];
+  let assignments: Map<string, string>;
+  try {
+    [data, assignments] = await Promise.all([
+      readAllPaged<unknown>(
+        (from, to) =>
+          supabase
+            .from("transactions")
+            .select("dedup_key, occurred_on, merchant, description, amount, category")
+            .eq("user_id", userId)
+            .eq("direction", "debit")
+            .gte("occurred_on", `${month}-01`)
+            .lt("occurred_on", nextMonthStart(month))
+            .lte("occurred_on", asOf)
+            .order("occurred_on", { ascending: false })
+            .order("dedup_key", { ascending: true })
+            .range(from, to),
+        "budget-drill",
+      ),
+      readCategoryAssignments(supabase, userId),
+    ]);
+  } catch {
+    return { ok: false }; // a query/RLS/db failure must NOT masquerade as "no transactions" (AC3)
+  }
+  const items: CategoryTransaction[] = data
     .map((r) => {
       const row = r as {
         dedup_key: string;

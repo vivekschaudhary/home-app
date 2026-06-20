@@ -1,5 +1,6 @@
 import { createServiceSupabase } from "@vc1023/passkey-2fa";
 import { matchRuleAssignments } from "@wealth/core";
+import { readAllPaged } from "./paged";
 
 // WLT-22-2 — the ONE shared read of a user's saved category assignments, used by
 // EVERY grouping reader (budget, recap, anomaly) so they resolve `saved ?? Plaid`
@@ -12,23 +13,6 @@ import { matchRuleAssignments } from "@wealth/core";
 // SupabaseClient shape; type the param off the synchronous one.
 type SupabaseClientT = ReturnType<typeof createServiceSupabase>;
 
-// Read EVERY row of a query, paginating past PostgREST's 1000-row response cap.
-// `page(from, to)` builds the query for one inclusive `.range()` window.
-async function readAllPaged<T>(
-  page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
-): Promise<T[]> {
-  const SIZE = 1000;
-  const out: T[] = [];
-  for (let from = 0; ; from += SIZE) {
-    const { data, error } = await page(from, from + SIZE - 1);
-    if (error) throw new Error(`[apply-rules] paged read failed: ${error.message}`);
-    const batch = data ?? [];
-    out.push(...batch);
-    if (batch.length < SIZE) break;
-  }
-  return out;
-}
-
 /**
  * `dedupKey → saved category NAME` for the user's transactions the user has
  * recategorized. Absent key ⇒ no saved category ⇒ the reader falls back to
@@ -39,15 +23,29 @@ export async function readCategoryAssignments(
   client: SupabaseClientT,
   userId: string,
 ): Promise<Map<string, string>> {
+  // `categories` is bounded (a handful per user) — one read. `transaction_categories`
+  // is one row per recategorized transaction and can exceed 1000 for a heavy user;
+  // page it (FIX-2026-06-20b) or the resolver map truncates and every surface
+  // (budget, recap, anomaly, drill) silently falls back to Plaid's category for the
+  // dropped rows.
   const [cats, assigns] = await Promise.all([
     client.from("categories").select("id, name").eq("user_id", userId),
-    client.from("transaction_categories").select("dedup_key, category_id").eq("user_id", userId),
+    readAllPaged<{ dedup_key: string; category_id: string }>(
+      (from, to) =>
+        client
+          .from("transaction_categories")
+          .select("dedup_key, category_id")
+          .eq("user_id", userId)
+          .order("dedup_key", { ascending: true })
+          .range(from, to),
+      "category-assignments",
+    ),
   ]);
   const idToName = new Map<string, string>();
   for (const c of (cats.data ?? []) as { id: string; name: string }[]) idToName.set(c.id, c.name);
 
   const out = new Map<string, string>();
-  for (const a of (assigns.data ?? []) as { dedup_key: string; category_id: string }[]) {
+  for (const a of assigns) {
     const name = idToName.get(a.category_id);
     if (name) out.set(a.dedup_key, name);
   }
@@ -122,6 +120,7 @@ export async function applyRulesToTransactions(
         .or("merchant.not.is.null,merchant_entity_id.not.is.null")
         .order("dedup_key", { ascending: true })
         .range(from, to),
+    "apply-rules",
   );
   // The user's explicit per-transaction overrides (also paged). Skipped on an
   // explicit "always categorize this merchant", which deliberately overrides them.
@@ -137,6 +136,7 @@ export async function applyRulesToTransactions(
               .eq("assigned_by", "user")
               .order("dedup_key", { ascending: true })
               .range(from, to),
+            "apply-rules",
           )
         ).map((a) => a.dedup_key),
   );

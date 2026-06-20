@@ -58,6 +58,77 @@ async function signUpWithPasskey(page: Page, context: BrowserContext, email: str
 test.describe("budget & spending — recommended/actual render + set + persist (WLT-21-1)", () => {
   test.skip(!RUN || !DB_URL, "Set E2E_PASSKEY=1 + SUPABASE_DB_URL + a real Supabase project to run.");
 
+  test("real session → >1000 budget rows reconcile through session, RLS, year-spread, and drill", async ({ page, context }) => {
+    const email = `e2e-budget-cap-u1+${Date.now()}@example.com`;
+    const password = "correct horse battery staple";
+    const CURRENT_MONTH_COUNT = 1001;
+    const CURRENT_MONTH_AMOUNT = 2;
+    const PRIOR_MONTH_AMOUNT = 3000;
+
+    await signUpWithPasskey(page, context, email, password);
+
+    const db = new Client({ connectionString: DB_URL });
+    await db.connect();
+    try {
+      const u = await db.query("select id from auth.users where email = $1", [email]);
+      expect(u.rows).toHaveLength(1);
+      const userId = u.rows[0].id as string;
+
+      const acct = await db.query(
+        `insert into financial_accounts (user_id, name, kind, currency, balance_current, balance_updated_at)
+         values ($1, 'Budget Cap Checking', 'depository', 'USD', 9000, now()) returning id`,
+        [userId],
+      );
+      const accountId = acct.rows[0].id as string;
+
+      await db.query(
+        `insert into transactions
+           (user_id, account_id, source, dedup_key, content_hash, amount, direction, currency, description, merchant, category, occurred_on)
+         values
+           ($1,$2,'plaid','e2e-budget-cap-prior','cap-prior',$3,'debit','USD','prior groceries','Budget Cap Prior','GROCERIES',$4)`,
+        [userId, accountId, PRIOR_MONTH_AMOUNT, monthDay(1)],
+      );
+      await db.query(
+        `insert into transactions
+           (user_id, account_id, source, dedup_key, content_hash, amount, direction, currency, description, merchant, category, occurred_on)
+         select
+           $1,
+           $2,
+           'plaid',
+           format('e2e-budget-cap-%s', lpad(n::text, 4, '0')),
+           format('cap-hash-%s', lpad(n::text, 4, '0')),
+           $3,
+           'debit',
+           'USD',
+           format('budget-cap description %s', lpad(n::text, 4, '0')),
+           format('Budget Cap Grocer %s', lpad(n::text, 4, '0')),
+           'GROCERIES',
+           $4
+         from generate_series(1, $5) as n`,
+        [userId, accountId, CURRENT_MONTH_AMOUNT, todayUtc(), CURRENT_MONTH_COUNT],
+      );
+
+      await page.goto("/budget");
+      await expect(page.getByRole("heading", { name: "Budget & Spending" })).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("Groceries")).toBeVisible();
+      await expect(page.getByRole("button", { name: /Show the transactions in Groceries this month \(\$2,002\.00\)/ })).toBeVisible();
+
+      await page.getByRole("button", { name: /Show the last 12 months of Groceries spend/ }).click();
+      await expect(page.getByText("Monthly Groceries spend — last 12 months")).toBeVisible();
+      await expect(page.getByText("Most: $3,000.00")).toBeVisible();
+
+      await page.getByRole("button", { name: /Show the transactions in Groceries this month \(\$2,002\.00\)/ }).click();
+      await expect(page.getByText("What's in Groceries this month")).toBeVisible();
+      const drill = page.getByRole("table", { name: "Transactions in Groceries this month" });
+      await expect(drill.getByText("Budget Cap Grocer 0001")).toBeVisible();
+      await expect(drill.getByText(`Budget Cap Grocer ${String(CURRENT_MONTH_COUNT).padStart(4, "0")}`)).toBeVisible();
+      await expect(drill.getByText("$2,002.00")).toBeVisible();
+      await expect(drill.locator("tbody tr")).toHaveCount(CURRENT_MONTH_COUNT);
+    } finally {
+      await db.end();
+    }
+  });
+
   test("real session → recommended from history + this-month actual → set a budget → persists on reload", async ({
     browser,
     page,

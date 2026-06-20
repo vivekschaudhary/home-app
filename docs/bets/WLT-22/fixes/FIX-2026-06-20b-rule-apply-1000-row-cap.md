@@ -10,6 +10,8 @@ created: 2026-06-20
 area_tags: [spending, categorization, data, scale]
 ---
 
+> **Shipped:** PR #76 (squash `c24d211`), 2026-06-20 — paginated rule-apply reads + chunked upsert. Codex's gated >1000-row E2E ([e2e/transactions.spec.ts](e2e/transactions.spec.ts)) green. The systemic budget-read follow-up flagged below is now addressed in **[FIX-2026-06-20c](FIX-2026-06-20c-budget-read-1000-row-cap.md)** (`readSpendingForBudgets`, the drill, + the shared `readCategoryAssignments` resolver); recap + anomaly main reads remain a logged follow-up there.
+
 # Fix: "remember the merchant" silently skips older rows on a >1000-transaction account (PostgREST 1000-row cap)
 
 ## Triage
