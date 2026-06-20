@@ -3,7 +3,7 @@ id: FIX-2026-06-20-remember-cant-override-user
 type: fix
 bet: WLT-22
 story: WLT-22-3
-status: in-review
+status: shipped
 severity: P2
 reported_by: operator (dogfooding)
 created: 2026-06-20
@@ -48,3 +48,7 @@ The copy is **"Always categorize {merchant} this way"** — an explicit, merchan
 
 ### Risks
 - [2026-06-20] [Engineer] **An intentional per-transaction exception for the same merchant is overridden by a later "remember"** — likelihood: low — impact: low — mitigation: that's the literal meaning of "always categorize this merchant"; the user can re-set an exception (a single recategorize without remember → sync-protected) — area: product
+
+---
+
+**Shipped:** PR #72 (squash `edfa1f5`), 2026-06-20. Codex authored the gated real-path E2E ([e2e/budget.spec.ts](e2e/budget.spec.ts)): seeds prior user-categorized Corner Hardware siblings, proves an explicit "Always categorize…" overrides all of them across the merchant, then re-establishes a single no-remember exception and verifies a later sync **still protects** it while continuing to auto-categorize new same-entity rows. Pure-function fix (no migration) — prod migrate-prod a no-op. **CLEAR tied to HEAD `0a895f2`.**
