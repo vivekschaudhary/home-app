@@ -78,6 +78,16 @@ describe("matchRuleAssignments (WLT-22-3 — which transactions a rule writes)",
     expect(out.every((m) => m.categoryId === "cat-coffee" && m.ruleId === "rule-1")).toBe(true);
   });
 
+  it("respects the caller's owner-set: an EXPLICIT remember (empty set) overrides a prior user choice; sync (set) protects it (FIX-2026-06-20)", () => {
+    const flc = [{ merchantNorm: "flc dining", categoryId: "cat-edu", ruleId: "r-flc" }];
+    const txn = [{ dedupKey: "dk-2025", merchant: "FLC Dining" }];
+    // sync-time apply (the row is user-owned) → protected, not touched
+    expect(matchRuleAssignments(txn, new Set(["dk-2025"]), flc)).toEqual([]);
+    // explicit "always categorize this merchant" passes an EMPTY owner-set → the
+    // prior user choice is overridden (the bug: previously the set was always full)
+    expect(matchRuleAssignments(txn, new Set(), flc)).toEqual([{ dedupKey: "dk-2025", categoryId: "cat-edu", ruleId: "r-flc" }]);
+  });
+
   it("NEVER writes over a 'user' override — the user's explicit choice wins", () => {
     const out = matchRuleAssignments(
       [

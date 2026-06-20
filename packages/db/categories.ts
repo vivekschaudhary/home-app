@@ -73,21 +73,23 @@ export async function readRules(client: SupabaseClientT, userId: string): Promis
 /**
  * Apply the given merchant rules to the user's transactions — write `'rule'`
  * assignments for every active transaction whose normalized merchant matches a
- * rule and that has NO `'user'` override (the user's explicit choice always
- * wins). Idempotent: re-running writes the same rows (so it's safe to call after
- * every sync, and to re-backfill on a last-write-wins rule replace). Returns the
- * number of transactions written. Works under either client (RLS app session or
- * the service-role sync job) — always scoped by `user_id`, and explicitly
- * filters superseded/removed (required under the RLS-bypassing service role).
+ * rule. By default a `'user'` override wins (the row is skipped), so AUTOMATIC
+ * re-application (sync) never clobbers a deliberate manual choice. Pass
+ * `overrideUserAssignments: true` for an EXPLICIT "always categorize this
+ * merchant" action — it re-assigns ALL matching rows, including the user's own
+ * prior per-transaction choices for that merchant (FIX-2026-06-20). Idempotent;
+ * returns the number written. Works under either client (RLS app session or the
+ * service-role sync job) — always scoped by `user_id`, filters superseded/removed.
  */
 export async function applyRulesToTransactions(
   client: SupabaseClientT,
   userId: string,
   rules: readonly MerchantRule[],
+  opts: { overrideUserAssignments?: boolean } = {},
 ): Promise<number> {
   if (rules.length === 0) return 0;
 
-  const [{ data: txns }, { data: userAssigns }] = await Promise.all([
+  const [{ data: txns }, userAssignsRes] = await Promise.all([
     client
       .from("transactions")
       .select("dedup_key, merchant, merchant_entity_id")
@@ -97,9 +99,13 @@ export async function applyRulesToTransactions(
       // WLT-22-4 — a row is matchable if it has a merchant NAME or a Plaid entity id
       // (entity-first matching); only rows with neither are unmatchable.
       .or("merchant.not.is.null,merchant_entity_id.not.is.null"),
-    client.from("transaction_categories").select("dedup_key").eq("user_id", userId).eq("assigned_by", "user"),
+    // An explicit "always categorize this merchant" overrides the user's OWN prior
+    // choices for that merchant, so we don't fetch (or exclude) the user-owned set.
+    opts.overrideUserAssignments
+      ? Promise.resolve({ data: [] as { dedup_key: string }[] })
+      : client.from("transaction_categories").select("dedup_key").eq("user_id", userId).eq("assigned_by", "user"),
   ]);
-  const userOwned = new Set((userAssigns ?? []).map((a) => (a as { dedup_key: string }).dedup_key));
+  const userOwned = new Set((userAssignsRes.data ?? []).map((a) => (a as { dedup_key: string }).dedup_key));
 
   // Pure matching (which transactions get a 'rule' assignment, user-wins) lives
   // in @wealth/core; map the matches to upsert rows here.
