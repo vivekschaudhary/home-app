@@ -2,7 +2,7 @@
 id: WLT-22-5
 bet: WLT-22
 type: story
-status: ready
+status: merged
 priority: P1
 created: 2026-06-20
 author: PM
@@ -81,5 +81,9 @@ _If post-merge bugs are found, story is re-opened and fixes live under `fixes/`.
 - [2026-06-20] [PM] **recap + anomaly main transaction reads remain uncapped** (FIX-2026-06-20c follow-up) — severity: medium — owner: Engineer — status: open — area: scale (may be folded in opportunistically while wiring exclusion into those files)
 
 ---
+
+**App code MERGED, 2026-06-21** — **PR #81** (server spine, squash `149794c`): migration 0014 + the `kind` seam (AC8) + the `countsAsSpending` thread across budget/recap/anomaly + seed + auto-assign. Migration verified end-to-end on an ephemeral Postgres. **PR #83** (UI, squash `1e3c1c1`): the visible "Transfers & Payments" group + the per-user, no-flash review nudge + the picker "exclude from spending" relabel. (#82 was the UI PR pre-rebase; closed/superseded after #81's squash-merge.) Codex reviewed #83 — **no findings, approved**; two nudge ISSUEs (pre-hydration flash, browser-wide dismissal) fixed in `53dc829` before approval. Full gate green on each (lint · typecheck · 275 tests · build).
+
+**Outstanding before `shipped` (Codex-owned, per the story split):** the **RLS suite** (undeletable `source='system'`; can't forge `counts_as_spending`; cross-tenant isolation; composite-FK on a `'system'` assignment) + the **gated real-path E2E** (transfers + CC-payment excluded, mortgage kept; user override survives a CDC re-sync). These target the merged 0014 schema on `main`.
 
 _Story under bet: docs/bets/WLT-22/brief.md_
