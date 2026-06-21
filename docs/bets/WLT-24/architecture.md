@@ -1,7 +1,7 @@
 ---
 id: WLT-24-ARCH
 bet: WLT-24
-status: proposed
+status: approved
 created: 2026-06-21
 authors: [Architect, Enterprise/Solution Architect]
 area_tags: [frontend, backend, data, spending]
@@ -15,11 +15,11 @@ Add a **`transaction_flags`** overlay table — owner-CRUD, keyed by the stable 
 
 ## Context
 
-- **The overlay axis (load-bearing).** A subscription is orthogonal to category — a Netflix charge is *both* "Entertainment" *and* a subscription — and orthogonal to the WLT-22-5 spend/transfer classification (a subscription is real spend; it stays counted). So it cannot live on the category axis (`transaction_categories` / `categories`) without losing one of the two facts. It is a **flag overlay** on a transaction.
+- **The overlay axis (load-bearing).** A subscription is orthogonal to category — a Netflix charge is _both_ "Entertainment" _and_ a subscription — and orthogonal to the WLT-22-5 spend/transfer classification (a subscription is real spend; it stays counted). So it cannot live on the category axis (`transaction_categories` / `categories`) without losing one of the two facts. It is a **flag overlay** on a transaction.
 - **Why a table keyed by `dedup_key`, not a column.** `transactions.category` and other per-row fields churn on Plaid CDC re-sync (a revision is a new row). The WLT-22 lesson: user-set facts live in their own table keyed by the invariant `dedup_key` so they survive re-sync. `transaction_flags` follows `transaction_categories` exactly.
 - **Patterns to reuse (all shipped):** the saved-assignment owner-CRUD + RLS pattern (`0011_categories.sql`), `normalizeMerchant` + the newest-wins merchant grouping (`@wealth/core` `categories.ts`), the WLT-23 ledger row + its reused picker/popover, `readAllPaged` (the 1000-row-cap guardrail, `@wealth/db/paged`), the funnel-event pattern (`@wealth/core/funnel.ts`), OPS-2 migrate-on-deploy.
 - **Delete posture.** `transaction_flags` is user-declared config (like `categories`/`budgets`/`transaction_categories`) → owner-CRUD with **hard-delete on unmark** (the WLT-21 RLS lesson: a `deleted_at`-filtering SELECT policy makes an authenticated soft-delete structurally impossible). Not a financial/audit record, so no retention obligation.
-- **Foundational-stack deviation gate: PASS for slice 1.** No new tool/service/dependency — Postgres table + Route Handlers + a pure compute. The fast-follow's *Plaid `/transactions/recurring/get`* option is a **new Plaid product** beyond ADR-002's documented "Accounts / Balance / Transactions" scope → flagged as a **future foundation-amendment** to resolve at that build (DRI Issue), NOT introduced now. The custom-detector option needs no new tooling.
+- **Foundational-stack deviation gate: PASS for slice 1.** No new tool/service/dependency — Postgres table + Route Handlers + a pure compute. The fast-follow's _Plaid `/transactions/recurring/get`_ option is a **new Plaid product** beyond ADR-002's documented "Accounts / Balance / Transactions" scope → flagged as a **future foundation-amendment** to resolve at that build (DRI Issue), NOT introduced now. The custom-detector option needs no new tooling.
 
 ## Approach
 
@@ -48,6 +48,7 @@ transaction_flags (
   unique (user_id, dedup_key, flag_type)           -- one flag of a type per transaction
 )
 ```
+
 - Indexes: `(user_id, flag_type)` for the Subscriptions read. RLS: 4 owner policies (`select/insert/update/delete` on `auth.uid() = user_id`) — the `intents`/`categories` pattern. **Hard-delete** on unmark. **No composite FK** (unlike `transaction_categories` — there's no second-table reference to forge; the flag is self-contained, isolation is the plain `user_id` policy).
 - **No change** to `transactions`, `categories`, `transaction_categories`, `budgets`.
 
@@ -60,6 +61,7 @@ transaction_flags (
 ### Dependencies
 
 None new. Reuses `@wealth/core` (`normalizeMerchant`, funnel), `@wealth/db` (`readAllPaged`, emitters), Supabase (Postgres + RLS + AAL2), the WLT-23 ledger UI. The **`SubscriptionDetector` seam** (fast-follow) is an interface only this bet:
+
 ```
 interface SubscriptionDetector { detect(input): Promise<CandidateSubscription[]> }  // emits candidates → auto-set flags (source='auto'), a signal the user overrides
 ```
@@ -67,20 +69,23 @@ interface SubscriptionDetector { detect(input): Promise<CandidateSubscription[]>
 ## Enterprise/Solution Architect input
 
 ### Cross-system implications
-- **Orthogonality is the invariant.** A subscription flag must NOT change a transaction's category, its budget contribution, or its WLT-22-5 `counts_as_spending`. The Subscriptions read is a *separate* surface; the budget/recap/anomaly readers are untouched. (Guard: no shared compute — the subscription summary doesn't go through the category resolver.)
+
+- **Orthogonality is the invariant.** A subscription flag must NOT change a transaction's category, its budget contribution, or its WLT-22-5 `counts_as_spending`. The Subscriptions read is a _separate_ surface; the budget/recap/anomaly readers are untouched. (Guard: no shared compute — the subscription summary doesn't go through the category resolver.)
 - **Reuses the WLT-23 ledger** as the primary mark entry point (the natural "I recognize this recurring merchant" moment); the row already carries `dedup_key`.
 - **The detector seam** (fast-follow) auto-sets flags `source='auto'`; the precedence (a user unmark must beat a later auto-detect) needs a "dismissed" record — **resolved at the fast-follow**, not slice 1 (open question below). Slice 1's `source` column makes the table forward-compatible.
 
 ### Standards compliance
+
 Owner-CRUD RLS (default-deny tenancy), AAL2-guarded routes, no PII beyond the user's own merchant/amount/date (same posture as the WLT-23 ledger). No new audit obligation (user config, not a financial record).
 
 ### Cost / capacity / vendor lock-in
+
 - **Slice 1: zero new vendor cost.** A table + reads.
 - **Fast-follow lock-in flag:** the Plaid-recurring option is a separately-enabled (potentially billed) Plaid product beyond ADR-002 — a real **cost/lock-in** decision deferred to that build; the provider-agnostic seam keeps the custom-detector exit open. Aggregation cost is the foundation's named first-order variable cost, so this is logged, not waved through.
 
 ## Alternatives considered
 
-1. **A "Subscriptions" category** (on the WLT-22 category axis). Rejected — conflates two orthogonal axes; a Netflix charge would be *either* "Entertainment" *or* "Subscription," losing one. The overlay table preserves both.
+1. **A "Subscriptions" category** (on the WLT-22 category axis). Rejected — conflates two orthogonal axes; a Netflix charge would be _either_ "Entertainment" _or_ "Subscription," losing one. The overlay table preserves both.
 2. **A boolean column on `transactions`** (`is_subscription`). Rejected — churns on CDC re-sync (a revision is a new row, the flag would orphan); a `dedup_key`-keyed table survives it (the WLT-22 lesson).
 3. **Detection-first** (ship auto-detection as slice 1). Rejected per the brief — heavier, couples to a provider before demand is proven; manual-first ships the substrate + surface cheaply and the detector then rides the same flag as a signal.
 4. **Per-mark user-selected cadence.** Rejected for slice 1 — more friction per mark and redundant once detection lands; inferring from history (with an honest "cadence pending" fallback) is lighter and improves automatically as history accrues.
@@ -103,7 +108,7 @@ Owner-CRUD RLS (default-deny tenancy), AAL2-guarded routes, no PII beyond the us
 
 ## Open questions for Engineer
 
-- **Single-occurrence handling in the headline total:** a subscription with 1 observed charge shows "cadence pending" — include it in the monthly total at face value for its month, or exclude until a 2nd occurrence confirms cadence? (Lean: exclude from the *normalized* headline, list it separately so the number stays honest.)
+- **Single-occurrence handling in the headline total:** a subscription with 1 observed charge shows "cadence pending" — include it in the monthly total at face value for its month, or exclude until a 2nd occurrence confirms cadence? (Lean: exclude from the _normalized_ headline, list it separately so the number stays honest.)
 - **Cadence interval thresholds:** the day-interval bands for weekly/monthly/annual (+ "irregular") — pick tolerant bands (e.g. monthly = 26–35 days) in the pure compute; unit-test the boundaries.
 - **Mark entry points:** ledger row for slice 1; also the budget drill? (Lean: ledger row first.)
 - **Fast-follow precedence (not slice 1):** an auto-detector must not re-flag what a user unmarked → needs a "dismissed"/`source`-aware record; design at the detection build.
@@ -111,19 +116,22 @@ Owner-CRUD RLS (default-deny tenancy), AAL2-guarded routes, no PII beyond the us
 ## DRI Log
 
 ### Decisions
+
 - [2026-06-21] [Architect] **A `transaction_flags` overlay table keyed by `dedup_key`, not a category or a `transactions` column** — rationale: a subscription is orthogonal to category + to the spend/transfer axis; a dedup_key-keyed owner-CRUD table survives CDC re-sync (the WLT-22 lesson) — area: data — alternatives: a Subscriptions category (conflates axes), a boolean column (CDC churn) — reversibility: medium (schema)
 - [2026-06-21] [Architect/operator] **Provider-agnostic `SubscriptionDetector` seam; defer Plaid-vs-custom to the fast-follow build** — rationale: keeps slice 1 unblocked + commits nothing prematurely; the seam shapes the auto-set-flag path either way — area: architecture — alternatives: commit to Plaid recurring now (a new Plaid product + ADR-002 amendment before demand is proven), commit to a custom detector now (more work) — reversibility: easy
 - [2026-06-21] [Architect/operator] **Infer cadence + monthly total from marked history (≥2 occurrences), honest "pending" fallback** — rationale: lightest manual-first model that yields a real headline number and improves as history accrues; no per-mark friction — area: product/compute — alternatives: user-selected cadence (friction), latest-amount-only (weak headline) — reversibility: easy
 - [2026-06-21] [Architect] **`source ('user','auto')` column included in slice 1** — rationale: forward-compatibility for the detector without a later migration; slice 1 writes only `user` — area: data — reversibility: easy
 
 ### Risks
+
 - [2026-06-21] [Architect] **The Subscriptions aggregation read undercounts on a >1000-flag account** — likelihood: low (subscriptions are few) — impact: medium — mitigation: paginate (`readAllPaged`) from day one per the guardrail — area: scale
 - [2026-06-21] [Architect] **Cadence/total misleads on thin history** — likelihood: medium — impact: low — mitigation: ≥2-occurrence inference + "pending" label + exclude pending from the normalized headline — area: data
 - [2026-06-21] [Enterprise Architect] **Orthogonality regression** — a future change routes the subscription flag through the category/budget path and double-counts or mis-classifies — likelihood: low — impact: medium — mitigation: keep the subscription summary on a separate compute (never the category resolver); a guard test if the surfaces ever converge — area: correctness
 
 ### Issues
+
 - [2026-06-21] [Enterprise Architect] **Plaid `/transactions/recurring/get` exceeds ADR-002's documented Plaid scope** — severity: medium (High if/when the fast-follow chooses it) — owner: Enterprise/Solution Architect — status: open — area: vendor/scope — the detection fast-follow's Plaid option needs a `/setup-foundation-architecture` amendment (ADR-002) before it's built; the provider-agnostic seam means slice 1 incurs nothing now.
 
 ---
 
-_Approved by: <pending> on <date>_
+_Approved by: operator on 2026-06-21_
