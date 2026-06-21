@@ -1,7 +1,7 @@
 ---
 id: WLT-24
 type: feature
-status: proposed
+status: approved
 priority: P2
 parent: FOUNDATION-PRODUCT
 portfolio_stub: false
@@ -63,18 +63,21 @@ Mild. The user's curated subscription list + (later) detection history is **prop
 ## Scope
 
 ### In scope (slice-able under this bet)
-- **`transaction_flags` substrate** — a new owner-CRUD table `(user_id, dedup_key, flag_type, …)` with `flag_type ∈ {subscription}` *this bet* (the schema admits `followup` for the planned sibling bet), owner RLS, keyed by the stable `dedup_key` so a flag survives Plaid CDC re-syncs. Reuses the WLT-22 saved-assignment pattern + WLT-22-3/4 `normalizeMerchant`.
+
+- **`transaction_flags` substrate** — a new owner-CRUD table `(user_id, dedup_key, flag_type, …)` with `flag_type ∈ {subscription}` _this bet_ (the schema admits `followup` for the planned sibling bet), owner RLS, keyed by the stable `dedup_key` so a flag survives Plaid CDC re-syncs. Reuses the WLT-22 saved-assignment pattern + WLT-22-3/4 `normalizeMerchant`.
 - **Mark / unmark a transaction as a subscription** — an action on the WLT-23 ledger row (reusing the existing in-row picker/popover), and optionally the budget drill. A `'user'` mark is authoritative.
 - **The Subscriptions view** (the nav placeholder → live): the list of subscription merchants with their typical amount, derived cadence (where ≥2 occurrences let us infer monthly/annual), and a **headline monthly + annualized total** (all cadences normalized to a monthly figure). Honest empty state until the user marks something.
 - Funnel events (`subscription_marked`, `subscriptions_viewed`) for the metric.
 
 ### Out of scope (this bet — deferred to explicit fast-follow stories or other bets)
-- **Auto-DETECTION** of subscriptions (Plaid `/transactions/recurring/get` behind a swappable adapter, or a custom `normalizeMerchant` + cadence detector). The deliberate **fast-follow** — when it lands it AUTO-SETS the subscription flag as a *signal/default* the user overrides (the WLT-22-5 pattern, [[providers-signal-human-decides]]). Slice 1 is manual-first.
+
+- **Auto-DETECTION** of subscriptions (Plaid `/transactions/recurring/get` behind a swappable adapter, or a custom `normalizeMerchant` + cadence detector). The deliberate **fast-follow** — when it lands it AUTO-SETS the subscription flag as a _signal/default_ the user overrides (the WLT-22-5 pattern, [[providers-signal-human-decides]]). Slice 1 is manual-first.
 - The **follow-up flag** — a separate bet on the same `transaction_flags` substrate.
 - Cancel-a-subscription integrations, renewal reminders, price-change alerts, free-trial-ending nudges.
 - Editing transaction amounts/dates (Plaid owns the entries).
 
 ## Open questions for Researcher / Architect elicitation
+
 - **Detection source (for the fast-follow, decided at architecture):** Plaid `/transactions/recurring/get` behind a swappable adapter (lower effort, higher accuracy, region-coupled) **vs** a custom `normalizeMerchant` + cadence/amount-stability detector (provider-agnostic, more work) **vs** manual-only for longer. A real `[elicitation-with-options]`.
 - **Cadence derivation in slice 1:** infer cadence from the marked transactions' occurrence intervals (≥2 occurrences → monthly/annual/weekly) or just show merchant + latest amount + occurrence count until detection lands? (Leaning: derive simple cadence when history allows, else show "marked — cadence pending.")
 - **Monthly-total normalization:** annual ÷ 12, weekly × 4.33, etc. — confirm the normalization + how to treat a subscription with only one observed charge.
@@ -96,18 +99,21 @@ _Decomposed one at a time via `/create-story WLT-24` after approval. Likely: (1)
 ## DRI Log
 
 ### Decisions
+
 - [2026-06-21] [PM] **Manual-first, detect-later** — rationale: ships the user-controllable surface + the shared substrate cheaply and proves demand before investing in detection; detection then rides the same flag as an auto-set signal the user overrides ([[providers-signal-human-decides]]) — area: scope — alternatives: detection-first (rejected — heavier, couples to a provider before demand is proven); never-detect (rejected — recurring manual marking is friction the fast-follow removes) — reversibility: easy
 - [2026-06-21] [PM] **A new `transaction_flags` overlay table, NOT a category** — rationale: a subscription is orthogonal to category (a Netflix charge is both "Entertainment" AND a subscription); overloading the category axis would lose one or the other (the WLT-22-5 distinction) — area: architecture — alternatives: a "Subscriptions" category (rejected — conflates axes); a boolean column on transactions (rejected — churns on CDC re-sync; the dedup_key-keyed table survives it) — reversibility: medium (schema)
 - [2026-06-21] [PM] **architecture_required: true** — rationale: new owner-CRUD table + an aggregation read + the future provider-recurring adapter seam warrant an architecture pass (esp. the cadence/normalization model + the detection seam) — area: process — reversibility: n/a
 
 ### Risks
+
 - [2026-06-21] [PM] **Manual-first adoption is too low** (the marking burden outweighs the value before detection lands) — likelihood: medium — impact: medium — mitigation: keep slice 1 tiny (reuse the ledger picker; no new ceremony); the metric's "wrong if <10%" makes the manual-vs-detect question falsifiable fast → prioritize the detection fast-follow if so — area: product
 - [2026-06-21] [PM] **Cadence/total is misleading on thin history** (one observed charge → wrong monthly figure) — likelihood: medium — impact: low — mitigation: only assert a cadence with ≥2 occurrences; otherwise label honestly ("cadence pending") and exclude from the normalized total or show it as a single charge — area: data
 - [2026-06-21] [PM] **The aggregation read undercounts on a heavy account** (the 1000-row cap, again) — likelihood: medium — impact: medium — mitigation: paginate the subscriptions read from day one (guardrail) — area: scale
 
 ### Issues
+
 - [2026-06-21] [PM] **Detection-source elicitation deferred to architecture** — severity: low — owner: Architect — status: open — area: architecture — the Plaid-recurring-vs-custom-detector choice is a `/create-bet-architecture` decision, flagged here so it isn't lost.
 
 ---
 
-_Approved by: <pending> on <date>_
+_Approved by: operator on 2026-06-21_
