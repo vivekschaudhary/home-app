@@ -26,7 +26,7 @@ import { YearSpread } from "./YearSpread";
 const C = COPY.budget;
 const TR = COPY.budgetTransfers; // WLT-22-5
 const TR_A = COPY.budgetTransfersA11y;
-const NUDGE_KEY = "wlt22-5-transfers-nudge-dismissed";
+const NUDGE_KEY = "wlt22-5-transfers-nudge-dismissed"; // scoped per-user at runtime
 
 function money(n: number): string {
   try {
@@ -42,7 +42,7 @@ function fill(template: string, vars: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
 }
 
-export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
+export function BudgetClient({ initial, userId }: { initial: BudgetViewDTO; userId: string }) {
   const [view, setView] = useState<BudgetViewDTO>(initial);
   const [editing, setEditing] = useState<string | null>(null);
   const [draftType, setDraftType] = useState<"amount" | "percent">("amount");
@@ -94,18 +94,24 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
   const spendRows = useMemo(() => rows.filter((r) => r.countsAsSpending), [rows]);
   const excludedRows = useMemo(() => rows.filter((r) => !r.countsAsSpending), [rows]);
   const excludedRef = useRef<HTMLDivElement>(null);
-  const [nudgeDismissed, setNudgeDismissed] = useState(false);
+  // Per-USER key (not a single browser-wide flag) so one user's dismissal never
+  // hides another user's nudge on a shared browser.
+  const nudgeKey = `${NUDGE_KEY}:${userId}`;
+  // Start HIDDEN (dismissed=true) and reveal only after we've read storage on the
+  // client. The server can't know localStorage, so rendering it on first paint
+  // would flash for a user who already dismissed it (the SSR/hydration mismatch).
+  const [nudgeDismissed, setNudgeDismissed] = useState(true);
   useEffect(() => {
     try {
-      setNudgeDismissed(localStorage.getItem(NUDGE_KEY) === "1");
+      setNudgeDismissed(localStorage.getItem(nudgeKey) === "1");
     } catch {
-      /* localStorage unavailable — show the nudge (non-blocking either way) */
+      setNudgeDismissed(false); // storage unavailable — show it (non-blocking)
     }
-  }, []);
+  }, [nudgeKey]);
   function dismissNudge() {
     setNudgeDismissed(true); // sticky — never re-nags
     try {
-      localStorage.setItem(NUDGE_KEY, "1");
+      localStorage.setItem(nudgeKey, "1");
     } catch {
       /* ignore */
     }

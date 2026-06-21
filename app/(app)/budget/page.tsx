@@ -20,7 +20,7 @@ export default async function BudgetPage() {
     <div>
       <h1 className="text-xl font-semibold text-gray-900">{COPY.budget.title}</h1>
       <p className="mt-1 text-sm text-gray-600">{COPY.budget.subtitle}</p>
-      <BudgetClient initial={view} />
+      <BudgetClient initial={view} userId={userId} />
     </div>
   );
 }
