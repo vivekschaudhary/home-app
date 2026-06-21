@@ -37,6 +37,7 @@ const VIEW: BudgetViewDTO = {
       budget: { type: "amount", amount: 500 },
       effectiveCap: 500,
       status: "over",
+      countsAsSpending: true,
     },
     {
       category: "TRAVEL",
@@ -46,6 +47,7 @@ const VIEW: BudgetViewDTO = {
       budget: null,
       effectiveCap: null,
       status: "none",
+      countsAsSpending: true,
     },
   ],
   asOfMonth: "2026-06",
@@ -455,6 +457,7 @@ describe("BudgetClient", () => {
           budget: { type: "amount", amount: 100 },
           effectiveCap: 100,
           status: "under",
+          countsAsSpending: true,
         },
       ],
       asOfMonth: "2026-06",

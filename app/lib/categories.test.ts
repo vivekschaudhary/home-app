@@ -24,4 +24,13 @@ describe("categoriesToSeed", () => {
   it("drops null categories (the 'Other' bucket isn't a seeded category)", () => {
     expect(categoriesToSeed([null, null], [])).toEqual([]);
   });
+
+  it("WLT-22-5 — never seeds TRANSFER_IN/TRANSFER_OUT/INCOME as spend categories (they route to the protected bucket)", () => {
+    const rows = categoriesToSeed(["FOOD_AND_DRINK", "TRANSFER_IN", "TRANSFER_OUT", "INCOME"], []);
+    const names = rows.map((r) => r.name);
+    expect(names).toContain("FOOD_AND_DRINK");
+    expect(names).not.toContain("TRANSFER_IN");
+    expect(names).not.toContain("TRANSFER_OUT");
+    expect(names).not.toContain("INCOME");
+  });
 });

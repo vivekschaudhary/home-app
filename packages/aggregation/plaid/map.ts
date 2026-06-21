@@ -5,7 +5,27 @@ import type {
   AccountBase,
   Transaction as PlaidTransaction,
 } from "plaid";
-import type { AccountKind, NormalizedAccount, NormalizedTransaction } from "../core/types";
+import type { AccountKind, NormalizedAccount, NormalizedTransaction, TransactionKind } from "../core/types";
+
+/**
+ * WLT-22-5 (AC8) — classify a Plaid transaction's normalized `kind` from its
+ * personal-finance-category. The ONLY place Plaid's taxonomy is read for kind;
+ * core/app branch on the normalized `kind`, never on these strings, so a non-US
+ * adapter drives the same transfer-exclusion by emitting its own `kind`.
+ *
+ * Uses the DETAILED key to separate a credit-card payment (the double-count leg)
+ * from a mortgage/auto/student loan payment — both share primary `LOAN_PAYMENTS`,
+ * so primary alone can't tell them apart. Everything else keys off the primary,
+ * matching the SQL backfill in 0014 (which has no detailed key on history).
+ */
+export function classifyKind(pfc: PlaidTransaction["personal_finance_category"]): TransactionKind {
+  const primary = pfc?.primary ?? "";
+  if (pfc?.detailed === "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT") return "payment";
+  if (primary === "TRANSFER_IN" || primary === "TRANSFER_OUT") return "transfer";
+  if (primary === "INCOME") return "income";
+  if (primary === "BANK_FEES") return "fee";
+  return "spend"; // incl. other LOAN_PAYMENTS_* (mortgage/auto/student) — real outflow
+}
 
 /** Plaid amounts are JS numbers; render as a fixed-decimal string for `numeric`. */
 function money(n: number | null | undefined): string | null {
@@ -49,6 +69,7 @@ export function mapTransaction(t: PlaidTransaction): NormalizedTransaction {
     merchant: t.merchant_name ?? null,
     merchantEntityId: t.merchant_entity_id ?? null, // WLT-22-4 — Plaid's stable merchant id
     category,
+    kind: classifyKind(t.personal_finance_category), // WLT-22-5 (AC8)
     occurredOn: t.date, // already YYYY-MM-DD
     pending: Boolean(t.pending),
     source: "plaid",

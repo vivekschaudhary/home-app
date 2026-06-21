@@ -12,7 +12,7 @@ import { createProviderRegistry, ingestTransactions } from "@wealth/aggregation"
 import { createPlaidProvider } from "@wealth/aggregation/plaid";
 import { createSupabaseVault } from "@wealth/aggregation/vault";
 import { FUNNEL_EVENTS } from "@wealth/core";
-import { applyAllRulesForUser } from "@wealth/db/categories";
+import { applyAllRulesForUser, autoAssignTransfersForUser } from "@wealth/db/categories";
 import { emitFunnel } from "@wealth/db/emit";
 import { inngest } from "../client";
 import { settleHistory } from "./settle";
@@ -172,6 +172,15 @@ async function syncConnection(
   await step.run("apply-category-rules", async () => {
     const svc = createServiceSupabase();
     await applyAllRulesForUser(svc, userId);
+  });
+
+  // WLT-22-5 — route freshly-synced transfers/payments to the protected
+  // "Transfers & Payments" category so they don't inflate spending. A no-op until
+  // the user's protected category is seeded (first /budget load); never clobbers a
+  // 'user'/'rule' assignment. Runs after rules so a merchant rule wins on overlap.
+  await step.run("auto-assign-transfers", async () => {
+    const svc = createServiceSupabase();
+    await autoAssignTransfersForUser(svc, userId);
   });
 
   await step.run("emit-sync-completed", async () => {

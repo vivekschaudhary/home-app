@@ -5,19 +5,29 @@
 // in @wealth/db/categories — this file is the WRITE + management side.
 
 import { createServerSupabase } from "@vc1023/passkey-2fa";
-import { FUNNEL_EVENTS, isEssentialCategory, normalizeMerchant } from "@wealth/core";
-import { applyRulesToTransactions } from "@wealth/db/categories";
+import { FUNNEL_EVENTS, PROTECTED_TRANSFERS_CATEGORY, isEssentialCategory, normalizeMerchant } from "@wealth/core";
+import { applyRulesToTransactions, autoAssignTransfers } from "@wealth/db/categories";
 import { emitFunnel } from "@wealth/db/emit";
 
 type Supa = Awaited<ReturnType<typeof createServerSupabase>>;
 
 export type CategoryKind = "essential" | "discretionary";
+export type CategorySource = "seed" | "custom" | "system";
 export interface UserCategory {
   id: string;
   name: string;
   kind: CategoryKind;
-  source: "seed" | "custom";
+  source: CategorySource;
+  /** WLT-22-5: false ⇒ excluded from spending (the protected "Transfers & Payments"). */
+  countsAsSpending: boolean;
 }
+
+// WLT-22-5 — the protected category name lives in @wealth/core
+// (PROTECTED_TRANSFERS_CATEGORY), shared by the seed, the auto-assign writer, + UI.
+// Provider primary categories we stop seeding as their own spend categories —
+// their txns route to the protected bucket instead (INCOME is a credit, never a
+// spend row). Already-seeded ones are left alone (deletion = category-management).
+const NON_SPEND_SEED_SKIP = new Set(["TRANSFER_IN", "TRANSFER_OUT", "INCOME"]);
 
 export type CategoryWriteError = "invalid" | "duplicate" | "save_failed";
 
@@ -35,6 +45,7 @@ export function categoriesToSeed(
   const have = new Set(existingNames.map((n) => n.toLowerCase()));
   return distinct
     .filter((name) => !have.has(name.toLowerCase()))
+    .filter((name) => !NON_SPEND_SEED_SKIP.has(name)) // WLT-22-5 — transfers/income route to the protected bucket, not their own row
     .map((name) => ({ name, kind: isEssentialCategory(name) ? "essential" : "discretionary", source: "seed" }));
 }
 
@@ -49,15 +60,33 @@ export function categoriesToSeed(
 export async function ensureSeededCategories(userId: string, supabase: Supa): Promise<void> {
   const [{ data: txnCats }, { data: existing }] = await Promise.all([
     supabase.from("transactions").select("category").eq("user_id", userId).not("category", "is", null),
-    supabase.from("categories").select("name").eq("user_id", userId),
+    supabase.from("categories").select("name, source").eq("user_id", userId),
   ]);
   const present = (txnCats ?? []).map((r) => (r as { category: string | null }).category);
-  const existingNames = (existing ?? []).map((r) => (r as { name: string }).name);
+  const existingRows = (existing ?? []) as { name: string; source: CategorySource }[];
+  const existingNames = existingRows.map((r) => r.name);
   const toInsert = categoriesToSeed(present, existingNames).map((row) => ({ ...row, user_id: userId }));
-  if (toInsert.length === 0) return;
-  // A concurrent seed could race; the unique index protects integrity, so a
-  // duplicate error here is benign (the rows exist either way).
-  await supabase.from("categories").insert(toInsert);
+  if (toInsert.length > 0) {
+    // A concurrent seed could race; the unique index protects integrity, so a
+    // duplicate error here is benign (the rows exist either way).
+    await supabase.from("categories").insert(toInsert);
+  }
+
+  // WLT-22-5 — ensure the ONE protected "Transfers & Payments" category and, the
+  // first time it's created, back-assign the user's whole transfer/payment history
+  // to it. Read-diff-insert (the `(user_id, lower(name))` unique index reserves the
+  // name + makes it idempotent). The history back-assign runs ONLY in the branch
+  // that just created it, so a normal load is one cheap existence check; sync keeps
+  // new rows assigned thereafter. `ignoreDuplicates` makes even a racy double-run a no-op.
+  const hasProtected = existingRows.some((r) => r.source === "system" && r.name === PROTECTED_TRANSFERS_CATEGORY);
+  if (!hasProtected) {
+    const { data: created } = await supabase
+      .from("categories")
+      .insert({ user_id: userId, name: PROTECTED_TRANSFERS_CATEGORY, kind: "discretionary", source: "system", counts_as_spending: false })
+      .select("id")
+      .maybeSingle();
+    if (created) await autoAssignTransfers(supabase, userId, (created as { id: string }).id);
+  }
 }
 
 /** The user's category set (seeding first so a fresh user has their provider categories). */
@@ -66,12 +95,12 @@ export async function readCategories(userId: string): Promise<UserCategory[]> {
   await ensureSeededCategories(userId, supabase);
   const { data } = await supabase
     .from("categories")
-    .select("id, name, kind, source")
+    .select("id, name, kind, source, counts_as_spending")
     .eq("user_id", userId)
     .order("name", { ascending: true });
   return (data ?? []).map((r) => {
-    const row = r as { id: string; name: string; kind: CategoryKind; source: "seed" | "custom" };
-    return { id: row.id, name: row.name, kind: row.kind, source: row.source };
+    const row = r as { id: string; name: string; kind: CategoryKind; source: CategorySource; counts_as_spending: boolean };
+    return { id: row.id, name: row.name, kind: row.kind, source: row.source, countsAsSpending: row.counts_as_spending };
   });
 }
 
@@ -113,8 +142,9 @@ export async function createCategory(
     return { ok: false, error: error?.code === "23505" ? "duplicate" : "save_failed" };
   }
   await emitFunnel(FUNNEL_EVENTS.CATEGORY_CREATED, userId, {});
-  const row = data as { id: string; name: string; kind: CategoryKind; source: "seed" | "custom" };
-  return { ok: true, category: { id: row.id, name: row.name, kind: row.kind, source: row.source } };
+  const row = data as { id: string; name: string; kind: CategoryKind; source: CategorySource };
+  // A user-created custom category always counts as spending (DB default true).
+  return { ok: true, category: { id: row.id, name: row.name, kind: row.kind, source: row.source, countsAsSpending: true } };
 }
 
 /**

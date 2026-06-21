@@ -23,7 +23,7 @@ import {
   selectPromptedAction,
 } from "@wealth/core";
 import { emitAudit, emitFunnel } from "@wealth/db/emit";
-import { readCategoryAssignments } from "@wealth/db/categories";
+import { readCategoryAssignments, readCategorySpendingFlags } from "@wealth/db/categories";
 import { readAccountBalances } from "./aggregation-read";
 
 /** The top open/surfaced anomaly to show (WLT-18). amount/category/date only — no PII. */
@@ -173,29 +173,36 @@ async function readRecentSpending(userId: string): Promise<SpendingTxn[]> {
   // WLT-22-2: resolve through the ONE shared helper (saved ?? Plaid) so "where
   // your money went" groups by the user's category, consistent with budget +
   // anomaly — a recategorization shifts every surface together (the guardrail).
-  const [{ data }, assignments] = await Promise.all([
+  const [{ data }, assignments, spendingFlags] = await Promise.all([
     supabase
       .from("transactions")
       .select("dedup_key, direction, category, amount, occurred_on")
       .eq("user_id", userId)
       .gte("occurred_on", since),
     readCategoryAssignments(supabase, userId),
+    readCategorySpendingFlags(supabase, userId),
   ]);
-  return (data ?? []).map((r) => {
-    const row = r as {
-      dedup_key: string;
-      direction: string;
-      category: string | null;
-      amount: number | string;
-      occurred_on: string;
-    };
-    return {
-      direction: row.direction,
-      category: effectiveCategory(row.category, assignments.get(row.dedup_key)),
-      amount: Number(row.amount), // numeric → string via PostgREST; normalize
-      occurredOn: row.occurred_on,
-    };
-  });
+  // WLT-22-5: drop transfers/payments before the comparison — recap has no
+  // "show excluded" surface, so the exclusion is a reader-level filter (the same
+  // AC4 guardrail the budget applies, keeping every surface reconciled).
+  const countsAsSpending = (name: string | null) => spendingFlags.get(name ?? "") ?? true;
+  return (data ?? [])
+    .map((r) => {
+      const row = r as {
+        dedup_key: string;
+        direction: string;
+        category: string | null;
+        amount: number | string;
+        occurred_on: string;
+      };
+      return {
+        direction: row.direction,
+        category: effectiveCategory(row.category, assignments.get(row.dedup_key)),
+        amount: Number(row.amount), // numeric → string via PostgREST; normalize
+        occurredOn: row.occurred_on,
+      };
+    })
+    .filter((t) => countsAsSpending(t.category));
 }
 
 export type RecapActionResult =

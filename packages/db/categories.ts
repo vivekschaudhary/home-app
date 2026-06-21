@@ -1,5 +1,5 @@
 import { createServiceSupabase } from "@vc1023/passkey-2fa";
-import { matchRuleAssignments } from "@wealth/core";
+import { PROTECTED_TRANSFERS_CATEGORY, matchRuleAssignments, transfersToAutoAssign } from "@wealth/core";
 import { readAllPaged } from "./paged";
 
 // WLT-22-2 — the ONE shared read of a user's saved category assignments, used by
@@ -49,6 +49,21 @@ export async function readCategoryAssignments(
     const name = idToName.get(a.category_id);
     if (name) out.set(a.dedup_key, name);
   }
+  return out;
+}
+
+/**
+ * WLT-22-5 — `name → counts_as_spending` for the user's categories. The shared
+ * read (like `readCategoryAssignments`) used by EVERY grouping reader (budget,
+ * recap, anomaly) so they drop transfers/payments from spend the same way. Works
+ * under either client (RLS app session or service-role job); default true for any
+ * name absent here (an unseeded user is identical to today). `categories` is
+ * bounded per user (a handful), so a single read — no pagination needed.
+ */
+export async function readCategorySpendingFlags(client: SupabaseClientT, userId: string): Promise<Map<string, boolean>> {
+  const { data } = await client.from("categories").select("name, counts_as_spending").eq("user_id", userId);
+  const out = new Map<string, boolean>();
+  for (const r of (data ?? []) as { name: string; counts_as_spending: boolean }[]) out.set(r.name, r.counts_as_spending);
   return out;
 }
 
@@ -170,4 +185,82 @@ export async function applyRulesToTransactions(
 /** Read the user's rules and apply them all — the sync-time entry point. */
 export async function applyAllRulesForUser(client: SupabaseClientT, userId: string): Promise<number> {
   return applyRulesToTransactions(client, userId, await readRules(client, userId));
+}
+
+/**
+ * WLT-22-5 — auto-assign the user's transfer/payment transactions to the protected
+ * "Transfers & Payments" category so they drop out of spending. Writes
+ * `assigned_by='system'` for every `kind ∈ {transfer,payment}` row that has no
+ * existing assignment; `ignoreDuplicates` means a `'user'`/`'rule'`/prior `'system'`
+ * row is NEVER clobbered (precedence: user > rule > system). Idempotent: a re-run
+ * writes nothing new. Both reads paginate past the 1000-row cap (FIX-2026-06-20c).
+ * Works under either client (RLS app session or service-role sync job).
+ */
+export async function autoAssignTransfers(
+  client: SupabaseClientT,
+  userId: string,
+  protectedCategoryId: string,
+): Promise<number> {
+  const txns = await readAllPaged<{ dedup_key: string; kind: string }>(
+    (from, to) =>
+      client
+        .from("transactions")
+        .select("dedup_key, kind")
+        .eq("user_id", userId)
+        .is("superseded_by", null)
+        .is("removed_at", null)
+        .in("kind", ["transfer", "payment"])
+        .order("dedup_key", { ascending: true })
+        .range(from, to),
+    "auto-assign-transfers",
+  );
+  if (txns.length === 0) return 0;
+  // The user's explicit per-transaction choices — never overwritten (a user who
+  // deliberately calls a transfer "spending" keeps it).
+  const userOwned = new Set(
+    (
+      await readAllPaged<{ dedup_key: string }>(
+        (from, to) =>
+          client
+            .from("transaction_categories")
+            .select("dedup_key")
+            .eq("user_id", userId)
+            .eq("assigned_by", "user")
+            .order("dedup_key", { ascending: true })
+            .range(from, to),
+        "auto-assign-transfers",
+      )
+    ).map((a) => a.dedup_key),
+  );
+  const dedupKeys = transfersToAutoAssign(
+    txns.map((t) => ({ dedupKey: t.dedup_key, kind: t.kind })),
+    userOwned,
+  );
+  if (dedupKeys.length === 0) return 0;
+  const toWrite = dedupKeys.map((dedup_key) => ({
+    user_id: userId,
+    dedup_key,
+    category_id: protectedCategoryId,
+    assigned_by: "system" as const,
+  }));
+  for (let i = 0; i < toWrite.length; i += 500) {
+    const { error } = await client
+      .from("transaction_categories")
+      .upsert(toWrite.slice(i, i + 500), { onConflict: "user_id,dedup_key", ignoreDuplicates: true });
+    if (error) throw new Error(`[auto-assign-transfers] insert failed for ${userId}: ${error.message}`);
+  }
+  return toWrite.length;
+}
+
+/** Look up the user's protected category, then auto-assign — the sync-time entry point. */
+export async function autoAssignTransfersForUser(client: SupabaseClientT, userId: string): Promise<number> {
+  const { data } = await client
+    .from("categories")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("source", "system")
+    .eq("name", PROTECTED_TRANSFERS_CATEGORY)
+    .maybeSingle();
+  if (!data) return 0; // not seeded yet — first /budget load seeds + back-assigns
+  return autoAssignTransfers(client, userId, (data as { id: string }).id);
 }

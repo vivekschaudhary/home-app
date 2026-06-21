@@ -22,5 +22,15 @@ describe("category resolution guard (AC4)", () => {
       expect(src, `${rel} must call effectiveCategory`).toContain("effectiveCategory(");
       expect(src, `${rel} must read the shared assignment map`).toContain("readCategoryAssignments(");
     });
+
+    // WLT-22-5 — every grouping reader must ALSO honor the spending flag so
+    // transfers/payments drop from spend the same way (the AC4 cross-surface
+    // reconcile). A new reader that groups by category must thread it too, or the
+    // double-count resurfaces on that surface.
+    it(`${rel} honors counts_as_spending (excludes transfers/payments)`, () => {
+      const src = readFileSync(join(ROOT, rel), "utf8");
+      expect(src, `${rel} must thread the countsAsSpending predicate`).toContain("countsAsSpending");
+      expect(src, `${rel} must read the shared spending-flags map`).toContain("readCategorySpendingFlags(");
+    });
   }
 });

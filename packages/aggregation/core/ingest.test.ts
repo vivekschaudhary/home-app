@@ -52,6 +52,7 @@ const txn = (id: string): NormalizedTransaction => ({
   description: "x",
   merchant: null,
   category: null,
+  kind: "spend",
   occurredOn: "2026-06-01",
   pending: false,
   source: "plaid",

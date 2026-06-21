@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { effectiveCategory, matchRuleAssignments, normalizeMerchant, resolveCategory } from "./categories";
+import { effectiveCategory, matchRuleAssignments, normalizeMerchant, resolveCategory, transfersToAutoAssign } from "./categories";
 
 describe("effectiveCategory (WLT-22-2 — saved ?? Plaid)", () => {
   it("the SAVED category wins over Plaid's", () => {
@@ -179,5 +179,28 @@ describe("matchRuleAssignments (WLT-22-3 — which transactions a rule writes)",
       legacy,
     );
     expect(out.map((m) => m.dedupKey).sort()).toEqual(["dk-1", "dk-2"]);
+  });
+});
+
+describe("transfersToAutoAssign (WLT-22-5 — which txns route to the protected bucket)", () => {
+  const txns = [
+    { dedupKey: "t-transfer", kind: "transfer" },
+    { dedupKey: "t-payment", kind: "payment" }, // a credit-card payment
+    { dedupKey: "t-mortgage", kind: "spend" }, // LOAN_PAYMENTS mortgage → spend
+    { dedupKey: "t-fee", kind: "fee" }, // a bank fee is real spend
+    { dedupKey: "t-income", kind: "income" }, // a credit, never spending
+    { dedupKey: "t-groceries", kind: "spend" },
+  ];
+
+  it("selects ONLY transfer + payment kinds (fee/income/spend are never set aside)", () => {
+    expect(transfersToAutoAssign(txns, new Set()).sort()).toEqual(["t-payment", "t-transfer"]);
+  });
+
+  it("never re-assigns a transaction the user already owns (user's choice wins)", () => {
+    expect(transfersToAutoAssign(txns, new Set(["t-transfer"]))).toEqual(["t-payment"]);
+  });
+
+  it("returns nothing when there are no transfers/payments", () => {
+    expect(transfersToAutoAssign([{ dedupKey: "x", kind: "spend" }], new Set())).toEqual([]);
   });
 });
