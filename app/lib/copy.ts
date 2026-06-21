@@ -485,6 +485,10 @@ export const COPY = {
     pickerCurrentHint: "Now: {category}",
     saving: "Saving…",
     saved: "Moved to {category}",
+    // WLT-22-5 — moving a transaction in/out of "Transfers & Payments".
+    excludeOption: "Transfers & Payments (exclude from spending)",
+    savedExcluded: "Moved to Transfers & Payments — excluded from spending",
+    savedIncluded: "Moved to {category} — counts as spending again",
     error: "We couldn't save that just now — try again.",
     errorNetwork: "You appear to be offline — try again when you're back.",
     errorInvalid: "That didn't go through — give it another try.",
@@ -519,6 +523,22 @@ export const COPY = {
     error: "We couldn't apply that just now — try again.",
     errorNetwork: "You appear to be offline — try again when you're back.",
     retry: "Try again",
+  },
+  // WLT-22-5 — the protected "Transfers & Payments" group + the review nudge.
+  // docs/bets/WLT-22/stories/WLT-22-5/copy.md verbatim.
+  budgetTransfers: {
+    groupLabel: "Transfers & Payments",
+    groupCaption: "Not counted as spending",
+    groupHelp: "Money moved between your accounts and credit-card payments — counting these would double-count what you already spent.",
+    nudgeOne: "We set aside 1 transfer or payment so it doesn't inflate your spending.",
+    nudgeMany: "We set aside {count} transfers & payments so they don't inflate your spending.",
+    nudgeReview: "Review",
+    nudgeDismiss: "Dismiss",
+  },
+  budgetTransfersA11y: {
+    groupHeading: "Transfers & Payments — not counted as spending",
+    groupTotal: "Transfers & Payments, {amount}, not counted as spending",
+    nudgeRegion: "Transfers set aside",
   },
   // WLT-23-1 — the Transactions ledger. docs/bets/WLT-23/stories/WLT-23-1/copy.md verbatim.
   transactions: {

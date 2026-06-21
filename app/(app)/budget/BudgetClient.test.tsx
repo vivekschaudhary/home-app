@@ -59,6 +59,7 @@ const VIEW: BudgetViewDTO = {
     "2025-07", "2025-08", "2025-09", "2025-10", "2025-11", "2025-12",
     "2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06",
   ],
+  setAsideCount: 0,
 };
 
 // Headless UI (v2) — used by the WLT-22-2 recategorize picker — reaches for these
@@ -94,8 +95,9 @@ beforeEach(() => {
   fetchCategoriesMock.mockResolvedValue({
     ok: true,
     categories: [
-      { id: "c-food", name: "FOOD_AND_DRINK", kind: "essential", source: "seed" },
-      { id: "c-rent", name: "RENT", kind: "essential", source: "seed" },
+      { id: "c-food", name: "FOOD_AND_DRINK", kind: "essential", source: "seed", countsAsSpending: true },
+      { id: "c-rent", name: "RENT", kind: "essential", source: "seed", countsAsSpending: true },
+      { id: "c-transfers", name: "Transfers & Payments", kind: "discretionary", source: "system", countsAsSpending: false },
     ],
   });
   recategorizeTransactionMock.mockResolvedValue({ ok: true, count: 1 });
@@ -125,7 +127,7 @@ describe("BudgetClient", () => {
   it("honest empty state when there's no data", () => {
     render(
       <BudgetClient
-        initial={{ rows: [], asOfMonth: "2026-06", typicalMonthlyTotal: null, hasData: false, series: {}, seriesMonths: [] }}
+        initial={{ rows: [], asOfMonth: "2026-06", typicalMonthlyTotal: null, hasData: false, series: {}, seriesMonths: [], setAsideCount: 0 }}
       />,
     );
     expect(screen.getByText("Nothing to budget yet")).toBeTruthy();
@@ -465,6 +467,7 @@ describe("BudgetClient", () => {
       hasData: true,
       series: {},
       seriesMonths: [],
+      setAsideCount: 0,
     };
     render(<BudgetClient initial={view} />);
     expect(screen.queryByRole("button", { name: /Show the transactions in Insurance/ })).toBeNull();
@@ -477,5 +480,48 @@ describe("BudgetClient", () => {
     // pick a category not already shown (Food & Travel are present)
     fireEvent.click(screen.getByRole("button", { name: "Entertainment" }));
     expect(screen.getByText("Entertainment")).toBeTruthy(); // a new row appears
+  });
+});
+
+describe("WLT-22-5 — Transfers & Payments group + review nudge", () => {
+  const withTransfers: BudgetViewDTO = {
+    rows: [
+      { category: "FOOD_AND_DRINK", label: "Food And Drink", recommended: 500, actualThisMonth: 520, budget: null, effectiveCap: null, status: "none", countsAsSpending: true },
+      { category: "Transfers & Payments", label: "Transfers & Payments", recommended: null, actualThisMonth: 9000, budget: null, effectiveCap: null, status: "none", countsAsSpending: false },
+    ],
+    asOfMonth: "2026-06",
+    typicalMonthlyTotal: 520,
+    hasData: true,
+    series: {},
+    seriesMonths: [],
+    setAsideCount: 3,
+  };
+
+  it("renders the non-spending group (caption + its total) below the spend table", async () => {
+    localStorage.clear();
+    fetchBudgetMock.mockResolvedValue({ ok: true, view: withTransfers });
+    render(<BudgetClient initial={withTransfers} />);
+    expect(await screen.findByText(COPY.budgetTransfers.groupCaption, { exact: false })).toBeTruthy();
+    expect(screen.getByText("$9,000.00")).toBeTruthy(); // the excluded total is shown, not hidden
+    expect(screen.getByText("Food And Drink")).toBeTruthy(); // the spend row is still there
+  });
+
+  it("shows the dismissible review nudge when transfers were set aside; dismiss is sticky", async () => {
+    localStorage.clear();
+    fetchBudgetMock.mockResolvedValue({ ok: true, view: withTransfers });
+    render(<BudgetClient initial={withTransfers} />);
+    expect(await screen.findByText(/We set aside 3 transfers/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: COPY.budgetTransfers.nudgeDismiss }));
+    await waitFor(() => expect(screen.queryByText(/We set aside 3 transfers/)).toBeNull());
+    expect(localStorage.getItem("wlt22-5-transfers-nudge-dismissed")).toBe("1");
+  });
+
+  it("shows no nudge and no group when nothing was set aside", async () => {
+    localStorage.clear();
+    fetchBudgetMock.mockResolvedValue({ ok: true, view: { ...withTransfers, rows: [withTransfers.rows[0]], setAsideCount: 0 } });
+    render(<BudgetClient initial={{ ...withTransfers, rows: [withTransfers.rows[0]], setAsideCount: 0 }} />);
+    await screen.findByText("Food And Drink");
+    expect(screen.queryByText(/set aside/)).toBeNull();
+    expect(screen.queryByText(COPY.budgetTransfers.groupCaption, { exact: false })).toBeNull();
   });
 });

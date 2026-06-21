@@ -10,6 +10,8 @@ export interface BudgetViewDTO {
   hasData: boolean;
   series: Record<string, number[]>;
   seriesMonths: string[];
+  /** WLT-22-5: count of this-month txns set aside as non-spending — drives the nudge. */
+  setAsideCount: number;
 }
 
 export type BudgetError = "invalid" | "server" | "network";
@@ -61,7 +63,8 @@ export interface CategoryDTO {
   id: string;
   name: string;
   kind: "essential" | "discretionary";
-  source: "seed" | "custom";
+  source: "seed" | "custom" | "system"; // WLT-22-5 — 'system' = the protected Transfers & Payments
+  countsAsSpending: boolean; // WLT-22-5 — false ⇒ the "exclude from spending" target
 }
 
 export async function fetchCategoryTransactions(

@@ -24,6 +24,9 @@ import type { CreateResult, RecatResult } from "./CategoryPicker";
 import { YearSpread } from "./YearSpread";
 
 const C = COPY.budget;
+const TR = COPY.budgetTransfers; // WLT-22-5
+const TR_A = COPY.budgetTransfersA11y;
+const NUDGE_KEY = "wlt22-5-transfers-nudge-dismissed";
 
 function money(n: number): string {
   try {
@@ -86,6 +89,27 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
     const present = new Set(rows.map((r) => r.category));
     return BUDGETABLE_CATEGORIES.filter((c) => !present.has(c));
   }, [rows]);
+
+  // WLT-22-5 — split spend rows from the non-spending "Transfers & Payments" group.
+  const spendRows = useMemo(() => rows.filter((r) => r.countsAsSpending), [rows]);
+  const excludedRows = useMemo(() => rows.filter((r) => !r.countsAsSpending), [rows]);
+  const excludedRef = useRef<HTMLDivElement>(null);
+  const [nudgeDismissed, setNudgeDismissed] = useState(false);
+  useEffect(() => {
+    try {
+      setNudgeDismissed(localStorage.getItem(NUDGE_KEY) === "1");
+    } catch {
+      /* localStorage unavailable — show the nudge (non-blocking either way) */
+    }
+  }, []);
+  function dismissNudge() {
+    setNudgeDismissed(true); // sticky — never re-nags
+    try {
+      localStorage.setItem(NUDGE_KEY, "1");
+    } catch {
+      /* ignore */
+    }
+  }
 
   function startEdit(row: BudgetRow) {
     setEditing(row.category);
@@ -202,8 +226,18 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
       if (!applyToMerchant) {
         // The single-move success is the "Moved to…" toast (a rule shows the
         // picker's own counted success — no toast, to avoid double feedback).
-        const destName = categories.find((c) => c.id === categoryId)?.name ?? "";
-        setToast(fill(COPY.budgetRecat.saved, { category: humanizeCategory(destName || null) }));
+        // WLT-22-5 — name the spending EFFECT when moving in/out of the protected
+        // bucket: excluded ("excluded from spending") vs back-in ("counts again").
+        const dest = categories.find((c) => c.id === categoryId);
+        const destName = humanizeCategory(dest?.name || null);
+        const srcExcluded = categories.find((c) => c.name === sourceCategory)?.countsAsSpending === false;
+        const msg =
+          dest?.countsAsSpending === false
+            ? COPY.budgetRecat.savedExcluded
+            : srcExcluded
+              ? fill(COPY.budgetRecat.savedIncluded, { category: destName })
+              : fill(COPY.budgetRecat.saved, { category: destName });
+        setToast(msg);
       }
       // Reconcile the line-item popovers: drop every cached drill (so any reopened
       // one refetches the moved item) and refetch the source — the popover the
@@ -273,6 +307,30 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
 
   return (
     <div className="mt-6">
+      {/* WLT-22-5 — a one-time, dismissible heads-up that transfers were set aside. */}
+      {view.setAsideCount > 0 && !nudgeDismissed ? (
+        <div
+          role="region"
+          aria-label={TR_A.nudgeRegion}
+          className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-gray-200 bg-gray-50 px-4 py-3 text-sm"
+        >
+          <span className="text-gray-700">
+            {view.setAsideCount === 1 ? TR.nudgeOne : fill(TR.nudgeMany, { count: String(view.setAsideCount) })}
+          </span>
+          <div className="flex shrink-0 gap-3">
+            <button
+              type="button"
+              onClick={() => excludedRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+              className="font-medium text-gray-900 underline"
+            >
+              {TR.nudgeReview}
+            </button>
+            <button type="button" onClick={dismissNudge} className="text-gray-500 underline">
+              {TR.nudgeDismiss}
+            </button>
+          </div>
+        </div>
+      ) : null}
       <table className="w-full border-collapse text-sm" aria-label={COPY.budgetA11y.table}>
         <thead className="hidden md:table-header-group">
           <tr className="border-b border-gray-200 text-left text-xs uppercase tracking-wide text-gray-500">
@@ -283,7 +341,7 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => {
+          {spendRows.map((row) => {
             const series = view.series[row.category];
             const hasSeries = Array.isArray(series) && series.some((v) => v > 0);
             return (
@@ -466,6 +524,53 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
           })}
         </tbody>
       </table>
+
+      {/* WLT-22-5 — the visible "Transfers & Payments" group: shown + drillable so
+          the user sees what was set aside, but plainly marked NOT counted as spend. */}
+      {excludedRows.length > 0 ? (
+        <div ref={excludedRef} className="mt-8 border-t-2 border-gray-200 pt-4" aria-label={TR_A.groupHeading} role="group">
+          <h2 className="text-sm font-semibold text-gray-900">{TR.groupLabel}</h2>
+          <p className="mt-0.5 max-w-prose text-xs text-gray-500">
+            <span className="font-medium text-gray-600">{TR.groupCaption}.</span> {TR.groupHelp}
+          </p>
+          <ul className="mt-2 divide-y divide-gray-100">
+            {excludedRows.map((row) => (
+              <li key={row.category} className="flex items-center justify-between gap-3 py-2 text-sm">
+                <span className="text-gray-700">{row.label}</span>
+                {row.actualThisMonth > 0 ? (
+                  <Popover className="relative inline-block">
+                    <PopoverButton
+                      onClick={() => onDrillOpen(row.category)}
+                      aria-label={fill(TR_A.groupTotal, { amount: money(row.actualThisMonth) })}
+                      className="text-gray-600 underline decoration-dotted decoration-gray-400 underline-offset-2"
+                    >
+                      {money(row.actualThisMonth)}
+                    </PopoverButton>
+                    <PopoverPanel
+                      anchor="bottom end"
+                      aria-label={fill(A_D.list, { category: row.label })}
+                      className="z-50 max-h-[60vh] w-[min(28rem,92vw)] overflow-auto rounded-md border border-gray-200 bg-white p-3 text-left shadow-lg"
+                    >
+                      <CategoryTransactions
+                        label={row.label}
+                        state={drillCache[row.category] ?? { status: "loading" }}
+                        onRetry={() => loadDrill(row.category)}
+                        categories={categories}
+                        onRecategorize={(dedupKey, categoryId, applyToMerchant) =>
+                          recategorize(row.category, dedupKey, categoryId, applyToMerchant)
+                        }
+                        onCreateCategory={createCat}
+                      />
+                    </PopoverPanel>
+                  </Popover>
+                ) : (
+                  <span className="text-gray-500">{money(row.actualThisMonth)}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       {/* Add a category (the picker) — pre-set a budget on a category you haven't spent in yet. */}
       <div className="mt-4">

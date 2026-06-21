@@ -169,9 +169,11 @@ export function CategoryPicker({
                 onClick={() => pick(c.id)}
                 className="block w-full px-3 py-1.5 text-left text-sm text-gray-900 data-[focus]:bg-gray-100"
               >
-                {c.name === current
-                  ? fill(RA.categoryOptionCurrent, { category: humanizeCategory(c.name) })
-                  : humanizeCategory(c.name)}
+                {!c.countsAsSpending
+                  ? R.excludeOption // WLT-22-5 — the explicit "exclude from spending" target
+                  : c.name === current
+                    ? fill(RA.categoryOptionCurrent, { category: humanizeCategory(c.name) })
+                    : humanizeCategory(c.name)}
               </button>
             </MenuItem>
           ))}

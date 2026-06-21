@@ -13,8 +13,8 @@ const fetchCategoriesMock = vi.fn(() =>
   Promise.resolve({
     ok: true,
     categories: [
-      { id: "c1", name: "FOOD_AND_DRINK", kind: "discretionary", source: "seed" },
-      { id: "c2", name: "GROCERIES", kind: "essential", source: "seed" },
+      { id: "c1", name: "FOOD_AND_DRINK", kind: "discretionary", source: "seed", countsAsSpending: true },
+      { id: "c2", name: "GROCERIES", kind: "essential", source: "seed", countsAsSpending: true },
     ],
   }),
 );
