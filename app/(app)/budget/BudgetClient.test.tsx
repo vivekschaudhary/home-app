@@ -59,6 +59,7 @@ const VIEW: BudgetViewDTO = {
     "2025-07", "2025-08", "2025-09", "2025-10", "2025-11", "2025-12",
     "2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06",
   ],
+  setAsideCount: 0,
 };
 
 // Headless UI (v2) — used by the WLT-22-2 recategorize picker — reaches for these
@@ -94,8 +95,9 @@ beforeEach(() => {
   fetchCategoriesMock.mockResolvedValue({
     ok: true,
     categories: [
-      { id: "c-food", name: "FOOD_AND_DRINK", kind: "essential", source: "seed" },
-      { id: "c-rent", name: "RENT", kind: "essential", source: "seed" },
+      { id: "c-food", name: "FOOD_AND_DRINK", kind: "essential", source: "seed", countsAsSpending: true },
+      { id: "c-rent", name: "RENT", kind: "essential", source: "seed", countsAsSpending: true },
+      { id: "c-transfers", name: "Transfers & Payments", kind: "discretionary", source: "system", countsAsSpending: false },
     ],
   });
   recategorizeTransactionMock.mockResolvedValue({ ok: true, count: 1 });
@@ -114,7 +116,7 @@ afterEach(() => {
 
 describe("BudgetClient", () => {
   it("renders rows with recommended, actual, over/under; '—' for cold-start", () => {
-    render(<BudgetClient initial={VIEW} />);
+    render(<BudgetClient initial={VIEW} userId="u1" />);
     expect(screen.getByText("Food And Drink")).toBeTruthy();
     expect(screen.getByText("$520.00")).toBeTruthy(); // this-month actual
     expect(screen.getByText(/\$20\.00 over/)).toBeTruthy(); // 520 over a 500 cap
@@ -125,7 +127,8 @@ describe("BudgetClient", () => {
   it("honest empty state when there's no data", () => {
     render(
       <BudgetClient
-        initial={{ rows: [], asOfMonth: "2026-06", typicalMonthlyTotal: null, hasData: false, series: {}, seriesMonths: [] }}
+        initial={{ rows: [], asOfMonth: "2026-06", typicalMonthlyTotal: null, hasData: false, series: {}, seriesMonths: [], setAsideCount: 0 }}
+        userId="u1"
       />,
     );
     expect(screen.getByText("Nothing to budget yet")).toBeTruthy();
@@ -133,7 +136,7 @@ describe("BudgetClient", () => {
   });
 
   it("set a dollar budget → POSTs limitAmount + shows the saved toast", async () => {
-    render(<BudgetClient initial={VIEW} />);
+    render(<BudgetClient initial={VIEW} userId="u1" />);
     fireEvent.click(screen.getByRole("button", { name: "Set budget" })); // Travel
     const input = screen.getByLabelText("Monthly budget for Travel");
     fireEvent.change(input, { target: { value: "300" } });
@@ -143,7 +146,7 @@ describe("BudgetClient", () => {
   });
 
   it("the % toggle sends limitPercent + shows the resolved helper", async () => {
-    render(<BudgetClient initial={VIEW} />);
+    render(<BudgetClient initial={VIEW} userId="u1" />);
     fireEvent.click(screen.getByRole("button", { name: "Set budget" })); // Travel
     fireEvent.click(screen.getByRole("button", { name: "%" }));
     const input = screen.getByLabelText("Monthly budget for Travel");
@@ -154,7 +157,7 @@ describe("BudgetClient", () => {
   });
 
   it("blocks an invalid amount without calling save (input preserved)", async () => {
-    render(<BudgetClient initial={VIEW} />);
+    render(<BudgetClient initial={VIEW} userId="u1" />);
     fireEvent.click(screen.getByRole("button", { name: "Set budget" }));
     const input = screen.getByLabelText("Monthly budget for Travel") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "0" } });
@@ -165,13 +168,13 @@ describe("BudgetClient", () => {
   });
 
   it("'Use this' prefills the amount editor with the recommendation", () => {
-    render(<BudgetClient initial={VIEW} />);
+    render(<BudgetClient initial={VIEW} userId="u1" />);
     fireEvent.click(screen.getByRole("button", { name: "Use this" })); // Food (recommended 500)
     expect((screen.getByLabelText("Monthly budget for Food And Drink") as HTMLInputElement).value).toBe("500");
   });
 
   it("expands a category's year spread (chart + sr data table); records the view; TRAVEL has no toggle", async () => {
-    render(<BudgetClient initial={VIEW} />);
+    render(<BudgetClient initial={VIEW} userId="u1" />);
     // FOOD has a series → a "View the year" toggle; TRAVEL has none.
     const toggles = screen.getAllByRole("button", { name: /Show the last 12 months/ });
     expect(toggles).toHaveLength(1); // only FOOD
@@ -202,7 +205,7 @@ describe("BudgetClient", () => {
       ],
       total: 520,
     });
-    render(<BudgetClient initial={VIEW} />);
+    render(<BudgetClient initial={VIEW} userId="u1" />);
     fireEvent.click(screen.getByRole("button", { name: /Show the transactions in Food And Drink this month/ }));
     await waitFor(() => expect(fetchCategoryTransactionsMock).toHaveBeenCalledWith("FOOD_AND_DRINK", "2026-06"));
     expect(await screen.findByText("Trader Joe's")).toBeTruthy();
@@ -217,7 +220,7 @@ describe("BudgetClient", () => {
       items: [{ dedupKey: "dk", occurredOn: "2026-06-14", merchant: "Trader Joe's", description: "x", amount: 520, category: "FOOD_AND_DRINK" }],
       total: 520,
     });
-    render(<BudgetClient initial={VIEW} />);
+    render(<BudgetClient initial={VIEW} userId="u1" />);
     // The amount is a popover trigger: aria-expanded toggles on open.
     const amountTrigger = screen.getByRole("button", { name: /Show the transactions in Food And Drink this month/ });
     expect(amountTrigger.getAttribute("aria-expanded")).toBe("false");
@@ -241,7 +244,7 @@ describe("BudgetClient", () => {
       ],
       total: 520,
     });
-    render(<BudgetClient initial={VIEW} />);
+    render(<BudgetClient initial={VIEW} userId="u1" />);
     fireEvent.click(screen.getByRole("button", { name: /Show the transactions in Food And Drink this month/ }));
     expect(await screen.findByText("Costco")).toBeTruthy();
     // open the per-item category picker, pick RENT (humanized "Rent")
@@ -264,7 +267,7 @@ describe("BudgetClient", () => {
       total: 520,
     });
     createCategoryMock.mockResolvedValue({ ok: true, category: { id: "c-new", name: "Rent", kind: "discretionary", source: "custom" } });
-    render(<BudgetClient initial={VIEW} />);
+    render(<BudgetClient initial={VIEW} userId="u1" />);
     fireEvent.click(screen.getByRole("button", { name: /Show the transactions in Food And Drink this month/ }));
     expect(await screen.findByText("Costco")).toBeTruthy();
     fireEvent.click(await screen.findByRole("button", { name: /Change the category of Costco/ }));
@@ -290,7 +293,7 @@ describe("BudgetClient", () => {
       ],
       total: 520,
     });
-    render(<BudgetClient initial={VIEW} />);
+    render(<BudgetClient initial={VIEW} userId="u1" />);
     fireEvent.click(screen.getByRole("button", { name: /Show the transactions in Food And Drink this month/ }));
     expect(await screen.findByText("Costco")).toBeTruthy();
     fireEvent.click(await screen.findByRole("button", { name: /Change the category of Costco/ }));
@@ -310,7 +313,7 @@ describe("BudgetClient", () => {
     });
     createCategoryMock.mockResolvedValue({ ok: true, category: { id: "c-coffee", name: "Coffee", kind: "discretionary", source: "custom" } });
     recategorizeTransactionMock.mockResolvedValue({ ok: true, count: 5 });
-    render(<BudgetClient initial={VIEW} />);
+    render(<BudgetClient initial={VIEW} userId="u1" />);
     fireEvent.click(screen.getByRole("button", { name: /Show the transactions in Food And Drink this month/ }));
     expect(await screen.findByText("Starbucks")).toBeTruthy();
     fireEvent.click(await screen.findByRole("button", { name: /Change the category of Starbucks/ }));
@@ -335,7 +338,7 @@ describe("BudgetClient", () => {
       total: 520,
     });
     recategorizeTransactionMock.mockResolvedValue({ ok: false, error: "network" });
-    render(<BudgetClient initial={VIEW} />);
+    render(<BudgetClient initial={VIEW} userId="u1" />);
     fireEvent.click(screen.getByRole("button", { name: /Show the transactions in Food And Drink this month/ }));
     expect(await screen.findByText("Costco")).toBeTruthy();
     fireEvent.click(await screen.findByRole("button", { name: /Change the category of Costco/ }));
@@ -354,7 +357,7 @@ describe("BudgetClient", () => {
       total: 12,
     });
     recategorizeTransactionMock.mockResolvedValue({ ok: true, count: 4 });
-    render(<BudgetClient initial={VIEW} />);
+    render(<BudgetClient initial={VIEW} userId="u1" />);
     fireEvent.click(screen.getByRole("button", { name: /Show the transactions in Food And Drink this month/ }));
     expect(await screen.findByText("Starbucks")).toBeTruthy();
     fireEvent.click(await screen.findByRole("button", { name: /Change the category of Starbucks/ }));
@@ -376,7 +379,7 @@ describe("BudgetClient", () => {
       ],
       total: 40,
     });
-    render(<BudgetClient initial={VIEW} />);
+    render(<BudgetClient initial={VIEW} userId="u1" />);
     fireEvent.click(screen.getByRole("button", { name: /Show the transactions in Food And Drink this month/ }));
     expect(await screen.findByText("Cash withdrawal")).toBeTruthy();
     fireEvent.click(await screen.findByRole("button", { name: /Change the category of Cash withdrawal/ }));
@@ -392,7 +395,7 @@ describe("BudgetClient", () => {
       ],
       total: 520,
     });
-    render(<BudgetClient initial={VIEW} />);
+    render(<BudgetClient initial={VIEW} userId="u1" />);
     fireEvent.click(screen.getByRole("button", { name: /Show the transactions in Food And Drink this month/ }));
     // labelled region (design: "the panel is a labelled region")
     const region = await screen.findByRole("region", { name: "Transactions in Food And Drink this month" });
@@ -406,7 +409,7 @@ describe("BudgetClient", () => {
 
   it("category_drilldown_viewed fires once per category per load — not on retry, refetch, or reopen", async () => {
     fetchCategoryTransactionsMock.mockResolvedValueOnce({ ok: false }); // open #1 errors
-    render(<BudgetClient initial={VIEW} />);
+    render(<BudgetClient initial={VIEW} userId="u1" />);
     const toggle = () =>
       screen.getByRole("button", { name: /(Show|Hide) the transactions in Food And Drink this month/ });
     fireEvent.click(toggle()); // open → counts the view + fetches (errors)
@@ -424,7 +427,7 @@ describe("BudgetClient", () => {
   it("drill-down loading → empty state", async () => {
     let resolve!: (v: { ok: true; items: unknown[]; total: number }) => void;
     fetchCategoryTransactionsMock.mockReturnValue(new Promise((r) => { resolve = r; }));
-    render(<BudgetClient initial={VIEW} />);
+    render(<BudgetClient initial={VIEW} userId="u1" />);
     fireEvent.click(screen.getByRole("button", { name: /Show the transactions in Food And Drink this month/ }));
     expect(screen.getByText("Loading your transactions…")).toBeTruthy(); // loading state
     resolve({ ok: true, items: [], total: 0 });
@@ -433,7 +436,7 @@ describe("BudgetClient", () => {
 
   it("drill-down error state shows a banner + retry that refetches", async () => {
     fetchCategoryTransactionsMock.mockResolvedValueOnce({ ok: false });
-    render(<BudgetClient initial={VIEW} />);
+    render(<BudgetClient initial={VIEW} userId="u1" />);
     fireEvent.click(screen.getByRole("button", { name: /Show the transactions in Food And Drink this month/ }));
     await waitFor(() => expect(screen.getByText("We couldn't load these just now — try again.")).toBeTruthy());
     // retry refetches (this time succeeds)
@@ -465,17 +468,79 @@ describe("BudgetClient", () => {
       hasData: true,
       series: {},
       seriesMonths: [],
+      setAsideCount: 0,
     };
-    render(<BudgetClient initial={view} />);
+    render(<BudgetClient initial={view} userId="u1" />);
     expect(screen.queryByRole("button", { name: /Show the transactions in Insurance/ })).toBeNull();
     expect(screen.getByText("$0.00")).toBeTruthy(); // the amount is plain text, not a button
   });
 
   it("the add-category picker adds a budgetable row", () => {
-    render(<BudgetClient initial={VIEW} />);
+    render(<BudgetClient initial={VIEW} userId="u1" />);
     fireEvent.click(screen.getByRole("button", { name: "Add a category to budget" }));
     // pick a category not already shown (Food & Travel are present)
     fireEvent.click(screen.getByRole("button", { name: "Entertainment" }));
     expect(screen.getByText("Entertainment")).toBeTruthy(); // a new row appears
+  });
+});
+
+describe("WLT-22-5 — Transfers & Payments group + review nudge", () => {
+  const withTransfers: BudgetViewDTO = {
+    rows: [
+      { category: "FOOD_AND_DRINK", label: "Food And Drink", recommended: 500, actualThisMonth: 520, budget: null, effectiveCap: null, status: "none", countsAsSpending: true },
+      { category: "Transfers & Payments", label: "Transfers & Payments", recommended: null, actualThisMonth: 9000, budget: null, effectiveCap: null, status: "none", countsAsSpending: false },
+    ],
+    asOfMonth: "2026-06",
+    typicalMonthlyTotal: 520,
+    hasData: true,
+    series: {},
+    seriesMonths: [],
+    setAsideCount: 3,
+  };
+
+  it("renders the non-spending group (caption + its total) below the spend table", async () => {
+    localStorage.clear();
+    fetchBudgetMock.mockResolvedValue({ ok: true, view: withTransfers });
+    render(<BudgetClient initial={withTransfers} userId="u1" />);
+    expect(await screen.findByText(COPY.budgetTransfers.groupCaption, { exact: false })).toBeTruthy();
+    expect(screen.getByText("$9,000.00")).toBeTruthy(); // the excluded total is shown, not hidden
+    expect(screen.getByText("Food And Drink")).toBeTruthy(); // the spend row is still there
+  });
+
+  it("shows the dismissible review nudge when transfers were set aside; dismiss is sticky", async () => {
+    localStorage.clear();
+    fetchBudgetMock.mockResolvedValue({ ok: true, view: withTransfers });
+    render(<BudgetClient initial={withTransfers} userId="u1" />);
+    expect(await screen.findByText(/We set aside 3 transfers/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: COPY.budgetTransfers.nudgeDismiss }));
+    await waitFor(() => expect(screen.queryByText(/We set aside 3 transfers/)).toBeNull());
+    expect(localStorage.getItem("wlt22-5-transfers-nudge-dismissed:u1")).toBe("1"); // per-user key
+  });
+
+  it("scopes dismissal per user — user A's dismissal doesn't hide user B's nudge", async () => {
+    localStorage.clear();
+    localStorage.setItem("wlt22-5-transfers-nudge-dismissed:userA", "1"); // A already dismissed
+    fetchBudgetMock.mockResolvedValue({ ok: true, view: withTransfers });
+    // B has never dismissed → B still sees their own nudge (no shared browser-wide flag)
+    render(<BudgetClient initial={withTransfers} userId="userB" />);
+    expect(await screen.findByText(/We set aside 3 transfers/)).toBeTruthy();
+  });
+
+  it("does not flash the nudge for a user who already dismissed it (hidden until storage is read)", async () => {
+    localStorage.clear();
+    localStorage.setItem("wlt22-5-transfers-nudge-dismissed:u1", "1");
+    fetchBudgetMock.mockResolvedValue({ ok: true, view: withTransfers });
+    render(<BudgetClient initial={withTransfers} userId="u1" />);
+    await screen.findByText("Food And Drink"); // page rendered
+    expect(screen.queryByText(/We set aside 3 transfers/)).toBeNull(); // never shown, no flash
+  });
+
+  it("shows no nudge and no group when nothing was set aside", async () => {
+    localStorage.clear();
+    fetchBudgetMock.mockResolvedValue({ ok: true, view: { ...withTransfers, rows: [withTransfers.rows[0]], setAsideCount: 0 } });
+    render(<BudgetClient initial={{ ...withTransfers, rows: [withTransfers.rows[0]], setAsideCount: 0 }} userId="u1" />);
+    await screen.findByText("Food And Drink");
+    expect(screen.queryByText(/set aside/)).toBeNull();
+    expect(screen.queryByText(COPY.budgetTransfers.groupCaption, { exact: false })).toBeNull();
   });
 });
