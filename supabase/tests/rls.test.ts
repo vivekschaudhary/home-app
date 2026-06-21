@@ -32,9 +32,21 @@ suite("RLS default-deny cross-tenant", () => {
       JSON.stringify({ sub: uid, role: "authenticated" }),
     ]);
     await client.query("set local role authenticated");
-    const res = await client.query(sql, params);
-    await client.query("reset role");
-    return res;
+    // Savepoint so a query that legitimately RAISES (an RLS with-check violation we
+    // assert with rejects.toThrow) rolls back cleanly instead of poisoning the
+    // surrounding transaction — letting a test make further assertions after an
+    // expected throw. The error still propagates to the caller.
+    await client.query("savepoint asuser_sp");
+    try {
+      const res = await client.query(sql, params);
+      await client.query("release savepoint asuser_sp");
+      await client.query("reset role");
+      return res;
+    } catch (e) {
+      await client.query("rollback to savepoint asuser_sp");
+      await client.query("reset role");
+      throw e;
+    }
   }
 
   it("a tenant sees its own rows; another tenant sees none", async () => {
@@ -158,9 +170,21 @@ suite("intent RLS (WLT-3): owner CRUD", () => {
       JSON.stringify({ sub: uid, role: "authenticated" }),
     ]);
     await client.query("set local role authenticated");
-    const res = await client.query(sql, params);
-    await client.query("reset role");
-    return res;
+    // Savepoint so a query that legitimately RAISES (an RLS with-check violation we
+    // assert with rejects.toThrow) rolls back cleanly instead of poisoning the
+    // surrounding transaction — letting a test make further assertions after an
+    // expected throw. The error still propagates to the caller.
+    await client.query("savepoint asuser_sp");
+    try {
+      const res = await client.query(sql, params);
+      await client.query("release savepoint asuser_sp");
+      await client.query("reset role");
+      return res;
+    } catch (e) {
+      await client.query("rollback to savepoint asuser_sp");
+      await client.query("reset role");
+      throw e;
+    }
   }
 
   it("owner inserts + reads its own intent; cross-tenant insert denied; cross-tenant read = 0; soft-delete hidden", async () => {
@@ -265,9 +289,21 @@ suite("workflow RLS (WLT-12): owner CRUD + immutable runs + composite FKs", () =
       JSON.stringify({ sub: uid, role: "authenticated" }),
     ]);
     await client.query("set local role authenticated");
-    const res = await client.query(sql, params);
-    await client.query("reset role");
-    return res;
+    // Savepoint so a query that legitimately RAISES (an RLS with-check violation we
+    // assert with rejects.toThrow) rolls back cleanly instead of poisoning the
+    // surrounding transaction — letting a test make further assertions after an
+    // expected throw. The error still propagates to the caller.
+    await client.query("savepoint asuser_sp");
+    try {
+      const res = await client.query(sql, params);
+      await client.query("release savepoint asuser_sp");
+      await client.query("reset role");
+      return res;
+    } catch (e) {
+      await client.query("rollback to savepoint asuser_sp");
+      await client.query("reset role");
+      throw e;
+    }
   }
   /** Seed an intent+goal for a user (service path) and return the goal id. */
   async function seedGoal(uid: string): Promise<string> {
@@ -476,9 +512,21 @@ suite("budgets RLS (WLT-21): owner CRUD + cross-tenant deny", () => {
       JSON.stringify({ sub: uid, role: "authenticated" }),
     ]);
     await client.query("set local role authenticated");
-    const res = await client.query(sql, params);
-    await client.query("reset role");
-    return res;
+    // Savepoint so a query that legitimately RAISES (an RLS with-check violation we
+    // assert with rejects.toThrow) rolls back cleanly instead of poisoning the
+    // surrounding transaction — letting a test make further assertions after an
+    // expected throw. The error still propagates to the caller.
+    await client.query("savepoint asuser_sp");
+    try {
+      const res = await client.query(sql, params);
+      await client.query("release savepoint asuser_sp");
+      await client.query("reset role");
+      return res;
+    } catch (e) {
+      await client.query("rollback to savepoint asuser_sp");
+      await client.query("reset role");
+      throw e;
+    }
   }
 
   it("owner sets + reads + updates + clears (hard-delete) own budget; cross-tenant denied", async () => {
@@ -569,9 +617,21 @@ suite("categories RLS (WLT-22-2): owner CRUD + composite-FK isolation", () => {
       JSON.stringify({ sub: uid, role: "authenticated" }),
     ]);
     await client.query("set local role authenticated");
-    const res = await client.query(sql, params);
-    await client.query("reset role");
-    return res;
+    // Savepoint so a query that legitimately RAISES (an RLS with-check violation we
+    // assert with rejects.toThrow) rolls back cleanly instead of poisoning the
+    // surrounding transaction — letting a test make further assertions after an
+    // expected throw. The error still propagates to the caller.
+    await client.query("savepoint asuser_sp");
+    try {
+      const res = await client.query(sql, params);
+      await client.query("release savepoint asuser_sp");
+      await client.query("reset role");
+      return res;
+    } catch (e) {
+      await client.query("rollback to savepoint asuser_sp");
+      await client.query("reset role");
+      throw e;
+    }
   }
 
   it("owner CRUD on categories; cross-tenant read/update/delete denied; clear hard-deletes", async () => {
@@ -752,11 +812,13 @@ suite("categories RLS (WLT-22-2): owner CRUD + composite-FK isolation", () => {
         ),
       ).rejects.toThrow();
 
-      const crossUpdSystem = await asUser(USER_A, "update transaction_categories set category_id = $2 where id = $1", [
-        systemAssignId,
-        systemBId,
-      ]);
-      expect(crossUpdSystem.rowCount).toBe(0);
+      // Repointing the user's OWN assignment at another tenant's category passes
+      // RLS (it's their row) but the composite FK (category_id, user_id) ACTIVELY
+      // REJECTS it — a stronger guarantee than a silent no-op: the DB errors rather
+      // than returning 0 rows.
+      await expect(
+        asUser(USER_A, "update transaction_categories set category_id = $2 where id = $1", [systemAssignId, systemBId]),
+      ).rejects.toThrow();
     } finally {
       await client.query("rollback");
     }
@@ -780,9 +842,21 @@ suite("category_rules RLS (WLT-22-3/4): owner CRUD + composite-FK isolation", ()
       JSON.stringify({ sub: uid, role: "authenticated" }),
     ]);
     await client.query("set local role authenticated");
-    const res = await client.query(sql, params);
-    await client.query("reset role");
-    return res;
+    // Savepoint so a query that legitimately RAISES (an RLS with-check violation we
+    // assert with rejects.toThrow) rolls back cleanly instead of poisoning the
+    // surrounding transaction — letting a test make further assertions after an
+    // expected throw. The error still propagates to the caller.
+    await client.query("savepoint asuser_sp");
+    try {
+      const res = await client.query(sql, params);
+      await client.query("release savepoint asuser_sp");
+      await client.query("reset role");
+      return res;
+    } catch (e) {
+      await client.query("rollback to savepoint asuser_sp");
+      await client.query("reset role");
+      throw e;
+    }
   }
 
   it("owner CRUD on category_rules (including merchant_entity_id); cross-tenant read/update/delete denied; clear hard-deletes", async () => {
