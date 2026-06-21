@@ -1,7 +1,7 @@
 import { type BrowserContext, type CDPSession, type Page, expect, test } from "@playwright/test";
 import { Client } from "pg";
 import { createServiceSupabase } from "@vc1023/passkey-2fa";
-import { applyAllRulesForUser } from "@wealth/db/categories";
+import { applyAllRulesForUser, autoAssignTransfersForUser } from "@wealth/db/categories";
 
 // WLT-21-1 — Budget & Spending, REAL-PATH (the [real-path-integration-coverage]
 // mandate; the #36 class + the owner-isolation AC12). Drives the actual /budget
@@ -57,6 +57,162 @@ async function signUpWithPasskey(page: Page, context: BrowserContext, email: str
 
 test.describe("budget & spending — recommended/actual render + set + persist (WLT-21-1)", () => {
   test.skip(!RUN || !DB_URL, "Set E2E_PASSKEY=1 + SUPABASE_DB_URL + a real Supabase project to run.");
+
+  test("real session → transfers + credit-card payments are excluded, mortgage stays spending, a user override survives a CDC revision, and a second user stays isolated", async ({
+    browser,
+    page,
+    context,
+  }) => {
+    const email = `e2e-budget-xfer-u1+${Date.now()}@example.com`;
+    const otherEmail = `e2e-budget-xfer-u2+${Date.now()}@example.com`;
+    const password = "correct horse battery staple";
+
+    await signUpWithPasskey(page, context, email, password);
+
+    const db = new Client({ connectionString: DB_URL });
+    let otherContext: BrowserContext | null = null;
+    await db.connect();
+    try {
+      const u = await db.query("select id from auth.users where email = $1", [email]);
+      expect(u.rows).toHaveLength(1);
+      const userId = u.rows[0].id as string;
+
+      const acct = await db.query(
+        `insert into financial_accounts (user_id, name, kind, currency, balance_current, balance_updated_at)
+         values ($1, 'Transfer E2E Checking', 'depository', 'USD', 6500, now()) returning id`,
+        [userId],
+      );
+      const accountId = acct.rows[0].id as string;
+
+      await db.query(
+        `insert into categories (user_id, name, kind, source, counts_as_spending)
+         values ($1, 'Transfers & Payments', 'discretionary', 'system', false)`,
+        [userId],
+      );
+
+      await db.query(
+        `insert into transactions
+           (user_id, account_id, source, dedup_key, content_hash, amount, direction, currency, description, merchant, category, kind, occurred_on)
+         values
+           ($1,$2,'plaid','e2e-xfer-prior-transfer','xh-prior-transfer',900,'debit','USD','prior transfer','Between Accounts','TRANSFER_OUT','transfer',$3),
+           ($1,$2,'plaid','e2e-xfer-prior-cc','xh-prior-cc',300,'debit','USD','prior cc payment','Visa Payment','LOAN_PAYMENTS','payment',$3),
+           ($1,$2,'plaid','e2e-xfer-prior-mortgage','xh-prior-mortgage',700,'debit','USD','prior mortgage','Mortgage Servicer','LOAN_PAYMENTS','spend',$3),
+           ($1,$2,'plaid','e2e-xfer-transfer','xh-transfer',200,'debit','USD','this month transfer','Between Accounts','TRANSFER_OUT','transfer',$4),
+           ($1,$2,'plaid','e2e-xfer-cc','xh-cc',150,'debit','USD','this month cc payment','Visa Payment','LOAN_PAYMENTS','payment',$4),
+           ($1,$2,'plaid','e2e-xfer-mortgage','xh-mortgage',800,'debit','USD','this month mortgage','Mortgage Servicer','LOAN_PAYMENTS','spend',$4)`,
+        [userId, accountId, monthDay(1), todayUtc()],
+      );
+      await autoAssignTransfersForUser(createServiceSupabase(), userId);
+
+      await page.goto("/budget");
+      await expect(page.getByRole("heading", { name: "Budget & Spending" })).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("Transfers & Payments")).toBeVisible();
+      await expect(page.getByText("Not counted as spending")).toBeVisible();
+      await expect(page.getByRole("button", { name: /Show the transactions in Loan Payments this month \(\$800\.00\)/ })).toBeVisible({
+        timeout: 15_000,
+      });
+      await expect(page.getByRole("button", { name: /Transfers & Payments, \$350\.00, not counted as spending/i })).toBeVisible();
+
+      await page.getByRole("button", { name: /Show the last 12 months of Loan Payments spend/ }).click();
+      await expect(page.getByText("Monthly Loan Payments spend — last 12 months")).toBeVisible();
+      await expect(page.getByText("Most: $800.00")).toBeVisible(); // prior CC payment stays excluded from the max
+
+      await page.getByRole("button", { name: /Transfers & Payments, \$350\.00, not counted as spending/i }).click();
+      await expect(page.getByText("What's in Transfers & Payments this month")).toBeVisible();
+      await expect(page.getByText("Between Accounts")).toBeVisible();
+      await expect(page.getByText("Visa Payment")).toBeVisible();
+      await expect(page.getByText("$350.00")).toBeVisible();
+
+      await page.getByRole("button", { name: /Change the category of Visa Payment \(\$150\.00\).*Transfers & Payments/i }).click();
+      await page.getByRole("button", { name: /^Loan Payments$/ }).click();
+      await expect(page.getByText("Moved to Loan Payments — counts as spending again")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("$200.00")).toBeVisible(); // only the transfer remains excluded
+      await expect(page.getByText("Visa Payment")).toHaveCount(0);
+
+      const loanPaymentsCategory = await db.query(
+        "select id from categories where user_id = $1 and name = 'LOAN_PAYMENTS'",
+        [userId],
+      );
+      expect(loanPaymentsCategory.rows).toHaveLength(1);
+      const loanPaymentsCategoryId = loanPaymentsCategory.rows[0].id as string;
+      const ccAssignment = await db.query(
+        "select assigned_by, category_id from transaction_categories where user_id = $1 and dedup_key = 'e2e-xfer-cc'",
+        [userId],
+      );
+      expect(ccAssignment.rows).toEqual([{ assigned_by: "user", category_id: loanPaymentsCategoryId }]);
+
+      const revisedTxn = await db.query(
+        `insert into transactions
+           (user_id, account_id, source, dedup_key, content_hash, amount, direction, currency, description, merchant, category, kind, occurred_on)
+         values
+           ($1,$2,'plaid','e2e-xfer-cc','xh-cc-revised',150,'debit','USD','this month cc payment revised','Visa Payment Updated','LOAN_PAYMENTS','payment',$3)
+         returning id`,
+        [userId, accountId, todayUtc()],
+      );
+      const revisedTxnId = revisedTxn.rows[0].id as string;
+      const priorTxn = await db.query(
+        "select id from transactions where user_id = $1 and dedup_key = 'e2e-xfer-cc' and content_hash = 'xh-cc' and superseded_by is null",
+        [userId],
+      );
+      expect(priorTxn.rows).toHaveLength(1);
+      await db.query("update transactions set superseded_by = $2 where id = $1", [priorTxn.rows[0].id as string, revisedTxnId]);
+      await autoAssignTransfersForUser(createServiceSupabase(), userId);
+
+      const postRevisionAssignment = await db.query(
+        "select assigned_by, category_id from transaction_categories where user_id = $1 and dedup_key = 'e2e-xfer-cc'",
+        [userId],
+      );
+      expect(postRevisionAssignment.rows).toEqual([{ assigned_by: "user", category_id: loanPaymentsCategoryId }]);
+
+      await page.goto("/budget");
+      await expect(page.getByRole("button", { name: /Show the transactions in Loan Payments this month \(\$950\.00\)/ })).toBeVisible({
+        timeout: 15_000,
+      }); // 800 mortgage + 150 user-restored CC payment
+      await expect(page.getByRole("button", { name: "$200.00" })).toBeVisible();
+      await page.getByRole("button", { name: /Show the transactions in Loan Payments this month \(\$950\.00\)/ }).click();
+      await expect(page.getByText("Visa Payment Updated")).toBeVisible();
+      await expect(page.getByText("Mortgage Servicer")).toBeVisible();
+      await expect(page.getByText("$950.00")).toBeVisible();
+
+      otherContext = await browser.newContext();
+      const otherPage = await otherContext.newPage();
+      await signUpWithPasskey(otherPage, otherContext, otherEmail, password);
+
+      const otherUser = await db.query("select id from auth.users where email = $1", [otherEmail]);
+      expect(otherUser.rows).toHaveLength(1);
+      const otherUserId = otherUser.rows[0].id as string;
+      const otherAcct = await db.query(
+        `insert into financial_accounts (user_id, name, kind, currency, balance_current, balance_updated_at)
+         values ($1, 'Other Transfer Checking', 'depository', 'USD', 1200, now()) returning id`,
+        [otherUserId],
+      );
+      const otherAccountId = otherAcct.rows[0].id as string;
+      await db.query(
+        `insert into categories (user_id, name, kind, source, counts_as_spending)
+         values ($1, 'Transfers & Payments', 'discretionary', 'system', false)`,
+        [otherUserId],
+      );
+      await db.query(
+        `insert into transactions
+           (user_id, account_id, source, dedup_key, content_hash, amount, direction, currency, description, merchant, category, kind, occurred_on)
+         values
+           ($1,$2,'plaid','e2e-xfer-other-transfer','xh-other-transfer',111,'debit','USD','other transfer','Other Between Accounts','TRANSFER_OUT','transfer',$3)`,
+        [otherUserId, otherAccountId, todayUtc()],
+      );
+      await autoAssignTransfersForUser(createServiceSupabase(), otherUserId);
+
+      await otherPage.goto("/budget");
+      await expect(otherPage.getByRole("heading", { name: "Budget & Spending" })).toBeVisible({ timeout: 15_000 });
+      await expect(otherPage.getByText("Transfers & Payments")).toBeVisible();
+      await expect(otherPage.getByRole("button", { name: /Transfers & Payments, \$111\.00, not counted as spending/i })).toBeVisible();
+      await expect(otherPage.getByText("Loan Payments")).toHaveCount(0);
+      await expect(otherPage.getByText("Visa Payment Updated")).toHaveCount(0);
+      await expect(otherPage.getByText("$950.00")).toHaveCount(0);
+    } finally {
+      await otherContext?.close();
+      await db.end();
+    }
+  });
 
   test("real session → >1000 budget rows reconcile through session, RLS, year-spread, and drill", async ({ page, context }) => {
     const email = `e2e-budget-cap-u1+${Date.now()}@example.com`;
