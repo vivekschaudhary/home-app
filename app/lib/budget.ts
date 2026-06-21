@@ -17,7 +17,7 @@ import {
   isEssentialCategory,
   seriesMonthKeys,
 } from "@wealth/core";
-import { readCategoryAssignments } from "@wealth/db/categories";
+import { readCategoryAssignments, readCategorySpendingFlags } from "@wealth/db/categories";
 import { readAllPaged } from "@wealth/db/paged";
 import { readCategoryKinds } from "./categories";
 
@@ -36,6 +36,9 @@ export interface BudgetView {
   /** WLT-21-2: per-category 12-month spend series (index 0 = oldest … 11 = current "so far"). */
   series: Record<string, number[]>;
   seriesMonths: string[]; // the 12 ordered 'YYYY-MM' keys (oldest → current)
+  /** WLT-22-5: count of THIS-month debit transactions set aside as non-spending
+   * (transfers/payments) — drives the review nudge; 0 ⇒ no nudge, no group. */
+  setAsideCount: number;
 }
 
 function todayUtc(): string {
@@ -121,10 +124,11 @@ async function readBudgets(userId: string, supabase: Supa): Promise<SavedBudget[
 /** Assemble the budget table view (read-only; the page emits budget_viewed). */
 export async function getBudgetView(userId: string): Promise<BudgetView> {
   const supabase = await createServerSupabase();
-  const [txns, budgets, kinds] = await Promise.all([
+  const [txns, budgets, kinds, flags] = await Promise.all([
     readSpendingForBudgets(userId, supabase),
     readBudgets(userId, supabase),
     readCategoryKinds(userId, supabase),
+    readCategorySpendingFlags(supabase, userId),
   ]);
   const asOf = todayUtc();
   const seriesMap = computeMonthlySeries(txns, asOf, SERIES_MONTHS);
@@ -134,13 +138,22 @@ export async function getBudgetView(userId: string): Promise<BudgetView> {
   // marked essential), falling back to the built-in allow-list for anything
   // they haven't classified (incl. an unseeded user → identical to today).
   const isEssential = (name: string) => (kinds.has(name) ? kinds.get(name) === "essential" : isEssentialCategory(name));
+  // WLT-22-5: a category counts as spending unless the user's own row says
+  // otherwise (the protected "Transfers & Payments" + any category they flag).
+  // Default true for unknown names → an unseeded user is identical to today.
+  const countsAsSpending = (name: string) => flags.get(name) ?? true;
+  const month = asOf.slice(0, 7);
+  const setAsideCount = txns.filter(
+    (t) => t.direction === "debit" && t.occurredOn.slice(0, 7) === month && !countsAsSpending(t.category ?? ""),
+  ).length;
   return {
-    rows: buildBudgetRows({ budgets, txns, asOf, isEssential }),
-    asOfMonth: asOf.slice(0, 7),
-    typicalMonthlyTotal: computeTypicalMonthlyTotal(txns, asOf),
+    rows: buildBudgetRows({ budgets, txns, asOf, isEssential, countsAsSpending }),
+    asOfMonth: month,
+    typicalMonthlyTotal: computeTypicalMonthlyTotal(txns, asOf, countsAsSpending),
     hasData: txns.length > 0,
     series,
     seriesMonths: seriesMonthKeys(asOf, SERIES_MONTHS),
+    setAsideCount,
   };
 }
 

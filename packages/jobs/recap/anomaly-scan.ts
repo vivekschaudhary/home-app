@@ -9,7 +9,7 @@
 
 import { createServiceSupabase } from "@vc1023/passkey-2fa";
 import { type AnomalyAccount, type AnomalyTxn, detectAnomalies, effectiveCategory } from "@wealth/core";
-import { readCategoryAssignments } from "@wealth/db/categories";
+import { readCategoryAssignments, readCategorySpendingFlags } from "@wealth/db/categories";
 import { inngest } from "../client";
 
 function todayUtc(): string {
@@ -38,7 +38,7 @@ export const anomalyScanDaily = inngest.createFunction(
       const since = new Date(Date.now() - 100 * 86_400_000).toISOString().slice(0, 10); // ~quarter of history for a baseline
       let nInserted = 0;
       for (const userId of userIds) {
-        const [{ data: txRows }, { data: acctRows }, assignments] = await Promise.all([
+        const [{ data: txRows }, { data: acctRows }, assignments, spendingFlags] = await Promise.all([
           svc
             .from("transactions")
             .select("id, account_id, dedup_key, direction, category, amount, occurred_on")
@@ -51,19 +51,25 @@ export const anomalyScanDaily = inngest.createFunction(
           // helper — so anomalies detect on the user's category, consistent with
           // budget + recap (the guardrail). Service-role client, scoped by user_id.
           readCategoryAssignments(svc, userId),
+          // WLT-22-5: the spending flags, so transfers/payments are dropped before
+          // detection (we never want a "large charge" anomaly on a card payment).
+          readCategorySpendingFlags(svc, userId),
         ]);
+        const countsAsSpending = (name: string | null) => spendingFlags.get(name ?? "") ?? true;
 
-        const transactions: AnomalyTxn[] = (txRows ?? []).map((r) => {
-          const row = r as { id: string; account_id: string; dedup_key: string; direction: string; category: string | null; amount: number | string; occurred_on: string };
-          return {
-            id: row.id,
-            accountId: row.account_id,
-            direction: row.direction,
-            category: effectiveCategory(row.category, assignments.get(row.dedup_key)),
-            amount: Number(row.amount),
-            occurredOn: row.occurred_on,
-          };
-        });
+        const transactions: AnomalyTxn[] = (txRows ?? [])
+          .map((r) => {
+            const row = r as { id: string; account_id: string; dedup_key: string; direction: string; category: string | null; amount: number | string; occurred_on: string };
+            return {
+              id: row.id,
+              accountId: row.account_id,
+              direction: row.direction,
+              category: effectiveCategory(row.category, assignments.get(row.dedup_key)),
+              amount: Number(row.amount),
+              occurredOn: row.occurred_on,
+            };
+          })
+          .filter((t) => countsAsSpending(t.category));
         const accounts: AnomalyAccount[] = (acctRows ?? []).map((r) => {
           const row = r as { id: string; kind: string; balance_current: number | string | null };
           return { id: row.id, kind: row.kind, balanceCurrent: row.balance_current === null ? null : Number(row.balance_current) };

@@ -88,6 +88,10 @@ export interface BudgetRow {
   budget: { type: "amount"; amount: number } | { type: "percent"; percent: number } | null;
   effectiveCap: number | null; // resolved dollar cap (percent → resolved); null if no/unresolvable budget
   status: "over" | "under" | "none";
+  /** WLT-22-5: false ⇒ a non-spending category (transfers/payments). The row is
+   * still emitted (shown in the visible "Transfers & Payments" group + drillable),
+   * but it's EXCLUDED from the spend aggregates (recommendation, percent base). */
+  countsAsSpending: boolean;
 }
 
 export interface BuildBudgetRowsInput {
@@ -96,6 +100,10 @@ export interface BuildBudgetRowsInput {
   asOf: string; // 'YYYY-MM-DD'
   /** WLT-22-2: classify a category as essential per the user's own `kind` (falls back to the built-in set). */
   isEssential?: (name: string) => boolean;
+  /** WLT-22-5: does this category count as spending? (default: everything counts).
+   * Non-spending categories are dropped from the recommendation + percent-base
+   * aggregates, but still emitted as rows (flagged) so the UI can show the group. */
+  countsAsSpending?: (name: string) => boolean;
 }
 
 function round2(n: number): number {
@@ -191,6 +199,7 @@ export function computeRecommendedBudgets(
   txns: readonly SpendingTxn[],
   asOf: string,
   isEssential: (name: string) => boolean = isEssentialCategory,
+  countsAsSpending: (name: string) => boolean = () => true,
 ): Map<string, number> {
   const allowed = new Set(trailingMonths(asOf.slice(0, 7), TRAILING_MONTHS));
   const byCatMonth = new Map<string, Map<string, number>>();
@@ -199,6 +208,7 @@ export function computeRecommendedBudgets(
     const m = t.occurredOn.slice(0, 7);
     if (!allowed.has(m)) continue;
     const key = t.category ?? "";
+    if (!countsAsSpending(key)) continue; // WLT-22-5 — never recommend a budget for transfers/payments
     let mm = byCatMonth.get(key);
     if (!mm) {
       mm = new Map();
@@ -219,13 +229,18 @@ export function computeRecommendedBudgets(
 }
 
 /** Median of the trailing-window monthly GRAND totals — the base for percent budgets. */
-function typicalMonthlyTotal(txns: readonly SpendingTxn[], asOf: string): number | null {
+function typicalMonthlyTotal(
+  txns: readonly SpendingTxn[],
+  asOf: string,
+  countsAsSpending: (name: string) => boolean = () => true,
+): number | null {
   const allowed = new Set(trailingMonths(asOf.slice(0, 7), TRAILING_MONTHS));
   const byMonth = new Map<string, number>();
   for (const t of txns) {
     if (t.direction !== "debit") continue;
     const m = t.occurredOn.slice(0, 7);
     if (!allowed.has(m)) continue;
+    if (!countsAsSpending(t.category ?? "")) continue; // WLT-22-5 — the load-bearing AC4 reconcile
     byMonth.set(m, round2((byMonth.get(m) ?? 0) + t.amount));
   }
   const totals = [...byMonth.values()];
@@ -245,10 +260,14 @@ export function resolvePercentCap(percent: number, typicalTotal: number | null):
  * budget, joined with its recommendation + actual + over/under status. Sorted by
  * this-month spend (desc). null category → "Other", never dropped.
  */
-export function buildBudgetRows({ budgets, txns, asOf, isEssential }: BuildBudgetRowsInput): BudgetRow[] {
+export function buildBudgetRows({ budgets, txns, asOf, isEssential, countsAsSpending }: BuildBudgetRowsInput): BudgetRow[] {
+  const counts = countsAsSpending ?? (() => true);
+  // EMIT per-category actuals (incl. the protected category — it must show its
+  // own total + drill); FILTER the aggregates (recommendation + percent base) so
+  // transfers/payments drop from the spend numbers (WLT-22-5 AC4 + AC6).
   const actuals = computeMonthlySpending(txns, asOf);
-  const recommended = computeRecommendedBudgets(txns, asOf, isEssential);
-  const typicalTotal = typicalMonthlyTotal(txns, asOf);
+  const recommended = computeRecommendedBudgets(txns, asOf, isEssential, counts);
+  const typicalTotal = typicalMonthlyTotal(txns, asOf, counts);
   const budgetByCat = new Map(budgets.map((b) => [b.category, b]));
 
   // Show every category the user actually spends in — this month's spend, their
@@ -283,6 +302,7 @@ export function buildBudgetRows({ budgets, txns, asOf, isEssential }: BuildBudge
       budget,
       effectiveCap,
       status,
+      countsAsSpending: counts(key),
     });
   }
   rows.sort((a, b) => b.actualThisMonth - a.actualThisMonth || a.label.localeCompare(b.label));
@@ -290,6 +310,10 @@ export function buildBudgetRows({ budgets, txns, asOf, isEssential }: BuildBudge
 }
 
 /** Typical monthly total exposed for the app layer (percent helper text). */
-export function computeTypicalMonthlyTotal(txns: readonly SpendingTxn[], asOf: string): number | null {
-  return typicalMonthlyTotal(txns, asOf);
+export function computeTypicalMonthlyTotal(
+  txns: readonly SpendingTxn[],
+  asOf: string,
+  countsAsSpending: (name: string) => boolean = () => true,
+): number | null {
+  return typicalMonthlyTotal(txns, asOf, countsAsSpending);
 }

@@ -77,6 +77,7 @@ export function BudgetClient({ initial }: { initial: BudgetViewDTO }) {
         budget: null,
         effectiveCap: null,
         status: "none" as const,
+        countsAsSpending: true, // picker-added categories are always spendable
       }));
     return [...view.rows, ...extra];
   }, [view.rows, added]);

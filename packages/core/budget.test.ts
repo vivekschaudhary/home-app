@@ -205,3 +205,47 @@ describe("BUDGETABLE_CATEGORIES", () => {
     expect(BUDGETABLE_CATEGORIES).toContain("INSURANCE");
   });
 });
+
+describe("WLT-22-5 — countsAsSpending excludes transfers/payments from the totals, NOT the rows", () => {
+  const TRANSFERS = "Transfers & Payments";
+  const counts = (name: string) => name !== TRANSFERS;
+  // FOOD $300/mo across the trailing window + $120 this month; transfers $1000/mo
+  // + $1000 this month. The transfer dollars must vanish from every TOTAL but the
+  // transfer ROW must still appear (visible group) with its own total.
+  const txns: SpendingTxn[] = [
+    ...["2026-01", "2026-02", "2026-03", "2026-04", "2026-05"].flatMap((m) => [
+      tx(`${m}-10`, 300, "FOOD_AND_DRINK"),
+      tx(`${m}-12`, 1000, TRANSFERS),
+    ]),
+    tx("2026-06-03", 120, "FOOD_AND_DRINK"),
+    tx("2026-06-05", 1000, TRANSFERS),
+  ];
+
+  it("typicalMonthlyTotal drops the transfer dollars (the percent base / ≈$X/mo) — AC4", () => {
+    expect(computeTypicalMonthlyTotal(txns, ASOF)).toBe(1300); // default: everything counts
+    expect(computeTypicalMonthlyTotal(txns, ASOF, counts)).toBe(300); // transfers excluded
+  });
+
+  it("never recommends a budget for an excluded category", () => {
+    const rec = computeRecommendedBudgets(txns, ASOF, undefined, counts);
+    expect(rec.has(TRANSFERS)).toBe(false);
+    expect(rec.get("FOOD_AND_DRINK")).toBe(300);
+  });
+
+  it("STILL emits the excluded category as a flagged row (the visible group) with its own total", () => {
+    const rows = buildBudgetRows({ budgets: [], txns, asOf: ASOF, countsAsSpending: counts });
+    const transferRow = rows.find((r) => r.category === TRANSFERS);
+    const foodRow = rows.find((r) => r.category === "FOOD_AND_DRINK");
+    expect(transferRow).toBeDefined();
+    expect(transferRow?.countsAsSpending).toBe(false);
+    expect(transferRow?.actualThisMonth).toBe(1000); // its own total is shown
+    expect(transferRow?.recommended).toBeNull(); // but never recommended
+    expect(foodRow?.countsAsSpending).toBe(true);
+    expect(foodRow?.actualThisMonth).toBe(120);
+  });
+
+  it("defaults to counting everything when no predicate is passed (unseeded user = today)", () => {
+    const rows = buildBudgetRows({ budgets: [], txns, asOf: ASOF });
+    expect(rows.every((r) => r.countsAsSpending)).toBe(true);
+  });
+});

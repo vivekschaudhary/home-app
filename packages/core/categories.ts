@@ -131,3 +131,28 @@ export function matchRuleAssignments(
   }
   return out;
 }
+
+/** WLT-22-5 — the protected, undeletable system category that holds transfers +
+ * card payments so they don't inflate spending. The canonical name, shared by the
+ * seed (app), the auto-assign writer (db), and the UI. */
+export const PROTECTED_TRANSFERS_CATEGORY = "Transfers & Payments";
+
+/**
+ * WLT-22-5 — which transactions auto-route to the protected "Transfers &
+ * Payments" category: those the provider adapter classified `transfer` or
+ * `payment` (the double-count legs) that the user hasn't already assigned. `fee`
+ * (a real bank-fee spend) and `income` (a credit, never spending) are deliberately
+ * EXCLUDED — only the two non-spending debit kinds are set aside. Pure + keyed on
+ * the normalized `kind`, never a provider taxonomy string (AC8).
+ */
+export function transfersToAutoAssign(
+  txns: readonly { dedupKey: string; kind: string }[],
+  userOwnedDedupKeys: ReadonlySet<string>,
+): string[] {
+  const out: string[] = [];
+  for (const t of txns) {
+    if (userOwnedDedupKeys.has(t.dedupKey)) continue;
+    if (t.kind === "transfer" || t.kind === "payment") out.push(t.dedupKey);
+  }
+  return out;
+}

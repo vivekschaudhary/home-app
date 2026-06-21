@@ -11,6 +11,7 @@ const base: NormalizedTransaction = {
   description: "Coffee",
   merchant: "Cafe",
   category: "Food",
+  kind: "spend",
   occurredOn: "2026-06-01",
   pending: false,
   source: "plaid",
