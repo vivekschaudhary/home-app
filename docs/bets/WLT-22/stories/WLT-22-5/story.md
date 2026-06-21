@@ -2,7 +2,7 @@
 id: WLT-22-5
 bet: WLT-22
 type: story
-status: merged
+status: shipped
 priority: P1
 created: 2026-06-20
 author: PM
@@ -84,6 +84,8 @@ _If post-merge bugs are found, story is re-opened and fixes live under `fixes/`.
 
 **App code MERGED, 2026-06-21** — **PR #81** (server spine, squash `149794c`): migration 0014 + the `kind` seam (AC8) + the `countsAsSpending` thread across budget/recap/anomaly + seed + auto-assign. Migration verified end-to-end on an ephemeral Postgres. **PR #83** (UI, squash `1e3c1c1`): the visible "Transfers & Payments" group + the per-user, no-flash review nudge + the picker "exclude from spending" relabel. (#82 was the UI PR pre-rebase; closed/superseded after #81's squash-merge.) Codex reviewed #83 — **no findings, approved**; two nudge ISSUEs (pre-hydration flash, browser-wide dismissal) fixed in `53dc829` before approval. Full gate green on each (lint · typecheck · 275 tests · build).
 
-**Outstanding before `shipped` (Codex-owned, per the story split):** the **RLS suite** (undeletable `source='system'`; can't forge `counts_as_spending`; cross-tenant isolation; composite-FK on a `'system'` assignment) + the **gated real-path E2E** (transfers + CC-payment excluded, mortgage kept; user override survives a CDC re-sync). These target the merged 0014 schema on `main`.
+**Verification SHIPPED — PR #85** (squash `7260c3e`): Codex's **RLS suite** (undeletable `source='system'`; `counts_as_spending` owner-scoped; cross-tenant isolation; the composite `(category_id, user_id)` FK actively rejects a forged cross-tenant assignment) + the **gated real-path E2E** (transfers + CC-payment excluded, mortgage kept, group drills, override → "counts as spending again" survives a CDC revision, second-user isolation). Two test-only defects in the handed-off RLS suite were fixed before merge (a transaction-poisoning `asUser` harness → savepoint-safe; a cross-tenant FK assertion corrected from `rowCount 0` to `rejects.toThrow` — the FK actively rejects, a stronger guarantee); all 22 RLS tests pass against a real Postgres + in CI's live-PG job. Gated E2E run locally (skipped in CI by design). **CLEAR tied to HEAD `7260c3e`.**
+
+**SHIPPED, 2026-06-21** — story complete: app code (#81 + #83) + verification (#85). WLT-22 bet COMPLETE again.
 
 _Story under bet: docs/bets/WLT-22/brief.md_
