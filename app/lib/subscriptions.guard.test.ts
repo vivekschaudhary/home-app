@@ -21,3 +21,15 @@ describe("subscriptions orthogonality guard (AC5)", () => {
     });
   }
 });
+
+// FIX-2026-06-22 (regression) — the Subscriptions view read MUST paginate the
+// transactions, not build an `IN(dedup_keys)` over the flagged set: a large IN-list
+// of long, URL-encoded dedup_keys overflows the request-URL limit and the query
+// errors → the panel showed empty while the flags persisted. Pin the paged read.
+describe("subscriptions view read stays paginated (FIX-2026-06-22 — empty-panel)", () => {
+  const src = readFileSync(join(ROOT, "app/lib/subscriptions.ts"), "utf8");
+  it("reads via readAllPaged, not an IN() over the flagged dedup_keys", () => {
+    expect(src, "the marked-txn read must paginate (readAllPaged)").toContain("readAllPaged");
+    expect(src, "must not read the marked txns via .in(dedup_key, …) — the URL overflows past enough marks").not.toContain('.in("dedup_key"');
+  });
+});

@@ -111,13 +111,15 @@ export async function markMerchantSubscription(client: SupabaseClientT, userId: 
 /** Unmark every active charge from `dedupKey`'s merchant (hard-delete the flags). */
 export async function unmarkMerchantSubscription(client: SupabaseClientT, userId: string, dedupKey: string): Promise<number> {
   const keys = await merchantCharges(client, userId, dedupKey);
-  for (let i = 0; i < keys.length; i += 500) {
+  // Small DELETE chunks: the `dedup_key` IN-list rides in the request URL, so a
+  // large chunk of long keys would overflow the URL limit (FIX-2026-06-22).
+  for (let i = 0; i < keys.length; i += 50) {
     const { error } = await client
       .from("transaction_flags")
       .delete()
       .eq("user_id", userId)
       .eq("flag_type", "subscription")
-      .in("dedup_key", keys.slice(i, i + 500));
+      .in("dedup_key", keys.slice(i, i + 50));
     if (error) throw new Error(`[subscriptions] unmark failed for ${userId}: ${error.message}`);
   }
   return keys.length;
