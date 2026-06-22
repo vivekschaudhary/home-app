@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { SubscriptionCadence, SubscriptionRow } from "@wealth/core";
 import { Toast } from "@wealth/ui";
@@ -9,6 +9,7 @@ import { type SubscriptionsViewDTO, fetchSubscriptions, unmarkSubscription } fro
 
 const S = COPY.subscriptions;
 const SA = COPY.subscriptionsA11y;
+const NUDGE_KEY = "wlt24-2-detected-nudge-dismissed"; // scoped per-user at runtime
 
 function money(n: number): string {
   try {
@@ -29,7 +30,7 @@ const CADENCE_LABEL: Record<SubscriptionCadence, string> = {
   pending: S.cadencePending,
 };
 
-export function SubscriptionsClient({ initial }: { initial: SubscriptionsViewDTO }) {
+export function SubscriptionsClient({ initial, userId }: { initial: SubscriptionsViewDTO; userId: string }) {
   const [view, setView] = useState<SubscriptionsViewDTO>(initial);
   const [busy, setBusy] = useState<string | null>(null); // normKey being unmarked
   const [toast, setToast] = useState<string | null>(null);
@@ -42,6 +43,29 @@ export function SubscriptionsClient({ initial }: { initial: SubscriptionsViewDTO
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // WLT-24-2 — the review nudge: how many auto-detected subscriptions await review.
+  const detectedCount = useMemo(() => view.subscriptions.filter((r) => r.source === "auto").length, [view.subscriptions]);
+  // Per-USER key so one user's dismissal never hides another's nudge on a shared
+  // browser. Start HIDDEN and reveal only after reading storage on the client —
+  // rendering on first paint would flash for a user who already dismissed it.
+  const nudgeKey = `${NUDGE_KEY}:${userId}`;
+  const [nudgeDismissed, setNudgeDismissed] = useState(true);
+  useEffect(() => {
+    try {
+      setNudgeDismissed(localStorage.getItem(nudgeKey) === "1");
+    } catch {
+      setNudgeDismissed(false); // storage unavailable — show it (non-blocking)
+    }
+  }, [nudgeKey]);
+  function dismissNudge() {
+    setNudgeDismissed(true); // sticky — never re-nags
+    try {
+      localStorage.setItem(nudgeKey, "1");
+    } catch {
+      /* ignore */
+    }
+  }
 
   async function unmark(row: SubscriptionRow) {
     setBusy(row.normKey);
@@ -72,6 +96,31 @@ export function SubscriptionsClient({ initial }: { initial: SubscriptionsViewDTO
 
   return (
     <div className="mt-6">
+      {/* WLT-24-2 — the review nudge: a single quiet line drawing the eye to the
+          auto-detected rows below. Dismissible + sticky per-user; never a modal. */}
+      {detectedCount > 0 && !nudgeDismissed ? (
+        <div
+          role="status"
+          aria-label={SA.nudgeRegion}
+          className="mb-4 flex items-start justify-between gap-4 rounded-md border border-gray-200 bg-gray-50 px-4 py-3"
+        >
+          <div className="text-sm text-gray-700">
+            <p className="font-medium text-gray-900">
+              {detectedCount === 1 ? S.nudgeOne : fill(S.nudgeMany, { count: String(detectedCount) })}
+            </p>
+            <p className="mt-0.5 text-gray-600">{S.nudgeBody}</p>
+          </div>
+          <button
+            type="button"
+            onClick={dismissNudge}
+            aria-label={SA.nudgeDismissA11y}
+            className="shrink-0 text-xs font-medium text-gray-500 underline"
+          >
+            {S.nudgeDismiss}
+          </button>
+        </div>
+      ) : null}
+
       {/* Headline — the at-a-glance weight (both per-month and per-year). */}
       <p
         className="text-lg font-semibold text-gray-900"
@@ -101,6 +150,14 @@ export function SubscriptionsClient({ initial }: { initial: SubscriptionsViewDTO
               <tr key={row.normKey} className="block border-b border-gray-200 py-3 md:table-row md:py-0">
                 <td className="block py-0.5 text-base font-medium text-gray-900 md:table-cell md:py-3 md:pr-4 md:text-sm md:font-normal">
                   {row.merchant}
+                  {row.source === "auto" ? (
+                    <span
+                      className="ml-2 inline-flex items-center rounded-full bg-gray-100 px-1.5 py-0.5 align-middle text-[10px] font-medium uppercase tracking-wide text-gray-500"
+                      aria-label={SA.detectedTagA11y}
+                    >
+                      {S.detectedTag}
+                    </span>
+                  ) : null}
                 </td>
                 <td className="block py-0.5 text-gray-700 md:table-cell md:py-3 md:pr-4">
                   <span className="mr-2 text-xs text-gray-500 md:hidden">{S.colAmount}</span>

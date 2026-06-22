@@ -13,7 +13,7 @@ import { createPlaidProvider } from "@wealth/aggregation/plaid";
 import { createSupabaseVault } from "@wealth/aggregation/vault";
 import { FUNNEL_EVENTS } from "@wealth/core";
 import { applyAllRulesForUser, autoAssignTransfersForUser } from "@wealth/db/categories";
-import { applySubscriptionMerchantsForUser } from "@wealth/db/subscriptions";
+import { applySubscriptionMerchantsForUser, detectAndFlagSubscriptionsForUser } from "@wealth/db/subscriptions";
 import { emitFunnel } from "@wealth/db/emit";
 import { inngest } from "../client";
 import { settleHistory } from "./settle";
@@ -190,6 +190,15 @@ async function syncConnection(
   await step.run("apply-subscription-merchants", async () => {
     const svc = createServiceSupabase();
     await applySubscriptionMerchantsForUser(svc, userId);
+  });
+
+  // WLT-24-2 — auto-detect recurring charges and flag them source='auto' (a signal
+  // the user overrides). High-precision (>=3 occurrences, clean cadence, stable
+  // amount); skips already-flagged + dismissed merchants (never re-adds a removal).
+  // Idempotent; runs after the merchant re-apply so a user mark always pre-empts it.
+  await step.run("detect-subscriptions", async () => {
+    const svc = createServiceSupabase();
+    await detectAndFlagSubscriptionsForUser(svc, userId);
   });
 
   await step.run("emit-sync-completed", async () => {

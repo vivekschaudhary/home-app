@@ -21,13 +21,17 @@ export function subscriptionMerchantKey(merchant: string | null, merchantEntityI
   return norm ? `n:${norm}` : null;
 }
 
-/** A transaction the user has marked as a subscription (the read passes these in). */
+/** A transaction the user has marked as a subscription (the read passes these in).
+ * `merchantEntityId` is optional — the WLT-24-1 summary path ignores it; the
+ * WLT-24-2 detector uses it to group by the stable `subscriptionMerchantKey`. */
 export interface MarkedTxn {
   dedupKey: string;
   merchant: string | null;
+  merchantEntityId?: string | null;
   description: string;
   amount: number; // unsigned, in dollars
   occurredOn: string; // 'YYYY-MM-DD'
+  source?: "user" | "auto"; // WLT-24-2 — how the flag arose; absent ⇒ treated as 'user'
 }
 
 /** `pending` = too few occurrences to infer; `irregular` = inferred but not a clean cycle. */
@@ -42,6 +46,10 @@ export interface SubscriptionRow {
   /** Normalized monthly cost; null for `pending`/`irregular` (excluded from the headline). */
   monthlyEquivalent: number | null;
   dedupKeys: string[]; // the underlying marked transactions (unmark / drill)
+  /** WLT-24-2 — 'auto' iff EVERY underlying flag was auto-detected; 'user' once the
+   * user has marked any charge of the merchant (a user touch claims ownership). The
+   * UI tags 'auto' rows "detected" so an auto-mark reads as intentional, not a bug. */
+  source: "user" | "auto";
 }
 
 export interface SubscriptionsSummary {
@@ -130,6 +138,8 @@ export function summarizeSubscriptions(txns: readonly MarkedTxn[]): Subscription
       occurrences: members.length,
       monthlyEquivalent: monthlyEquivalent(cadence, typicalAmount),
       dedupKeys: members.map((m) => m.dedupKey),
+      // 'auto' only when every charge is auto-detected; any user mark ⇒ 'user'.
+      source: members.every((m) => m.source === "auto") ? "auto" : "user",
     });
   }
 
@@ -142,17 +152,126 @@ export function summarizeSubscriptions(txns: readonly MarkedTxn[]): Subscription
   return { subscriptions, monthlyTotal, annualTotal: round2(monthlyTotal * 12) };
 }
 
-/**
- * WLT-24 (fast-follow seam) — the provider-agnostic subscription detector. NOT
- * implemented this slice; the detection story implements it (Plaid recurring
- * behind a swappable adapter, or a custom normalizeMerchant+cadence detector) and
- * auto-sets `transaction_flags(source='auto')` as a SIGNAL the user overrides.
- */
+// ── WLT-24-2: the custom subscription detector (pure) ───────────────────────
+// Find a user's recurring charges from history so they can be auto-marked
+// (`source='auto'`) — a SIGNAL the user overrides, never a verdict. HIGH-PRECISION,
+// never alarming: a merchant becomes a candidate only if it clears THREE independent
+// gates (enough occurrences AND a clean cadence AND a stable amount) and a
+// confidence floor. We under-detect on purpose — a wrong auto-mark erodes trust
+// more than a miss (the user can always mark by hand). Provider-agnostic: it reads
+// the same normalized merchant/cadence the WLT-24-1 summary does, so no Plaid
+// recurring product (and no ADR-002 amendment) is needed.
+
+/** Detection thresholds — named so they're tunable and unit-tested at the edges. */
+export const DETECT_MIN_OCCURRENCES = 3; // stricter than a human mark's >= 2
+export const DETECT_MAX_AMOUNT_CV = 0.1; // amount coefficient-of-variation ceiling (<=10% spread)
+export const DETECT_MIN_CONFIDENCE = 0.7; // auto-flag confidence floor
+const AMOUNT_CV_DENOM = 0.1; // amountScore reaches 0 at this amount CV
+const INTERVAL_CV_DENOM = 0.25; // regularityScore reaches 0 at this interval CV
+const OCCURRENCE_SATURATION = 6; // occurrenceScore saturates at this many charges
+const W_AMOUNT = 0.45;
+const W_REGULARITY = 0.35;
+const W_OCCURRENCE = 0.2;
+
+function mean(nums: readonly number[]): number {
+  if (nums.length === 0) return 0;
+  return nums.reduce((s, n) => s + n, 0) / nums.length;
+}
+
+/** Population coefficient of variation (stddev / mean). 0 for <2 points; a
+ * zero/negative mean is treated as maximally unstable (not a stable price). */
+function coefficientOfVariation(nums: readonly number[]): number {
+  if (nums.length < 2) return 0;
+  const m = mean(nums);
+  if (m <= 0) return Number.POSITIVE_INFINITY;
+  const variance = mean(nums.map((n) => (n - m) ** 2));
+  return Math.sqrt(variance) / m;
+}
+
+function clamp01(n: number): number {
+  return Math.max(0, Math.min(1, n));
+}
+
+/** A merchant the detector believes is a subscription — its charges get flagged
+ * `source='auto'`. `merchantKey` is the fan-out + skip key (already-flagged /
+ * dismissed merchants are filtered on it); `dedupKeys` are the charges to flag. */
 export interface CandidateSubscription {
-  dedupKey: string;
-  normKey: string;
+  merchantKey: string; // subscriptionMerchantKey (entity-id-first)
+  normKey: string; // the normalized grouping/display key
+  dedupKeys: string[]; // the merchant's charges seen in the input (to flag)
+  cadence: Exclude<SubscriptionCadence, "pending" | "irregular">;
+  occurrences: number;
+  typicalAmount: number; // median of the charges
   confidence: number; // 0..1
 }
+
+/**
+ * Detect a user's recurring-subscription merchants from their active debits (pure;
+ * no I/O). Groups by `subscriptionMerchantKey`, then keeps only merchants that pass
+ * all gates with `confidence >= DETECT_MIN_CONFIDENCE`. The write path flags each
+ * candidate's `dedupKeys` with `source='auto'`, skipping already-flagged/dismissed
+ * merchants. Confidence blends amount stability, interval regularity, and how many
+ * times we've seen the charge — so a long, rock-steady history scores highest.
+ */
+export function detectSubscriptions(input: { txns: readonly MarkedTxn[] }): CandidateSubscription[] {
+  const groups = new Map<string, MarkedTxn[]>();
+  for (const t of input.txns) {
+    const key = subscriptionMerchantKey(t.merchant, t.merchantEntityId);
+    if (!key) continue; // unmatchable merchant — never auto-detect a one-off
+    const g = groups.get(key);
+    if (g) g.push(t);
+    else groups.set(key, [t]);
+  }
+
+  const candidates: CandidateSubscription[] = [];
+  for (const [merchantKey, members] of groups) {
+    // Gate (a) — enough occurrences.
+    if (members.length < DETECT_MIN_OCCURRENCES) continue;
+
+    const sorted = [...members].sort((a, b) => a.occurredOn.localeCompare(b.occurredOn));
+    const intervals: number[] = [];
+    for (let i = 1; i < sorted.length; i++) intervals.push(daysBetween(sorted[i - 1].occurredOn, sorted[i].occurredOn));
+
+    // Gate (b) — a clean (non-irregular) cadence.
+    const cadence = cadenceFromInterval(median(intervals));
+    if (cadence === "irregular") continue;
+
+    // Gate (c) — a stable amount (fixed-price subscriptions vary little).
+    const amounts = members.map((m) => m.amount);
+    const amountCV = coefficientOfVariation(amounts);
+    if (amountCV > DETECT_MAX_AMOUNT_CV) continue;
+
+    // Confidence — the margin tie-breaker once the hard gates pass.
+    const amountScore = clamp01(1 - amountCV / AMOUNT_CV_DENOM);
+    const regularityScore = clamp01(1 - coefficientOfVariation(intervals) / INTERVAL_CV_DENOM);
+    const occurrenceScore = Math.min(members.length, OCCURRENCE_SATURATION) / OCCURRENCE_SATURATION;
+    const confidence = round2(W_AMOUNT * amountScore + W_REGULARITY * regularityScore + W_OCCURRENCE * occurrenceScore);
+    if (confidence < DETECT_MIN_CONFIDENCE) continue;
+
+    candidates.push({
+      merchantKey,
+      normKey: merchantKey,
+      dedupKeys: members.map((m) => m.dedupKey),
+      cadence,
+      occurrences: members.length,
+      typicalAmount: round2(median(amounts)),
+      confidence,
+    });
+  }
+  // Most-confident first (deterministic; the write path flags them all anyway).
+  candidates.sort((a, b) => b.confidence - a.confidence || a.merchantKey.localeCompare(b.merchantKey));
+  return candidates;
+}
+
+/**
+ * The fast-follow seam (WLT-24 architecture), now filled by the custom detector.
+ * Kept as an interface + a concrete impl so a future Plaid-recurring adapter can
+ * swap in behind the same shape without touching the write path.
+ */
 export interface SubscriptionDetector {
   detect(input: { txns: readonly MarkedTxn[] }): Promise<CandidateSubscription[]>;
 }
+
+export const customSubscriptionDetector: SubscriptionDetector = {
+  detect: async (input) => detectSubscriptions(input),
+};

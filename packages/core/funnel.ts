@@ -57,6 +57,12 @@ export const FUNNEL_EVENTS = {
   // visit to the Subscriptions surface (adoption of the recurring-spend view).
   SUBSCRIPTION_MARKED: "subscription_marked",
   SUBSCRIPTIONS_VIEWED: "subscriptions_viewed",
+  // WLT-24-2 — auto-detection: the detector auto-marked N recurring merchants
+  // (source='auto', a signal the user overrides), and the user DISMISSED a
+  // subscription (unmark — now a durable soft-delete). Together these make the
+  // manual-vs-detected split and the false-positive (dismissal) rate falsifiable.
+  SUBSCRIPTION_DETECTED: "subscription_detected",
+  SUBSCRIPTION_DISMISSED: "subscription_dismissed",
 } as const;
 
 export type FunnelEvent = (typeof FUNNEL_EVENTS)[keyof typeof FUNNEL_EVENTS];

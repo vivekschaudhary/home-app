@@ -284,4 +284,162 @@ test.describe("subscriptions — mark from ledger + summarize + CDC survival + o
       await db.end();
     }
   });
+
+  test("real session → auto-detected subscriptions are tagged, a dismissal is durable, a re-mark flips to user, variable charges stay undetected, and a second user stays isolated", async ({
+    browser,
+    page,
+    context,
+  }) => {
+    const email = `e2e-subscriptions-detect-u1+${Date.now()}@example.com`;
+    const otherEmail = `e2e-subscriptions-detect-u2+${Date.now()}@example.com`;
+    const password = "correct horse battery staple";
+
+    await signUpWithPasskey(page, context, email, password);
+
+    const db = new Client({ connectionString: DB_URL });
+    let otherContext: BrowserContext | null = null;
+    await db.connect();
+    try {
+      const u = await db.query("select id from auth.users where email = $1", [email]);
+      expect(u.rows).toHaveLength(1);
+      const userId = u.rows[0].id as string;
+
+      const acct = await db.query(
+        `insert into financial_accounts (user_id, name, kind, currency, balance_current, balance_updated_at)
+         values ($1, 'Detector Subscriptions Checking', 'depository', 'USD', 4800, now()) returning id`,
+        [userId],
+      );
+      const accountId = acct.rows[0].id as string;
+
+      await db.query(
+        `insert into transactions
+           (user_id, account_id, source, dedup_key, content_hash, amount, direction, currency, merchant, merchant_entity_id, description, category, kind, occurred_on)
+         values
+           ($1,$2,'plaid','e2e-detectflix-1','detectflix-hash-1',15.99,'debit','USD','DetectFlix','ent-detectflix','DetectFlix Jan','ENTERTAINMENT','spend',$3),
+           ($1,$2,'plaid','e2e-detectflix-2','detectflix-hash-2',15.99,'debit','USD','DetectFlix','ent-detectflix','DetectFlix Feb','ENTERTAINMENT','spend',$4),
+           ($1,$2,'plaid','e2e-detectflix-3','detectflix-hash-3',15.99,'debit','USD','DetectFlix','ent-detectflix','DetectFlix Mar','ENTERTAINMENT','spend',$5),
+           ($1,$2,'plaid','e2e-detectflix-4','detectflix-hash-4',15.99,'debit','USD','DetectFlix','ent-detectflix','DetectFlix Apr','ENTERTAINMENT','spend',$6),
+           ($1,$2,'plaid','e2e-tunebox-1','tunebox-hash-1',10.99,'debit','USD','TuneBox','ent-tunebox','TuneBox Jan','ENTERTAINMENT','spend',$3),
+           ($1,$2,'plaid','e2e-tunebox-2','tunebox-hash-2',10.99,'debit','USD','TuneBox','ent-tunebox','TuneBox Feb','ENTERTAINMENT','spend',$4),
+           ($1,$2,'plaid','e2e-tunebox-3','tunebox-hash-3',10.99,'debit','USD','TuneBox','ent-tunebox','TuneBox Mar','ENTERTAINMENT','spend',$5),
+           ($1,$2,'plaid','e2e-tunebox-4','tunebox-hash-4',10.99,'debit','USD','TuneBox','ent-tunebox','TuneBox Apr','ENTERTAINMENT','spend',$6),
+           ($1,$2,'plaid','e2e-wildcard-1','wildcard-hash-1',12.00,'debit','USD','WildCard Cafe','ent-wildcard','WildCard Jan','DINING','spend',$3),
+           ($1,$2,'plaid','e2e-wildcard-2','wildcard-hash-2',28.00,'debit','USD','WildCard Cafe','ent-wildcard','WildCard Feb','DINING','spend',$4),
+           ($1,$2,'plaid','e2e-wildcard-3','wildcard-hash-3',16.00,'debit','USD','WildCard Cafe','ent-wildcard','WildCard Mar','DINING','spend',$5),
+           ($1,$2,'plaid','e2e-wildcard-4','wildcard-hash-4',32.00,'debit','USD','WildCard Cafe','ent-wildcard','WildCard Apr','DINING','spend',$6)`,
+        [userId, accountId, monthDay(3), monthDay(2), monthDay(1), monthDay(0)],
+      );
+
+      await page.goto("/subscriptions");
+      await expect(page.getByRole("heading", { name: "Subscriptions" })).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("DetectFlix")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("TuneBox")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("WildCard Cafe")).toHaveCount(0);
+      await expect(page.getByText("We found 2 recurring charges — review them below.")).toBeVisible();
+      await expect(page.getByText("detected")).toHaveCount(2);
+
+      const initialFlags = await db.query(
+        `select source, count(*)::int as n
+           from transaction_flags
+          where user_id = $1 and flag_type = 'subscription' and dismissed_at is null
+          group by source
+          order by source`,
+        [userId],
+      );
+      expect(initialFlags.rows).toEqual([
+        { source: "auto", n: 8 },
+      ]);
+
+      const detectflixRow = page.locator("tr", { hasText: "DetectFlix" });
+      await detectflixRow.getByRole("button", { name: "Remove from subscriptions" }).click();
+      await expect(page.getByText("Removed from subscriptions")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("DetectFlix")).toHaveCount(0);
+      await expect(page.getByText("TuneBox")).toBeVisible();
+      await expect(page.getByText("We found 1 recurring charge — review it below.")).toBeVisible();
+      await expect(page.getByText("detected")).toHaveCount(1);
+
+      const dismissedDetectflix = await db.query(
+        `select count(*)::int as active,
+                count(*) filter (where dismissed_at is not null)::int as dismissed
+           from transaction_flags
+          where user_id = $1 and dedup_key like 'e2e-detectflix-%'`,
+        [userId],
+      );
+      expect(dismissedDetectflix.rows).toEqual([{ active: 4, dismissed: 4 }]);
+
+      await page.reload();
+      await expect(page.getByText("DetectFlix")).toHaveCount(0);
+      await expect(page.getByText("TuneBox")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("We found 1 recurring charge — review it below.")).toBeVisible();
+      await expect(page.getByText("detected")).toHaveCount(1);
+
+      await page.goto("/transactions");
+      await expect(page.getByRole("heading", { name: "Transactions" })).toBeVisible({ timeout: 15_000 });
+      const tuneBoxPicker = page.getByRole("button", { name: /Change the category of TuneBox \(\$10\.99\)/i }).first();
+      await tuneBoxPicker.click();
+      await page.getByRole("button", { name: "Remove from subscriptions" }).click();
+      await expect(page.getByText("Removed from subscriptions")).toBeVisible({ timeout: 15_000 });
+      await tuneBoxPicker.click();
+      await page.getByRole("button", { name: "Mark as a subscription" }).click();
+      await expect(page.getByText("Marked as a subscription")).toBeVisible({ timeout: 15_000 });
+
+      const tuneBoxSources = await db.query(
+        `select distinct source, count(*)::int as n
+           from transaction_flags
+          where user_id = $1 and dedup_key like 'e2e-tunebox-%' and dismissed_at is null
+          group by source
+          order by source`,
+        [userId],
+      );
+      expect(tuneBoxSources.rows).toEqual([{ source: "user", n: 4 }]);
+
+      await page.goto("/subscriptions");
+      await expect(page.getByText("TuneBox")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("DetectFlix")).toHaveCount(0);
+      await expect(page.getByText("WildCard Cafe")).toHaveCount(0);
+      await expect(page.getByText("detected")).toHaveCount(0);
+      await expect(page.getByText("We found 1 recurring charge — review it below.")).toHaveCount(0);
+
+      await page.reload();
+      await expect(page.getByText("TuneBox")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("DetectFlix")).toHaveCount(0);
+      await expect(page.getByText("detected")).toHaveCount(0);
+
+      otherContext = await browser.newContext();
+      const otherPage = await otherContext.newPage();
+      await signUpWithPasskey(otherPage, otherContext, otherEmail, password);
+
+      const otherUser = await db.query("select id from auth.users where email = $1", [otherEmail]);
+      expect(otherUser.rows).toHaveLength(1);
+      const otherUserId = otherUser.rows[0].id as string;
+      const otherAcct = await db.query(
+        `insert into financial_accounts (user_id, name, kind, currency, balance_current, balance_updated_at)
+         values ($1, 'Other Detector Checking', 'depository', 'USD', 1500, now()) returning id`,
+        [otherUserId],
+      );
+      const otherAccountId = otherAcct.rows[0].id as string;
+      await db.query(
+        `insert into transactions
+           (user_id, account_id, source, dedup_key, content_hash, amount, direction, currency, merchant, merchant_entity_id, description, category, kind, occurred_on)
+         values
+           ($1,$2,'plaid','e2e-otherpod-1','otherpod-hash-1',8.99,'debit','USD','OtherPod','ent-otherpod','OtherPod Jan','ENTERTAINMENT','spend',$3),
+           ($1,$2,'plaid','e2e-otherpod-2','otherpod-hash-2',8.99,'debit','USD','OtherPod','ent-otherpod','OtherPod Feb','ENTERTAINMENT','spend',$4),
+           ($1,$2,'plaid','e2e-otherpod-3','otherpod-hash-3',8.99,'debit','USD','OtherPod','ent-otherpod','OtherPod Mar','ENTERTAINMENT','spend',$5),
+           ($1,$2,'plaid','e2e-otherpod-4','otherpod-hash-4',8.99,'debit','USD','OtherPod','ent-otherpod','OtherPod Apr','ENTERTAINMENT','spend',$6)`,
+        [otherUserId, otherAccountId, monthDay(3), monthDay(2), monthDay(1), monthDay(0)],
+      );
+
+      await otherPage.goto("/subscriptions");
+      await expect(otherPage.getByRole("heading", { name: "Subscriptions" })).toBeVisible({ timeout: 15_000 });
+      await expect(otherPage.getByText("OtherPod")).toBeVisible({ timeout: 15_000 });
+      await expect(otherPage.getByText("We found 1 recurring charge — review it below.")).toBeVisible();
+      await expect(otherPage.getByText("detected")).toHaveCount(1);
+      await expect(otherPage.getByText("TuneBox")).toHaveCount(0);
+      await expect(otherPage.getByText("DetectFlix")).toHaveCount(0);
+      await expect(otherPage.getByText("WildCard Cafe")).toHaveCount(0);
+    } finally {
+      await otherContext?.close();
+      await db.end();
+    }
+  });
 });
