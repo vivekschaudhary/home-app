@@ -7,6 +7,20 @@
 
 import { normalizeMerchant } from "./categories";
 
+/**
+ * WLT-24-1 (mark-the-merchant) — the stable key a subscription mark applies to.
+ * Marking one charge marks the whole MERCHANT, so every charge from it (past +
+ * future) is flagged. Entity-id first (Plaid's stable merchant id, robust to name
+ * drift like "NETFLIX.COM #123"), else the normalized name. Null ⇒ unmatchable
+ * (no merchant) — only the single charge is flagged. Mirrors the WLT-22-3/4
+ * merchant-rule match key, applied to subscription flags instead of categories.
+ */
+export function subscriptionMerchantKey(merchant: string | null, merchantEntityId: string | null | undefined): string | null {
+  if (merchantEntityId) return `e:${merchantEntityId}`;
+  const norm = normalizeMerchant(merchant);
+  return norm ? `n:${norm}` : null;
+}
+
 /** A transaction the user has marked as a subscription (the read passes these in). */
 export interface MarkedTxn {
   dedupKey: string;

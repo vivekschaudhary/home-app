@@ -1,5 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { type MarkedTxn, summarizeSubscriptions } from "./subscriptions";
+import { type MarkedTxn, subscriptionMerchantKey, summarizeSubscriptions } from "./subscriptions";
+
+describe("subscriptionMerchantKey (WLT-24-1 mark-the-merchant)", () => {
+  it("prefers the stable entity id (robust to name drift)", () => {
+    expect(subscriptionMerchantKey("NETFLIX.COM #123", "ent-netflix")).toBe("e:ent-netflix");
+    expect(subscriptionMerchantKey("Netflix", "ent-netflix")).toBe("e:ent-netflix"); // same merchant despite a different name
+  });
+  it("falls back to the normalized name when there's no entity id", () => {
+    expect(subscriptionMerchantKey("NETFLIX.COM #123", null)).toBe(subscriptionMerchantKey("Netflix", null));
+    expect(subscriptionMerchantKey("Netflix", null)).toMatch(/^n:/);
+  });
+  it("is null when the merchant is unidentifiable (mark just the one charge)", () => {
+    expect(subscriptionMerchantKey(null, null)).toBeNull();
+    expect(subscriptionMerchantKey("", undefined)).toBeNull();
+  });
+});
 
 const tx = (over: Partial<MarkedTxn> & { dedupKey: string; occurredOn: string; amount: number }): MarkedTxn => ({
   merchant: "Netflix",

@@ -6,7 +6,7 @@
 
 import { createServerSupabase } from "@vc1023/passkey-2fa";
 import { FUNNEL_EVENTS, type MarkedTxn, type SubscriptionsSummary, summarizeSubscriptions } from "@wealth/core";
-import { readSubscriptionFlags } from "@wealth/db/subscriptions";
+import { markMerchantSubscription, readSubscriptionFlags, unmarkMerchantSubscription } from "@wealth/db/subscriptions";
 import { emitFunnel } from "@wealth/db/emit";
 
 export type SubscriptionWriteResult = { ok: true } | { ok: false; error: "invalid" | "save_failed" };
@@ -51,32 +51,30 @@ export async function readSubscriptionsView(userId: string): Promise<Subscriptio
   return summarizeSubscriptions(marked);
 }
 
-/** Mark a transaction as a subscription — idempotent (upsert on the unique flag). */
+/** Mark a charge as a subscription — and with it the whole MERCHANT (every active
+ * charge from it), so one mark flags all of Netflix + totals from full history.
+ * Idempotent; emits once per action. */
 export async function markSubscription(userId: string, dedupKey: string): Promise<SubscriptionWriteResult> {
   if (!dedupKey || typeof dedupKey !== "string") return { ok: false, error: "invalid" };
   const supabase = await createServerSupabase();
-  const { error } = await supabase
-    .from("transaction_flags")
-    .upsert(
-      { user_id: userId, dedup_key: dedupKey, flag_type: "subscription", source: "user" },
-      { onConflict: "user_id,dedup_key,flag_type" },
-    );
-  if (error) return { ok: false, error: "save_failed" };
+  try {
+    await markMerchantSubscription(supabase, userId, dedupKey);
+  } catch {
+    return { ok: false, error: "save_failed" };
+  }
   await emitFunnel(FUNNEL_EVENTS.SUBSCRIPTION_MARKED, userId, { action: "mark" });
   return { ok: true };
 }
 
-/** Remove a subscription mark — HARD delete (owner-scoped). */
+/** Remove the subscription mark from the charge's whole merchant — HARD delete. */
 export async function unmarkSubscription(userId: string, dedupKey: string): Promise<SubscriptionWriteResult> {
   if (!dedupKey || typeof dedupKey !== "string") return { ok: false, error: "invalid" };
   const supabase = await createServerSupabase();
-  const { error } = await supabase
-    .from("transaction_flags")
-    .delete()
-    .eq("user_id", userId)
-    .eq("dedup_key", dedupKey)
-    .eq("flag_type", "subscription");
-  if (error) return { ok: false, error: "save_failed" };
+  try {
+    await unmarkMerchantSubscription(supabase, userId, dedupKey);
+  } catch {
+    return { ok: false, error: "save_failed" };
+  }
   await emitFunnel(FUNNEL_EVENTS.SUBSCRIPTION_MARKED, userId, { action: "unmark" });
   return { ok: true };
 }

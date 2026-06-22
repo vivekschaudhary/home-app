@@ -13,6 +13,7 @@ import { createPlaidProvider } from "@wealth/aggregation/plaid";
 import { createSupabaseVault } from "@wealth/aggregation/vault";
 import { FUNNEL_EVENTS } from "@wealth/core";
 import { applyAllRulesForUser, autoAssignTransfersForUser } from "@wealth/db/categories";
+import { applySubscriptionMerchantsForUser } from "@wealth/db/subscriptions";
 import { emitFunnel } from "@wealth/db/emit";
 import { inngest } from "../client";
 import { settleHistory } from "./settle";
@@ -181,6 +182,14 @@ async function syncConnection(
   await step.run("auto-assign-transfers", async () => {
     const svc = createServiceSupabase();
     await autoAssignTransfersForUser(svc, userId);
+  });
+
+  // WLT-24-1 (mark-the-merchant) — flag freshly-synced charges whose merchant the
+  // user has already marked as a subscription, so a new month's Netflix auto-joins.
+  // No-op until the user marks something; never un-flags.
+  await step.run("apply-subscription-merchants", async () => {
+    const svc = createServiceSupabase();
+    await applySubscriptionMerchantsForUser(svc, userId);
   });
 
   await step.run("emit-sync-completed", async () => {
