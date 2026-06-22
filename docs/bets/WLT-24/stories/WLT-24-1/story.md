@@ -2,7 +2,7 @@
 id: WLT-24-1
 bet: WLT-24
 type: story
-status: ready
+status: shipped
 priority: P2
 created: 2026-06-21
 author: PM
@@ -65,6 +65,7 @@ _If post-merge bugs are found, story is re-opened and fixes live under `fixes/`.
 ### Decisions
 - [2026-06-21] [PM] **Slice 1 = substrate + mark-from-ledger + the view; detection is the next story** — rationale: ships the user-controllable surface + the shared `transaction_flags` substrate cheaply and proves demand before the detector; matches the brief's manual-first decision — area: scope — alternatives: bundle detection (rejected — heavier, defeats manual-first) — reversibility: easy
 - [2026-06-21] [PM] **Ledger row is the only mark entry point this slice** — rationale: it's the natural "I recognize this recurring merchant" moment and reuses the WLT-23 popover with zero new control; the budget-drill entry point can fast-follow — area: ux — alternatives: also the budget drill (deferred) — reversibility: easy
+- [2026-06-21] [Engineer→Codex BLOCKER] **The mark action lives INSIDE the reused WLT-23 row popover, via a generic `extraActions` slot on the shared `CategoryPicker`** — rationale: the engineer first shipped a standalone star toggle (to avoid coupling the shared picker), but Codex blocked it as a deviation from AC2/architecture (it dropped the popover's keyboard/focus/dismiss); the generic slot satisfies AC2 AND keeps the picker subscription-agnostic (budget passes none) — area: ux — alternatives: standalone toggle (rejected by review), subscription-specific picker props (rejected — couples the shared component) — reversibility: easy
 - [2026-06-21] [PM] **`pending`/`irregular` excluded from the normalized headline total** — rationale: a single charge or an erratic one would distort the monthly figure; listing them honestly while keeping the headline to confidently-inferred cadences keeps the number trustworthy — area: product/compute — alternatives: include at face value (rejected — misleading) — reversibility: easy
 
 ### Risks
@@ -76,5 +77,9 @@ _If post-merge bugs are found, story is re-opened and fixes live under `fixes/`.
 - [2026-06-21] [PM] **Detection precedence (don't re-flag an unmarked txn) is a next-story concern** — severity: low — owner: Engineer (detection story) — status: open — area: architecture — slice 1's `source` column reserves it; no handling needed while only `'user'` writes exist.
 
 ---
+
+**SHIPPED, 2026-06-21 — PR #89** (squash `6f58636`). The `transaction_flags` overlay + the pure cadence/total compute + mark-from-the-ledger (in the reused popover) + the Subscriptions view (nav flipped live). Migration 0015 verified end-to-end on an ephemeral Postgres. Codex review CLEAN after two BLOCKERs were resolved pre-merge: (1) the mark action moved into the reused row popover via a generic `extraActions` slot (it had shipped as a standalone toggle); (2) Codex's `transaction_flags` RLS suite + gated real-path E2E landed (their handoff, committed to the branch). The RLS suite (owner CRUD · hard-delete · cross-tenant deny · forged-insert WITH CHECK) passes in CI's live-PG job + was re-verified locally against a real Postgres (24 RLS tests); the gated E2E (mark 3 charges → `$15.49/mo · $185.88/yr` → CDC-revision survival → second-user isolation) run locally. Full gate green: lint · typecheck · 287 tests · build. **CLEAR tied to HEAD `6f58636`.**
+
+**Next slice:** the detection fast-follow — the `SubscriptionDetector` impl (Plaid recurring behind a swappable adapter, or a custom detector — the deferred elicitation), auto-setting `source='auto'` flags as a signal the user overrides.
 
 _Story under bet: docs/bets/WLT-24/brief.md_
