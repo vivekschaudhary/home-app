@@ -1,5 +1,7 @@
 import { type BrowserContext, type CDPSession, type Page, expect, test } from "@playwright/test";
 import { Client } from "pg";
+import { createServiceSupabase } from "@vc1023/passkey-2fa";
+import { applySubscriptionMerchantsForUser } from "@wealth/db/subscriptions";
 
 // WLT-24-1 — Subscriptions, REAL-PATH. Drives the actual ledger mark flow and
 // the live subscriptions surface under authenticated sessions so the read path is
@@ -50,7 +52,7 @@ async function markSubscriptionFromLedger(page: Page, merchant: string, amount: 
 test.describe("subscriptions — mark from ledger + summarize + CDC survival + owner isolation (WLT-24-1)", () => {
   test.skip(!RUN || !DB_URL, "Set E2E_PASSKEY=1 + SUPABASE_DB_URL + a real Supabase project to run.");
 
-  test("real session → marked recurring charges group into a monthly total, survive a CDC revision, and stay isolated to their owner", async ({
+  test("real session → one ledger mark flags the whole merchant, a new same-merchant charge auto-joins, CDC survives, and the owner stays isolated", async ({
     browser,
     page,
     context,
@@ -78,20 +80,18 @@ test.describe("subscriptions — mark from ledger + summarize + CDC survival + o
 
       await db.query(
         `insert into transactions
-           (user_id, account_id, source, dedup_key, content_hash, amount, direction, currency, merchant, description, category, kind, occurred_on)
+           (user_id, account_id, source, dedup_key, content_hash, amount, direction, currency, merchant, merchant_entity_id, description, category, kind, occurred_on)
          values
-           ($1,$2,'plaid','e2e-sub-netflix-1','sub-hash-1',14.49,'debit','USD','StreamFlix','StreamFlix May','ENTERTAINMENT','spend',$3),
-           ($1,$2,'plaid','e2e-sub-netflix-2','sub-hash-2',15.49,'debit','USD','StreamFlix','StreamFlix June','ENTERTAINMENT','spend',$4),
-           ($1,$2,'plaid','e2e-sub-netflix-3','sub-hash-3',16.49,'debit','USD','StreamFlix','StreamFlix July','ENTERTAINMENT','spend',$5),
-           ($1,$2,'plaid','e2e-sub-grocery','sub-hash-grocery',82.10,'debit','USD','Fresh Foods','Fresh Foods weekly run','GROCERIES','spend',$5)`,
+           ($1,$2,'plaid','e2e-sub-netflix-1','sub-hash-1',14.49,'debit','USD','StreamFlix','ent-streamflix','StreamFlix May','ENTERTAINMENT','spend',$3),
+           ($1,$2,'plaid','e2e-sub-netflix-2','sub-hash-2',15.49,'debit','USD','StreamFlix','ent-streamflix','StreamFlix June','ENTERTAINMENT','spend',$4),
+           ($1,$2,'plaid','e2e-sub-netflix-3','sub-hash-3',16.49,'debit','USD','StreamFlix','ent-streamflix','StreamFlix July','ENTERTAINMENT','spend',$5),
+           ($1,$2,'plaid','e2e-sub-grocery','sub-hash-grocery',82.10,'debit','USD','Fresh Foods','ent-fresh-foods','Fresh Foods weekly run','GROCERIES','spend',$5)`,
         [userId, accountId, monthDay(2), monthDay(1), monthDay(0)],
       );
 
       await page.goto("/transactions");
       await expect(page.getByRole("heading", { name: "Transactions" })).toBeVisible({ timeout: 15_000 });
       await markSubscriptionFromLedger(page, "StreamFlix", "\\$14\\.49");
-      await markSubscriptionFromLedger(page, "StreamFlix", "\\$15\\.49");
-      await markSubscriptionFromLedger(page, "StreamFlix", "\\$16\\.49");
       await expect(page.getByText("★ Subscription")).toHaveCount(3);
 
       const flags = await db.query(
@@ -116,9 +116,9 @@ test.describe("subscriptions — mark from ledger + summarize + CDC survival + o
 
       const revisedTxn = await db.query(
         `insert into transactions
-           (user_id, account_id, source, dedup_key, content_hash, amount, direction, currency, merchant, description, category, kind, occurred_on)
+           (user_id, account_id, source, dedup_key, content_hash, amount, direction, currency, merchant, merchant_entity_id, description, category, kind, occurred_on)
          values
-           ($1,$2,'plaid','e2e-sub-netflix-2','sub-hash-2-revised',15.49,'debit','USD','StreamFlix.com','StreamFlix June revised','ENTERTAINMENT','spend',$3)
+           ($1,$2,'plaid','e2e-sub-netflix-2','sub-hash-2-revised',15.49,'debit','USD','StreamFlix.com','ent-streamflix','StreamFlix June revised','ENTERTAINMENT','spend',$3)
          returning id`,
         [userId, accountId, monthDay(1)],
       );
@@ -143,6 +143,37 @@ test.describe("subscriptions — mark from ledger + summarize + CDC survival + o
       await expect(page.getByText("StreamFlix.com")).toBeVisible({ timeout: 15_000 });
       await expect(page.getByText("★ Subscription")).toHaveCount(3);
 
+      await db.query(
+        `insert into transactions
+           (user_id, account_id, source, dedup_key, content_hash, amount, direction, currency, merchant, merchant_entity_id, description, category, kind, occurred_on)
+         values
+           ($1,$2,'plaid','e2e-sub-netflix-4','sub-hash-4',18.49,'debit','USD','STREAMFLIX.COM #123','ent-streamflix','StreamFlix August','ENTERTAINMENT','spend',$3)`,
+        [userId, accountId, monthDay(-1)],
+      );
+      await applySubscriptionMerchantsForUser(createServiceSupabase(), userId);
+
+      const postSyncFlags = await db.query(
+        `select dedup_key
+           from transaction_flags
+          where user_id = $1 and flag_type = 'subscription'
+          order by dedup_key`,
+        [userId],
+      );
+      expect(postSyncFlags.rows).toEqual([
+        { dedup_key: "e2e-sub-netflix-1" },
+        { dedup_key: "e2e-sub-netflix-2" },
+        { dedup_key: "e2e-sub-netflix-3" },
+        { dedup_key: "e2e-sub-netflix-4" },
+      ]);
+
+      await page.goto("/subscriptions");
+      await expect(page.getByText("$15.99 / month · $191.88 / year")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("every month")).toBeVisible();
+
+      await page.goto("/transactions");
+      await expect(page.getByText("STREAMFLIX.COM #123")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("★ Subscription")).toHaveCount(4);
+
       otherContext = await browser.newContext();
       const otherPage = await otherContext.newPage();
       await signUpWithPasskey(otherPage, otherContext, otherEmail, password);
@@ -158,9 +189,9 @@ test.describe("subscriptions — mark from ledger + summarize + CDC survival + o
       const otherAccountId = otherAcct.rows[0].id as string;
       await db.query(
         `insert into transactions
-           (user_id, account_id, source, dedup_key, content_hash, amount, direction, currency, merchant, description, category, kind, occurred_on)
+           (user_id, account_id, source, dedup_key, content_hash, amount, direction, currency, merchant, merchant_entity_id, description, category, kind, occurred_on)
          values
-           ($1,$2,'plaid','e2e-sub-other','sub-other-hash',24.99,'debit','USD','Other Service','Other Service June','ENTERTAINMENT','spend',$3)`,
+           ($1,$2,'plaid','e2e-sub-other','sub-other-hash',24.99,'debit','USD','Other Service','ent-other-service','Other Service June','ENTERTAINMENT','spend',$3)`,
         [otherUserId, otherAccountId, monthDay(0)],
       );
       await db.query(
