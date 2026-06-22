@@ -3,7 +3,7 @@ id: FIX-2026-06-22-mark-the-merchant
 type: fix
 bet: WLT-24
 story: WLT-24-1
-status: in-review
+status: shipped
 severity: P2
 reported_by: operator (dogfooding)
 created: 2026-06-22
@@ -51,4 +51,4 @@ Marking (or unmarking) a charge now applies to its whole merchant, reusing the W
 
 ---
 
-**Shipped:** _pending PR._ Reuses the WLT-24-1 `transaction_flags` substrate; no migration. CLEAR to be tied to HEAD on merge.
+**Shipped:** PR #91 (squash `6e73ff9`), 2026-06-22. Reuses the WLT-24-1 `transaction_flags` substrate; no migration. Codex review CLEAN after one BLOCKER (the gated E2E had to prove the new merchant-mark contract, not the old per-charge flow) — Codex updated `e2e/subscriptions.spec.ts` (one mark → all 3 flagged · total from one mark · CDC survival · a name-variant same-entity charge auto-joins via the sync step · second-user isolation), committed to the branch. RLS suite unchanged (re-verified at 24 tests on the WLT-24-1 build). Full gate green: lint · typecheck · 290 tests · build. **CLEAR tied to HEAD `6e73ff9`.**
