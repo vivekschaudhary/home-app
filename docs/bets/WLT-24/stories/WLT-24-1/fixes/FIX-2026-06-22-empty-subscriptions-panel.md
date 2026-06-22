@@ -3,7 +3,7 @@ id: FIX-2026-06-22-empty-subscriptions-panel
 type: fix
 bet: WLT-24
 story: WLT-24-1
-status: in-review
+status: shipped
 severity: P1
 reported_by: operator (dogfooding)
 created: 2026-06-22
@@ -34,7 +34,7 @@ Read the user's **active debit transactions paginated** (`readAllPaged`, the FIX
 ## Verification
 
 - Engineer: the read returns the marked subscriptions regardless of flag count (the IN-URL ceiling is gone). Verified the read logic end-to-end on an ephemeral Postgres (mark N charges → the summary lists them). Full gate: lint · typecheck · tests · build. A source-guard test pins that the view read stays paginated (no `.in(` over dedup_keys reintroduced).
-- **Codex (separate handoff):** extend the gated E2E so the Subscriptions panel is populated when a merchant with **many** charges is marked (a flag count that would have overflowed the old IN read) — the real-path regression proof.
+- **Codex (separate handoff):** extend the gated E2E so the Subscriptions panel is populated when a merchant with **many** charges is marked (a flag count that would have overflowed the old IN read) — the real-path regression proof. **Done** — `e2e/subscriptions.spec.ts` adds the 180-charge "MegaStream" case asserting the panel stays populated after a server read + reload (committed in the closeout PR; the fix itself shipped in #93).
 
 ## DRI Log
 
@@ -49,4 +49,4 @@ Read the user's **active debit transactions paginated** (`readAllPaged`, the FIX
 
 ---
 
-**Shipped:** _pending PR._ No migration. CLEAR to be tied to HEAD on merge.
+**Shipped:** PR #93 (squash-merged `d8439667`, 2026-06-22). No migration. The fix + source-guard landed in #93; Codex's many-charge regression E2E lands in the closeout PR (it arrived uncommitted — the [[codex-deliverables-land-uncommitted]] pattern).
