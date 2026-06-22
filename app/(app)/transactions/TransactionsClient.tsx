@@ -81,15 +81,12 @@ export function TransactionsClient({
   const [moreError, setMoreError] = useState(false);
   const [focusRowId, setFocusRowId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [subBusy, setSubBusy] = useState<string | null>(null); // dedupKey toggling its subscription mark
 
-  // WLT-24-1 — mark / unmark a recurring charge as a subscription (orthogonal to
-  // category — this never touches the row's category/budget). No optimistic revert:
-  // the row flips only on success.
+  // WLT-24-1 — mark / unmark a recurring charge as a subscription, from the row's
+  // existing popover (AC2). Orthogonal to category — never touches the row's
+  // category/budget. No optimistic revert: the row flips only on success.
   async function toggleSubscription(r: TransactionRowDTO) {
-    setSubBusy(r.dedupKey);
     const res = r.isSubscription ? await unmarkSubscription(r.dedupKey) : await markSubscription(r.dedupKey);
-    setSubBusy(null);
     if (!res.ok) {
       setToast(res.error === "network" ? SUB.errorNetwork : res.error === "invalid" ? SUB.errorInvalid : SUB.error);
       return;
@@ -337,23 +334,12 @@ export function TransactionsClient({
                         {C.pending}
                       </span>
                     ) : null}
-                    {/* WLT-24-1 — mark/unmark as a subscription (a debit only). */}
-                    {r.direction === "debit" ? (
-                      <button
-                        type="button"
-                        onClick={() => toggleSubscription(r)}
-                        disabled={subBusy === r.dedupKey}
-                        aria-pressed={r.isSubscription}
-                        aria-label={fill(r.isSubscription ? SUBA.unmarkA11y : SUBA.markA11y, {
-                          merchant: r.merchant || r.description,
-                        })}
-                        title={r.isSubscription ? SUB.unmarkAction : SUB.markAction}
-                        className={`ml-2 align-middle text-xs font-medium underline disabled:opacity-50 ${
-                          r.isSubscription ? "text-indigo-600" : "text-gray-400"
-                        }`}
-                      >
-                        {r.isSubscription ? `★ ${SUB.markIndicator}` : "☆"}
-                      </button>
+                    {/* WLT-24-1 — a non-interactive marked indicator; the mark/unmark
+                        ACTION lives in the row popover below (AC2). */}
+                    {r.isSubscription ? (
+                      <span className="ml-2 rounded-full bg-indigo-50 px-2 py-0.5 align-middle text-xs font-medium text-indigo-700">
+                        ★ {SUB.markIndicator}
+                      </span>
                     ) : null}
                   </td>
                   <td
@@ -377,6 +363,21 @@ export function TransactionsClient({
                       canRemember={!!r.merchant}
                       onPick={(categoryId, applyToMerchant) => handleRecat(r, categoryId, applyToMerchant)}
                       onCreate={createCat}
+                      extraActions={
+                        r.direction === "debit"
+                          ? [
+                              {
+                                key: "subscription",
+                                label: r.isSubscription ? SUB.unmarkAction : SUB.markAction,
+                                a11yLabel: fill(r.isSubscription ? SUBA.unmarkA11y : SUBA.markA11y, {
+                                  merchant: r.merchant || r.description,
+                                }),
+                                pressed: r.isSubscription,
+                                onSelect: () => toggleSubscription(r),
+                              },
+                            ]
+                          : undefined
+                      }
                     />
                   </td>
                   <td className="block py-0.5 text-gray-600 md:table-cell md:py-3">

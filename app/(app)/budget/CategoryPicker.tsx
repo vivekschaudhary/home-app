@@ -28,6 +28,16 @@ export type CreateResult =
   | { ok: true; category: CategoryDTO }
   | { ok: false; error: "invalid" | "duplicate" | "server" | "network" };
 
+/** A generic extra action in the picker menu (e.g. WLT-24-1 "Mark as subscription")
+ * — keeps this shared component agnostic of any one caller's feature. */
+export interface PickerExtraAction {
+  key: string;
+  label: string;
+  a11yLabel?: string;
+  pressed?: boolean; // reflected as aria-pressed (a toggle)
+  onSelect: () => void;
+}
+
 export function CategoryPicker({
   current,
   merchantLabel,
@@ -36,6 +46,7 @@ export function CategoryPicker({
   canRemember,
   onPick,
   onCreate,
+  extraActions,
 }: {
   current: string; // the resolved current category name ("" = "Other")
   merchantLabel: string; // merchant or description, for display + a11y
@@ -44,6 +55,7 @@ export function CategoryPicker({
   canRemember: boolean; // true when the transaction has a real merchant (a rule can match)
   onPick: (categoryId: string, applyToMerchant: boolean) => Promise<RecatResult>;
   onCreate: (name: string, kind: "essential" | "discretionary") => Promise<CreateResult>;
+  extraActions?: readonly PickerExtraAction[]; // caller-provided menu items (WLT-24-1)
 }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -190,6 +202,21 @@ export function CategoryPicker({
               {R.newCategory}
             </button>
           </MenuItem>
+          {/* WLT-24-1 — caller-provided extra actions (e.g. mark as subscription),
+              in the SAME popover so they inherit its keyboard/focus/dismiss. */}
+          {(extraActions ?? []).map((a) => (
+            <MenuItem key={a.key}>
+              <button
+                type="button"
+                onClick={a.onSelect}
+                aria-pressed={a.pressed}
+                aria-label={a.a11yLabel}
+                className="block w-full border-t border-gray-100 px-3 py-1.5 text-left text-sm font-medium text-gray-700 data-[focus]:bg-gray-100"
+              >
+                {a.label}
+              </button>
+            </MenuItem>
+          ))}
         </MenuItems>
       </Menu>
       {creating ? (
