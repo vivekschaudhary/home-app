@@ -64,6 +64,7 @@ const r = (over: Partial<TransactionRowDTO> & { id: string }): TransactionRowDTO
   category: "FOOD_AND_DRINK",
   account: "Everyday Checking",
   pending: false,
+  isSubscription: false,
   ...over,
 });
 

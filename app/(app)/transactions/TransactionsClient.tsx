@@ -14,9 +14,12 @@ import {
   fetchTransactions,
   recordTransactionsFiltered,
 } from "@/app/lib/transactions-client";
+import { markSubscription, unmarkSubscription } from "@/app/lib/subscriptions-client";
 
 const C = COPY.transactions;
 const A = COPY.transactionsA11y;
+const SUB = COPY.subscriptions;
+const SUBA = COPY.subscriptionsA11y;
 
 // Select sentinel for the "all" (unfiltered) option — distinct from a real account
 // id (uuid) and from the "" category value (the null-category "Other" bucket).
@@ -78,6 +81,22 @@ export function TransactionsClient({
   const [moreError, setMoreError] = useState(false);
   const [focusRowId, setFocusRowId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [subBusy, setSubBusy] = useState<string | null>(null); // dedupKey toggling its subscription mark
+
+  // WLT-24-1 — mark / unmark a recurring charge as a subscription (orthogonal to
+  // category — this never touches the row's category/budget). No optimistic revert:
+  // the row flips only on success.
+  async function toggleSubscription(r: TransactionRowDTO) {
+    setSubBusy(r.dedupKey);
+    const res = r.isSubscription ? await unmarkSubscription(r.dedupKey) : await markSubscription(r.dedupKey);
+    setSubBusy(null);
+    if (!res.ok) {
+      setToast(res.error === "network" ? SUB.errorNetwork : res.error === "invalid" ? SUB.errorInvalid : SUB.error);
+      return;
+    }
+    setRows((rs) => rs.map((x) => (x.dedupKey === r.dedupKey ? { ...x, isSubscription: !r.isSubscription } : x)));
+    setToast(r.isSubscription ? SUB.unmarkedToast : SUB.markedToast);
+  }
   const didMount = useRef(false);
 
   // Replace the list with a fresh first page for the current filters + search.
@@ -317,6 +336,24 @@ export function TransactionsClient({
                       <span className="ml-2 rounded-full bg-amber-50 px-2 py-0.5 align-middle text-xs font-medium text-amber-700">
                         {C.pending}
                       </span>
+                    ) : null}
+                    {/* WLT-24-1 — mark/unmark as a subscription (a debit only). */}
+                    {r.direction === "debit" ? (
+                      <button
+                        type="button"
+                        onClick={() => toggleSubscription(r)}
+                        disabled={subBusy === r.dedupKey}
+                        aria-pressed={r.isSubscription}
+                        aria-label={fill(r.isSubscription ? SUBA.unmarkA11y : SUBA.markA11y, {
+                          merchant: r.merchant || r.description,
+                        })}
+                        title={r.isSubscription ? SUB.unmarkAction : SUB.markAction}
+                        className={`ml-2 align-middle text-xs font-medium underline disabled:opacity-50 ${
+                          r.isSubscription ? "text-indigo-600" : "text-gray-400"
+                        }`}
+                      >
+                        {r.isSubscription ? `★ ${SUB.markIndicator}` : "☆"}
+                      </button>
                     ) : null}
                   </td>
                   <td

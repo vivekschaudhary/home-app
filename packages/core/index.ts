@@ -9,3 +9,4 @@ export * from "./recap";
 export * from "./anomaly";
 export * from "./budget";
 export * from "./categories";
+export * from "./subscriptions";

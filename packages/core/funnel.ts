@@ -53,6 +53,10 @@ export const FUNNEL_EVENTS = {
   // WLT-23-2 — a user applied an account/category filter on the ledger (the
   // "find a charge" engagement signal — whether filters get used).
   TRANSACTIONS_FILTERED: "transactions_filtered",
+  // WLT-24-1 — Subscriptions: a user marked/unmarked a recurring charge, and a
+  // visit to the Subscriptions surface (adoption of the recurring-spend view).
+  SUBSCRIPTION_MARKED: "subscription_marked",
+  SUBSCRIPTIONS_VIEWED: "subscriptions_viewed",
 } as const;
 
 export type FunnelEvent = (typeof FUNNEL_EVENTS)[keyof typeof FUNNEL_EVENTS];
