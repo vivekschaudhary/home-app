@@ -6,7 +6,12 @@
 
 import { createServerSupabase } from "@vc1023/passkey-2fa";
 import { FUNNEL_EVENTS, type MarkedTxn, type SubscriptionsSummary, summarizeSubscriptions } from "@wealth/core";
-import { markMerchantSubscription, readSubscriptionFlags, unmarkMerchantSubscription } from "@wealth/db/subscriptions";
+import {
+  detectAndFlagSubscriptionsForUser,
+  markMerchantSubscription,
+  readSubscriptionFlags,
+  unmarkMerchantSubscription,
+} from "@wealth/db/subscriptions";
 import { emitFunnel } from "@wealth/db/emit";
 import { readAllPaged } from "@wealth/db/paged";
 
@@ -20,6 +25,26 @@ export type SubscriptionWriteResult = { ok: true } | { ok: false; error: "invali
  * FLAGGED transactions — a single mark is `pending` until a second confirms the
  * cadence; the detection fast-follow auto-marks recurring siblings.
  */
+/**
+ * WLT-24-2 — run the custom subscription detector for the user (idempotent) and
+ * emit `subscription_detected` when it auto-flags new merchants. Called at the top
+ * of the Subscriptions page RSC so an already-connected user sees detections on
+ * first visit, mirroring the WLT-22-5 auto-assign-on-read pattern. Best-effort:
+ * detection never blocks the view (a failure logs nothing user-facing and returns 0,
+ * since the sync step is the durable path). Returns the number of new merchants.
+ */
+export async function runSubscriptionDetection(userId: string): Promise<number> {
+  const supabase = await createServerSupabase();
+  let detected = 0;
+  try {
+    detected = await detectAndFlagSubscriptionsForUser(supabase, userId);
+  } catch {
+    return 0;
+  }
+  if (detected > 0) await emitFunnel(FUNNEL_EVENTS.SUBSCRIPTION_DETECTED, userId, { merchants: detected });
+  return detected;
+}
+
 export async function readSubscriptionsView(userId: string): Promise<SubscriptionsSummary> {
   const supabase = await createServerSupabase();
   const flagged = await readSubscriptionFlags(supabase, userId);
@@ -76,7 +101,9 @@ export async function markSubscription(userId: string, dedupKey: string): Promis
   return { ok: true };
 }
 
-/** Remove the subscription mark from the charge's whole merchant — HARD delete. */
+/** Remove (DISMISS) the subscription from the charge's whole merchant. WLT-24-2:
+ * a durable SOFT-delete — the detector won't re-add a dismissed merchant. Emits
+ * `subscription_dismissed` (the false-positive / curation signal). */
 export async function unmarkSubscription(userId: string, dedupKey: string): Promise<SubscriptionWriteResult> {
   if (!dedupKey || typeof dedupKey !== "string") return { ok: false, error: "invalid" };
   const supabase = await createServerSupabase();
@@ -85,7 +112,7 @@ export async function unmarkSubscription(userId: string, dedupKey: string): Prom
   } catch {
     return { ok: false, error: "save_failed" };
   }
-  await emitFunnel(FUNNEL_EVENTS.SUBSCRIPTION_MARKED, userId, { action: "unmark" });
+  await emitFunnel(FUNNEL_EVENTS.SUBSCRIPTION_DISMISSED, userId, { action: "unmark" });
   return { ok: true };
 }
 

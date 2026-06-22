@@ -33,3 +33,15 @@ describe("subscriptions view read stays paginated (FIX-2026-06-22 — empty-pane
     expect(src, "must not read the marked txns via .in(dedup_key, …) — the URL overflows past enough marks").not.toContain('.in("dedup_key"');
   });
 });
+
+// WLT-24-2 — the detector lives in @wealth/core and MUST stay pure (no I/O): the DB
+// write path (@wealth/db) reads + runs it, the app layer orchestrates. If the core
+// detector reached into the DB it would couple the pure compute to a client and
+// break unit-testability (and could smuggle the category axis back in). Pin purity.
+describe("the core subscription detector stays pure (WLT-24-2)", () => {
+  const src = readFileSync(join(ROOT, "packages/core/subscriptions.ts"), "utf8");
+  it("packages/core/subscriptions.ts imports no DB / Supabase client", () => {
+    expect(src, "the pure detector must not import @wealth/db").not.toContain("@wealth/db");
+    expect(src, "the pure detector must not import a Supabase client").not.toContain("supabase");
+  });
+});
