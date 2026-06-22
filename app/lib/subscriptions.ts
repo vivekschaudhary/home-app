@@ -9,7 +9,7 @@ import { FUNNEL_EVENTS, type MarkedTxn, type SubscriptionsSummary, summarizeSubs
 import {
   detectAndFlagSubscriptionsForUser,
   markMerchantSubscription,
-  readSubscriptionFlags,
+  readSubscriptionFlagSources,
   unmarkMerchantSubscription,
 } from "@wealth/db/subscriptions";
 import { emitFunnel } from "@wealth/db/emit";
@@ -47,8 +47,8 @@ export async function runSubscriptionDetection(userId: string): Promise<number> 
 
 export async function readSubscriptionsView(userId: string): Promise<SubscriptionsSummary> {
   const supabase = await createServerSupabase();
-  const flagged = await readSubscriptionFlags(supabase, userId);
-  if (flagged.size === 0) return { subscriptions: [], monthlyTotal: 0, annualTotal: 0 };
+  const sources = await readSubscriptionFlagSources(supabase, userId);
+  if (sources.size === 0) return { subscriptions: [], monthlyTotal: 0, annualTotal: 0 };
 
   // Read the user's ACTIVE debit transactions (paged past the 1000-row cap) and
   // keep the flagged ones — NOT an `IN(dedup_keys)`, whose query string overflows
@@ -75,13 +75,14 @@ export async function readSubscriptionsView(userId: string): Promise<Subscriptio
     "subscriptions-view",
   );
   const marked: MarkedTxn[] = rows
-    .filter((r) => flagged.has(r.dedup_key))
+    .filter((r) => sources.has(r.dedup_key))
     .map((r) => ({
       dedupKey: r.dedup_key,
       merchant: r.merchant,
       description: r.description,
       amount: Math.abs(Number(r.amount)),
       occurredOn: r.occurred_on,
+      source: sources.get(r.dedup_key), // 'user' | 'auto' — drives the "detected" tag
     }));
   return summarizeSubscriptions(marked);
 }

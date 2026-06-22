@@ -31,6 +31,7 @@ export interface MarkedTxn {
   description: string;
   amount: number; // unsigned, in dollars
   occurredOn: string; // 'YYYY-MM-DD'
+  source?: "user" | "auto"; // WLT-24-2 — how the flag arose; absent ⇒ treated as 'user'
 }
 
 /** `pending` = too few occurrences to infer; `irregular` = inferred but not a clean cycle. */
@@ -45,6 +46,10 @@ export interface SubscriptionRow {
   /** Normalized monthly cost; null for `pending`/`irregular` (excluded from the headline). */
   monthlyEquivalent: number | null;
   dedupKeys: string[]; // the underlying marked transactions (unmark / drill)
+  /** WLT-24-2 — 'auto' iff EVERY underlying flag was auto-detected; 'user' once the
+   * user has marked any charge of the merchant (a user touch claims ownership). The
+   * UI tags 'auto' rows "detected" so an auto-mark reads as intentional, not a bug. */
+  source: "user" | "auto";
 }
 
 export interface SubscriptionsSummary {
@@ -133,6 +138,8 @@ export function summarizeSubscriptions(txns: readonly MarkedTxn[]): Subscription
       occurrences: members.length,
       monthlyEquivalent: monthlyEquivalent(cadence, typicalAmount),
       dedupKeys: members.map((m) => m.dedupKey),
+      // 'auto' only when every charge is auto-detected; any user mark ⇒ 'user'.
+      source: members.every((m) => m.source === "auto") ? "auto" : "user",
     });
   }
 

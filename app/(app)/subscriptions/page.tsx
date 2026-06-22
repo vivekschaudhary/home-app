@@ -23,7 +23,7 @@ export default async function SubscriptionsPage() {
     <div>
       <h1 className="text-xl font-semibold text-gray-900">{COPY.subscriptions.title}</h1>
       <p className="mt-1 text-sm text-gray-600">{COPY.subscriptions.subtitle}</p>
-      <SubscriptionsClient initial={view} />
+      <SubscriptionsClient initial={view} userId={userId} />
     </div>
   );
 }

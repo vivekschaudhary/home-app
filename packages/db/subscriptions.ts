@@ -31,6 +31,28 @@ export async function readSubscriptionFlags(client: SupabaseClientT, userId: str
   return new Set(rows.map((r) => r.dedup_key));
 }
 
+/** Like `readSubscriptionFlags` but keeps each ACTIVE flag's `source` ('user' or
+ * 'auto') — the Subscriptions view needs it to tag auto-detected rows "detected"
+ * (WLT-24-2 AC7). Dismissed flags are excluded (same as the set reader). */
+export async function readSubscriptionFlagSources(
+  client: SupabaseClientT,
+  userId: string,
+): Promise<Map<string, "user" | "auto">> {
+  const rows = await readAllPaged<{ dedup_key: string; source: "user" | "auto" }>(
+    (from, to) =>
+      client
+        .from("transaction_flags")
+        .select("dedup_key, source")
+        .eq("user_id", userId)
+        .eq("flag_type", "subscription")
+        .is("dismissed_at", null)
+        .order("dedup_key", { ascending: true })
+        .range(from, to),
+    "subscription-flag-sources",
+  );
+  return new Map(rows.map((r) => [r.dedup_key, r.source]));
+}
+
 type TxnMerchant = {
   dedup_key: string;
   merchant: string | null;

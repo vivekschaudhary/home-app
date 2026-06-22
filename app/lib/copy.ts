@@ -569,6 +569,14 @@ export const COPY = {
     emptyBody:
       "Spot a recurring charge in your transactions — a streaming service, a gym, a SaaS tool — and mark it as a subscription to see what it all adds up to.",
     emptyCta: "Go to transactions",
+    // WLT-24-2 — auto-detection: the "detected" tag + the review nudge.
+    // docs/bets/WLT-24/stories/WLT-24-2/copy.md verbatim.
+    detectedTag: "detected",
+    nudgeOne: "We found 1 recurring charge — review it below.",
+    nudgeMany: "We found {count} recurring charges — review them below.",
+    nudgeBody:
+      "We auto-marked these from your transaction history. Keep the ones that are right, remove any that aren't — your changes stick.",
+    nudgeDismiss: "Got it",
   },
   subscriptionsA11y: {
     markA11y: "Mark {merchant} as a subscription",
@@ -576,6 +584,11 @@ export const COPY = {
     listA11y: "Your subscriptions",
     headline: "{monthly} per month, {annual} per year, across {count} subscriptions",
     rowA11y: "{merchant}, {amount}, billed {cadence}, {monthly} per month",
+    // WLT-24-2 — auto-detected rows + the review-nudge region.
+    detectedTagA11y: "detected automatically — review or remove",
+    rowDetectedA11y: "{merchant}, {amount}, billed {cadence}, detected automatically",
+    nudgeRegion: "Subscription review",
+    nudgeDismissA11y: "Dismiss this review note",
   },
   // WLT-23-1 — the Transactions ledger. docs/bets/WLT-23/stories/WLT-23-1/copy.md verbatim.
   transactions: {
