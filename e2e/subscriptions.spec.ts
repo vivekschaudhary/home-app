@@ -211,4 +211,77 @@ test.describe("subscriptions — mark from ledger + summarize + CDC survival + o
       await db.end();
     }
   });
+
+  test("real session → marking a many-charge merchant keeps the subscriptions panel populated after a server read", async ({
+    page,
+    context,
+  }) => {
+    const email = `e2e-subscriptions-overflow+${Date.now()}@example.com`;
+    const password = "correct horse battery staple";
+    const MANY_CHARGES = 180;
+
+    await signUpWithPasskey(page, context, email, password);
+
+    const db = new Client({ connectionString: DB_URL });
+    await db.connect();
+    try {
+      const u = await db.query("select id from auth.users where email = $1", [email]);
+      expect(u.rows).toHaveLength(1);
+      const userId = u.rows[0].id as string;
+
+      const acct = await db.query(
+        `insert into financial_accounts (user_id, name, kind, currency, balance_current, balance_updated_at)
+         values ($1, 'Overflow Subscriptions Checking', 'depository', 'USD', 7200, now()) returning id`,
+        [userId],
+      );
+      const accountId = acct.rows[0].id as string;
+
+      await db.query(
+        `insert into transactions
+           (user_id, account_id, source, dedup_key, content_hash, amount, direction, currency, merchant, merchant_entity_id, description, category, kind, occurred_on)
+         select
+           $1,
+           $2,
+           'plaid',
+           format('plaid:acct-overflow:%s:%s', lpad(n::text, 4, '0'), repeat('very-long-subscription-key-', 3)),
+           format('overflow-hash-%s', lpad(n::text, 4, '0')),
+           19.99,
+           'debit',
+           'USD',
+           'MegaStream',
+           'ent-megastream',
+           format('MegaStream cycle %s', lpad(n::text, 4, '0')),
+           'ENTERTAINMENT',
+           'spend',
+           ($3::date - (( $4 - n) * interval '30 days'))::date
+         from generate_series(1, $4) as n`,
+        [userId, accountId, monthDay(0), MANY_CHARGES],
+      );
+
+      await page.goto("/transactions");
+      await expect(page.getByRole("heading", { name: "Transactions" })).toBeVisible({ timeout: 15_000 });
+      await markSubscriptionFromLedger(page, "MegaStream", "\\$19\\.99");
+
+      const flagCount = await db.query(
+        `select count(*)::int as n
+           from transaction_flags
+          where user_id = $1 and flag_type = 'subscription'`,
+        [userId],
+      );
+      expect(flagCount.rows).toEqual([{ n: MANY_CHARGES }]);
+
+      await page.goto("/subscriptions");
+      await expect(page.getByRole("heading", { name: "Subscriptions" })).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("MegaStream")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("$19.99 / month · $239.88 / year")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("No subscriptions marked yet")).toHaveCount(0);
+
+      await page.reload();
+      await expect(page.getByText("MegaStream")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("$19.99 / month · $239.88 / year")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("No subscriptions marked yet")).toHaveCount(0);
+    } finally {
+      await db.end();
+    }
+  });
 });
