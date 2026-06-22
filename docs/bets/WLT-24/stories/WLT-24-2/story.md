@@ -2,7 +2,7 @@
 id: WLT-24-2
 bet: WLT-24
 type: story
-status: ready
+status: shipped
 priority: P2
 created: 2026-06-22
 author: PM
@@ -80,5 +80,9 @@ _If post-merge bugs are found, story is re-opened and fixes live under `fixes/`.
 - [2026-06-21] [Enterprise Architect] **Plaid `/transactions/recurring/get` ADR-002 amendment** — severity: low (now) — owner: Enterprise/Solution Architect — status: parked — area: vendor/scope — **closed for this slice** by the custom-detector decision; only re-opens if a future slice adopts the Plaid recurring product.
 
 ---
+
+**SHIPPED, 2026-06-22 — PR #96** (squash `f03f7e3`). The custom, provider-agnostic subscription detector, in one PR: migration `0016` (`dismissed_at` + partial active index), the pure `detectSubscriptions` (≥3 occurrences AND clean cadence AND amount CV ≤ 0.10 AND confidence ≥ 0.70), the dismissal model (durable soft-delete unmark; the detector never re-adds a dismissed merchant; re-mark clears it — user > auto > dismissed), `detectAndFlagSubscriptionsForUser`, the `detect-subscriptions` sync step + the first-visit page-RSC run, and the AC7 UI (the "detected" tag + the dismissible review nudge + per-row `source`). Migration verified on an ephemeral Postgres; OPS-2 auto-applies on deploy. **Codex review** raised two BLOCKERs, both resolved pre-merge: (1) the AC7 trust UI was missing while detection ran live → folded in (it would otherwise have made auto-marks look like a bug); (2) the `dismissed_at` RLS + the gated E2E were owed → Codex authored both (each landed uncommitted and was committed with Codex co-author). The RLS suite (owner set/clear of `dismissed_at` + cross-tenant deny) was re-verified against a real Postgres (CI's exact recipe — **25/25 RLS tests**) + passes CI's live-PG job; the gated E2E proves detect → tagged → durable-dismiss → re-mark → no-false-positive → second-user isolation. Full gate green: lint · typecheck · 305 unit tests · build. **CLEAR tied to HEAD `384ba69`.**
+
+**WLT-24 bet status:** WLT-24-1 (manual mark + the view) + WLT-24-2 (auto-detection) shipped — the Subscriptions surface now finds recurring charges for the user and lets them override (the signal/decision split). Open follow-ons (not started): the `followup` flag bet (reuses the `transaction_flags` substrate); a "detect now" affordance / a `last_detected_at` read-path guard if latency warrants.
 
 _Story under bet: docs/bets/WLT-24/brief.md_
