@@ -25,6 +25,12 @@ vi.mock("@/app/lib/budget-client", () => ({
   recategorizeTransaction: (p: unknown) => recategorizeTransactionMock(p),
   createCategory: (...a: unknown[]) => createCategoryMock(...a),
 }));
+const markSubscriptionMock = vi.fn<(dk: string) => Promise<{ ok: boolean }>>();
+const unmarkSubscriptionMock = vi.fn<(dk: string) => Promise<{ ok: boolean }>>();
+vi.mock("@/app/lib/subscriptions-client", () => ({
+  markSubscription: (dk: string) => markSubscriptionMock(dk),
+  unmarkSubscription: (dk: string) => unmarkSubscriptionMock(dk),
+}));
 
 import { TransactionsClient } from "./TransactionsClient";
 
@@ -64,6 +70,7 @@ const r = (over: Partial<TransactionRowDTO> & { id: string }): TransactionRowDTO
   category: "FOOD_AND_DRINK",
   account: "Everyday Checking",
   pending: false,
+  isSubscription: false,
   ...over,
 });
 
@@ -301,6 +308,17 @@ describe("TransactionsClient — recategorize from the row (WLT-23-3)", () => {
     // single-move acknowledgment + the row now reads Groceries (no full refetch needed)
     await waitFor(() => expect(screen.getByText("Moved to Groceries")).toBeTruthy());
     expect(fetchTransactionsMock).not.toHaveBeenCalled(); // a single move reconciles in place, no page refetch
+  });
+
+  it("WLT-24-1 — the 'Mark as a subscription' action lives IN the row's popover (AC2) and marks the row's dedupKey", async () => {
+    markSubscriptionMock.mockResolvedValue({ ok: true });
+    render(<TransactionsClient initial={page()} initialError={false} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Change the category of Blue Bottle/ })); // the SAME reused popover
+    // the action is a menuitem IN that popover (its a11y name names the merchant)
+    const markItem = await screen.findByRole("menuitem", { name: "Mark Blue Bottle as a subscription" });
+    fireEvent.click(markItem);
+    await waitFor(() => expect(markSubscriptionMock).toHaveBeenCalledWith("dk-t1"));
+    await waitFor(() => expect(screen.getByText("Marked as a subscription")).toBeTruthy());
   });
 
   it("offers 'Always categorize this merchant' only when the row has a merchant (AC3 edge)", async () => {

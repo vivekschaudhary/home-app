@@ -962,3 +962,91 @@ suite("category_rules RLS (WLT-22-3/4): owner CRUD + composite-FK isolation", ()
     }
   }, 30_000);
 });
+
+// Subscription-flag posture (WLT-24-1): owner CRUD on transaction_flags keyed by
+// dedup_key, hard-delete on unmark, and cross-tenant isolation enforced by the
+// plain user_id owner policy (no composite FK in this substrate).
+suite("transaction_flags RLS (WLT-24-1): owner CRUD + hard-delete + cross-tenant deny", () => {
+  let client: Client;
+  beforeAll(async () => {
+    client = new Client({ connectionString: DB_URL });
+    await client.connect();
+  });
+  afterAll(async () => {
+    await client?.end();
+  });
+  async function asUser(uid: string, sql: string, params: unknown[] = []) {
+    await client.query("select set_config('request.jwt.claims', $1, true)", [
+      JSON.stringify({ sub: uid, role: "authenticated" }),
+    ]);
+    await client.query("set local role authenticated");
+    await client.query("savepoint asuser_sp");
+    try {
+      const res = await client.query(sql, params);
+      await client.query("release savepoint asuser_sp");
+      await client.query("reset role");
+      return res;
+    } catch (e) {
+      await client.query("rollback to savepoint asuser_sp");
+      await client.query("reset role");
+      throw e;
+    }
+  }
+
+  it("owner inserts, reads, updates, and hard-deletes their own subscription flag; another tenant sees none", async () => {
+    await client.query("begin");
+    try {
+      await client.query("insert into auth.users (id) values ($1),($2) on conflict do nothing", [USER_A, USER_B]);
+
+      const ins = await asUser(
+        USER_A,
+        "insert into transaction_flags (user_id, dedup_key, flag_type, source) values ($1,'txn-subscription','subscription','user') returning id",
+        [USER_A],
+      );
+      const id = ins.rows[0].id as string;
+
+      const owner = await asUser(
+        USER_A,
+        "select count(*)::int as n, min(source) as source from transaction_flags where id = $1",
+        [id],
+      );
+      expect(owner.rows).toEqual([{ n: 1, source: "user" }]);
+      const other = await asUser(USER_B, "select count(*)::int as n from transaction_flags where id = $1", [id]);
+      expect(other.rows).toEqual([{ n: 0 }]);
+
+      const upd = await asUser(USER_A, "update transaction_flags set source = 'auto' where id = $1", [id]);
+      expect(upd.rowCount).toBe(1);
+      const afterUpdate = await asUser(USER_A, "select source from transaction_flags where id = $1", [id]);
+      expect(afterUpdate.rows).toEqual([{ source: "auto" }]);
+
+      const crossUpd = await asUser(USER_B, "update transaction_flags set source = 'user' where id = $1", [id]);
+      expect(crossUpd.rowCount).toBe(0);
+      const crossDel = await asUser(USER_B, "delete from transaction_flags where id = $1", [id]);
+      expect(crossDel.rowCount).toBe(0);
+
+      const del = await asUser(USER_A, "delete from transaction_flags where id = $1", [id]);
+      expect(del.rowCount).toBe(1);
+      const afterDelete = await asUser(USER_A, "select count(*)::int as n from transaction_flags where id = $1", [id]);
+      expect(afterDelete.rows).toEqual([{ n: 0 }]);
+    } finally {
+      await client.query("rollback");
+    }
+  });
+
+  it("rejects a forged cross-tenant flag insert (WITH CHECK)", async () => {
+    await client.query("begin");
+    try {
+      await client.query("insert into auth.users (id) values ($1),($2) on conflict do nothing", [USER_A, USER_B]);
+
+      await expect(
+        asUser(
+          USER_A,
+          "insert into transaction_flags (user_id, dedup_key, flag_type, source) values ($1,'txn-foreign','subscription','user')",
+          [USER_B],
+        ),
+      ).rejects.toThrow();
+    } finally {
+      await client.query("rollback");
+    }
+  });
+});

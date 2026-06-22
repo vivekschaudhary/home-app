@@ -31,7 +31,7 @@ export const NAV_SECTIONS: readonly NavSection[] = [
   { key: "goals", label: COPY.nav.goals, href: "/goals", icon: FlagIcon, status: "coming_soon" },
   { key: "debt", label: COPY.nav.debt, href: "/debt", icon: ScaleIcon, status: "coming_soon" },
   { key: "investments", label: COPY.nav.investments, href: "/investments", icon: ArrowTrendingUpIcon, status: "coming_soon" },
-  { key: "subscriptions", label: COPY.nav.subscriptions, href: "/subscriptions", icon: ArrowPathIcon, status: "coming_soon" },
+  { key: "subscriptions", label: COPY.nav.subscriptions, href: "/subscriptions", icon: ArrowPathIcon, status: "live" }, // WLT-24-1
   // WLT-23-1 — the all-accounts ledger; adjacent to Accounts (the activity *in* them).
   { key: "transactions", label: COPY.nav.transactions, href: "/transactions", icon: QueueListIcon, status: "live" },
   { key: "accounts", label: COPY.nav.accounts, href: "/accounts", icon: BuildingLibraryIcon, status: "live" },

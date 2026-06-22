@@ -14,9 +14,12 @@ import {
   fetchTransactions,
   recordTransactionsFiltered,
 } from "@/app/lib/transactions-client";
+import { markSubscription, unmarkSubscription } from "@/app/lib/subscriptions-client";
 
 const C = COPY.transactions;
 const A = COPY.transactionsA11y;
+const SUB = COPY.subscriptions;
+const SUBA = COPY.subscriptionsA11y;
 
 // Select sentinel for the "all" (unfiltered) option — distinct from a real account
 // id (uuid) and from the "" category value (the null-category "Other" bucket).
@@ -78,6 +81,19 @@ export function TransactionsClient({
   const [moreError, setMoreError] = useState(false);
   const [focusRowId, setFocusRowId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+
+  // WLT-24-1 — mark / unmark a recurring charge as a subscription, from the row's
+  // existing popover (AC2). Orthogonal to category — never touches the row's
+  // category/budget. No optimistic revert: the row flips only on success.
+  async function toggleSubscription(r: TransactionRowDTO) {
+    const res = r.isSubscription ? await unmarkSubscription(r.dedupKey) : await markSubscription(r.dedupKey);
+    if (!res.ok) {
+      setToast(res.error === "network" ? SUB.errorNetwork : res.error === "invalid" ? SUB.errorInvalid : SUB.error);
+      return;
+    }
+    setRows((rs) => rs.map((x) => (x.dedupKey === r.dedupKey ? { ...x, isSubscription: !r.isSubscription } : x)));
+    setToast(r.isSubscription ? SUB.unmarkedToast : SUB.markedToast);
+  }
   const didMount = useRef(false);
 
   // Replace the list with a fresh first page for the current filters + search.
@@ -318,6 +334,13 @@ export function TransactionsClient({
                         {C.pending}
                       </span>
                     ) : null}
+                    {/* WLT-24-1 — a non-interactive marked indicator; the mark/unmark
+                        ACTION lives in the row popover below (AC2). */}
+                    {r.isSubscription ? (
+                      <span className="ml-2 rounded-full bg-indigo-50 px-2 py-0.5 align-middle text-xs font-medium text-indigo-700">
+                        ★ {SUB.markIndicator}
+                      </span>
+                    ) : null}
                   </td>
                   <td
                     className={`block py-0.5 md:table-cell md:py-3 md:pr-4 md:text-right ${
@@ -340,6 +363,21 @@ export function TransactionsClient({
                       canRemember={!!r.merchant}
                       onPick={(categoryId, applyToMerchant) => handleRecat(r, categoryId, applyToMerchant)}
                       onCreate={createCat}
+                      extraActions={
+                        r.direction === "debit"
+                          ? [
+                              {
+                                key: "subscription",
+                                label: r.isSubscription ? SUB.unmarkAction : SUB.markAction,
+                                a11yLabel: fill(r.isSubscription ? SUBA.unmarkA11y : SUBA.markA11y, {
+                                  merchant: r.merchant || r.description,
+                                }),
+                                pressed: r.isSubscription,
+                                onSelect: () => toggleSubscription(r),
+                              },
+                            ]
+                          : undefined
+                      }
                     />
                   </td>
                   <td className="block py-0.5 text-gray-600 md:table-cell md:py-3">

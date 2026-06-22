@@ -10,6 +10,7 @@
 import { createServerSupabase } from "@vc1023/passkey-2fa";
 import { effectiveCategory } from "@wealth/core";
 import { readCategoryAssignments } from "@wealth/db/categories";
+import { readSubscriptionFlags } from "@wealth/db/subscriptions";
 import type { LedgerAccountDTO, TransactionRowDTO } from "./transactions-client";
 
 export const PAGE_SIZE = 50; // keeps each keyset query well under the 1000-row cap
@@ -117,10 +118,11 @@ export async function readTransactionsPage(
   // Shared owner-scoped reads: the saved-category map + the account names (also the
   // account-filter options + `hasAccount` for the empty state) + a bounded probe for
   // whether the null-category "Other" bucket exists (gates that filter option, AC2).
-  const [assignments, accountsRes, otherProbe] = await Promise.all([
+  const [assignments, accountsRes, otherProbe, subscriptionFlags] = await Promise.all([
     readCategoryAssignments(supabase, userId),
     supabase.from("financial_accounts").select("id, name").eq("user_id", userId),
     supabase.from("transactions").select("dedup_key").eq("user_id", userId).is("category", null).limit(200),
+    readSubscriptionFlags(supabase, userId), // WLT-24-1 — the per-row "subscription" indicator
   ]);
   const accountName = new Map<string, string>();
   for (const a of (accountsRes.data ?? []) as { id: string; name: string }[]) accountName.set(a.id, a.name);
@@ -144,6 +146,7 @@ export async function readTransactionsPage(
     category: effectiveCategory(r.category, assignments.get(r.dedup_key)) ?? "",
     account: (r.account_id && accountName.get(r.account_id)) || "",
     pending: r.pending === true,
+    isSubscription: subscriptionFlags.has(r.dedup_key), // WLT-24-1
   });
 
   // One keyset chunk starting strictly after `from` — account + search applied in

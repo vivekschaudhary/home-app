@@ -27,10 +27,11 @@ describe("NAV_SECTIONS / SHELL_PATHS integrity", () => {
       "transactions",
       "accounts",
     ]);
-    // WLT-21-1 flipped budget → live; WLT-23-1 mounts transactions → live (adjacent to accounts).
+    // WLT-21-1 flipped budget → live; WLT-23-1 mounts transactions → live; WLT-24-1 mounts subscriptions → live.
     expect(NAV_SECTIONS.filter((s) => s.status === "live").map((s) => s.key)).toEqual([
       "dashboard",
       "budget",
+      "subscriptions",
       "transactions",
       "accounts",
     ]);

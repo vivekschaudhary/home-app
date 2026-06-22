@@ -16,6 +16,7 @@ export interface TransactionRowDTO {
   category: string;
   account: string;
   pending: boolean;
+  isSubscription: boolean; // WLT-24-1 — the user marked this charge as a subscription
 }
 
 // WLT-23-2 — an account option for the account filter (the user's own accounts).
