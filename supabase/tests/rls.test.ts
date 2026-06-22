@@ -963,10 +963,11 @@ suite("category_rules RLS (WLT-22-3/4): owner CRUD + composite-FK isolation", ()
   }, 30_000);
 });
 
-// Subscription-flag posture (WLT-24-1): owner CRUD on transaction_flags keyed by
-// dedup_key, hard-delete on unmark, and cross-tenant isolation enforced by the
-// plain user_id owner policy (no composite FK in this substrate).
-suite("transaction_flags RLS (WLT-24-1): owner CRUD + hard-delete + cross-tenant deny", () => {
+// Subscription-flag posture (WLT-24-1 / WLT-24-2): owner CRUD on transaction_flags
+// keyed by dedup_key, cross-tenant isolation enforced by the plain user_id owner
+// policy, and (post-0016) owner-only dismissed_at set/clear for the durable
+// dismissal model.
+suite("transaction_flags RLS (WLT-24-1 / WLT-24-2): owner CRUD + dismissed_at ownership + cross-tenant deny", () => {
   let client: Client;
   beforeAll(async () => {
     client = new Client({ connectionString: DB_URL });
@@ -1045,6 +1046,54 @@ suite("transaction_flags RLS (WLT-24-1): owner CRUD + hard-delete + cross-tenant
           [USER_B],
         ),
       ).rejects.toThrow();
+    } finally {
+      await client.query("rollback");
+    }
+  });
+
+  it("lets the owner set and clear dismissed_at; another tenant cannot update it", async () => {
+    await client.query("begin");
+    try {
+      await client.query("insert into auth.users (id) values ($1),($2) on conflict do nothing", [USER_A, USER_B]);
+
+      const ins = await asUser(
+        USER_A,
+        "insert into transaction_flags (user_id, dedup_key, flag_type, source) values ($1,'txn-dismiss','subscription','auto') returning id",
+        [USER_A],
+      );
+      const id = ins.rows[0].id as string;
+
+      const dismiss = await asUser(USER_A, "update transaction_flags set dismissed_at = now() where id = $1", [id]);
+      expect(dismiss.rowCount).toBe(1);
+      const afterDismiss = await asUser(
+        USER_A,
+        "select dismissed_at is not null as dismissed, source from transaction_flags where id = $1",
+        [id],
+      );
+      expect(afterDismiss.rows).toEqual([{ dismissed: true, source: "auto" }]);
+
+      const crossDismiss = await asUser(USER_B, "update transaction_flags set dismissed_at = now() where id = $1", [id]);
+      expect(crossDismiss.rowCount).toBe(0);
+      const stillDismissed = await asUser(USER_A, "select dismissed_at is not null as dismissed from transaction_flags where id = $1", [id]);
+      expect(stillDismissed.rows).toEqual([{ dismissed: true }]);
+
+      const clear = await asUser(USER_A, "update transaction_flags set dismissed_at = null, source = 'user' where id = $1", [id]);
+      expect(clear.rowCount).toBe(1);
+      const afterClear = await asUser(
+        USER_A,
+        "select dismissed_at is not null as dismissed, source from transaction_flags where id = $1",
+        [id],
+      );
+      expect(afterClear.rows).toEqual([{ dismissed: false, source: "user" }]);
+
+      const crossClear = await asUser(USER_B, "update transaction_flags set dismissed_at = null where id = $1", [id]);
+      expect(crossClear.rowCount).toBe(0);
+      const stillCleared = await asUser(
+        USER_A,
+        "select dismissed_at is not null as dismissed, source from transaction_flags where id = $1",
+        [id],
+      );
+      expect(stillCleared.rows).toEqual([{ dismissed: false, source: "user" }]);
     } finally {
       await client.query("rollback");
     }
