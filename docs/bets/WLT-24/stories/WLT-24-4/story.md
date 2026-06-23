@@ -2,7 +2,7 @@
 id: WLT-24-4
 bet: WLT-24
 type: story
-status: ready
+status: shipped
 priority: P2
 created: 2026-06-23
 author: PM
@@ -73,5 +73,9 @@ _If post-merge bugs are found, story is re-opened and fixes live under `fixes/`.
 - [2026-06-23] [Engineer] **Plaid's "Subscription" category label is an unused detection signal** — severity: low — owner: Engineer — status: open — area: detection — the ledger shows Plaid's "Subscription" tag; the custom detector ignores it. Could become a future signal (provider-signal-human-decides) to catch subs with too-thin history for cadence inference. Not this slice.
 
 ---
+
+**SHIPPED, 2026-06-23 — PR #102** (squash `a0b7570`). Two surfaced gaps fixed in one PR: (1) **longer cadences** — added bimonthly/quarterly/semi-annual bands (non-overlapping, `irregular` gaps between), each normalized to a monthly figure, **calibrated to the operator's real 91-day Sony intervals** ($49.99 every 3 months → $16.66/mo, previously dropped as `irregular`); the detector picks them up automatically (its clean-cadence gate already accepts any non-irregular cadence). (2) **last-charged + inactive** — `SubscriptionRow.lastChargedOn` (shown "Last charged Jun 1, 2026") + `inactive` (overdue by a full extra cycle, `asOf − lastCharged > medianInterval × 2` — the operator picked 2×), with a muted "may have ended" tag and **exclusion from the headline** so the total = what's actively charging; `summarizeSubscriptions` takes an `asOf` from the read layer (core stays pure). Also fixed a **timezone off-by-one** in the date formatter (format in UTC), caught by a test. **Pure compute + display only — no schema, no migration, no `packages/db` change**; orthogonality + the amount-CV precision gate preserved. **Codex review: no findings**; its gated E2E (quarterly detection → $16.66 + last-charged; stale merchant → "may have ended" + headline exclusion) landed **uncommitted** and was committed with co-author (the recurring pattern). Full gate: lint · typecheck · **324 unit tests** · build; no RLS delta (Codex-confirmed + CI live-PG). **CLEAR tied to HEAD `78068ae`.**
+
+**WLT-24 bet:** manual mark (24-1) → auto-detect (24-2) → multi-sub-per-vendor (24-3) → longer cadences + last-charged/inactive (24-4), all shipped.
 
 _Story under bet: docs/bets/WLT-24/brief.md_
