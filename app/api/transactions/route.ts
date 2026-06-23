@@ -1,4 +1,6 @@
 import { getAal2UserId } from "@vc1023/passkey-2fa";
+import { FUNNEL_EVENTS } from "@wealth/core";
+import { emitFunnel } from "@wealth/db/emit";
 import { readTransactionsPage } from "@/app/lib/transactions";
 
 // WLT-23-1 — the Transactions ledger data API. AAL2-gated + owner-scoped (RLS
@@ -11,12 +13,16 @@ export async function GET(req: Request) {
   if (!userId) return Response.json({ error: "unauthorized" }, { status: 401 });
 
   const params = new URL(req.url).searchParams;
+  const followup = params.get("followup") === "1";
+  // WLT-25-1 — once per Follow-ups view (the first page, not each Load-more).
+  if (followup && !params.get("cursor")) await emitFunnel(FUNNEL_EVENTS.FOLLOWUPS_VIEWED, userId, {});
   const result = await readTransactionsPage(userId, {
     cursor: params.get("cursor"),
     search: params.get("q"),
     accountId: params.get("account"),
     // null (absent) = all categories; "" (present) = the null-category "Other" bucket.
     category: params.get("category"),
+    followup, // WLT-25-1 — the Follow-ups filter
   });
   if (!result.ok) return Response.json({ error: "server" }, { status: 502 });
   return Response.json(result.page);

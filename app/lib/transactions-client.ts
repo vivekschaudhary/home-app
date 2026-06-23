@@ -17,6 +17,7 @@ export interface TransactionRowDTO {
   account: string;
   pending: boolean;
   isSubscription: boolean; // WLT-24-1 — the user marked this charge as a subscription
+  isFollowup: boolean; // WLT-25-1 — the user flagged this charge to follow up (open)
 }
 
 // WLT-23-2 — an account option for the account filter (the user's own accounts).
@@ -45,6 +46,7 @@ export async function fetchTransactions(params: {
   q?: string;
   accountId?: string | null;
   category?: string | null;
+  followup?: boolean; // WLT-25-1 — only charges with an open follow-up
 }): Promise<{ ok: true; page: TransactionsPageDTO } | { ok: false }> {
   try {
     const qs = new URLSearchParams();
@@ -53,6 +55,7 @@ export async function fetchTransactions(params: {
     if (params.accountId) qs.set("account", params.accountId);
     // category present (even "") = a filter; absent/null = all categories.
     if (params.category !== null && params.category !== undefined) qs.set("category", params.category);
+    if (params.followup) qs.set("followup", "1"); // WLT-25-1
     const suffix = qs.toString() ? `?${qs.toString()}` : "";
     const res = await fetch(`/api/transactions${suffix}`, { headers: { accept: "application/json" } });
     if (!res.ok) return { ok: false };
