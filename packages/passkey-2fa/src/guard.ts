@@ -3,7 +3,7 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { AAL2_COOKIE, AAL2_TTL_SECONDS, signAal2Token, verifyAal2Token } from "./aal2";
+import { AAL2_COOKIE, aal2TtlSeconds, signAal2Token, verifyAal2Token } from "./aal2";
 import { mfaSecret } from "./config";
 import { createServerSupabase } from "./supabase";
 
@@ -59,7 +59,9 @@ export async function requireAal2(signInPath = "/sign-in"): Promise<string> {
 }
 
 /** Mint the AAL2 marker after a verified passkey ceremony, bound to the live
- *  Supabase session. Route-handler only. */
+ *  Supabase session. Route-handler only. The cookie maxAge tracks the same
+ *  effective (possibly preview-compressed) TTL the token is signed with, so the
+ *  cookie and the token expire together. */
 export async function setAal2Cookie(userId: string): Promise<void> {
   const sid = await currentSessionId();
   const store = await cookies();
@@ -68,7 +70,7 @@ export async function setAal2Cookie(userId: string): Promise<void> {
     secure: process.env.NODE_ENV === "production",
     sameSite: "strict",
     path: "/",
-    maxAge: AAL2_TTL_SECONDS,
+    maxAge: aal2TtlSeconds(),
   });
 }
 
