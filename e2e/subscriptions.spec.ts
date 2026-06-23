@@ -17,6 +17,19 @@ function monthDay(monthsAgo: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+function dayOffset(daysAgo: number): string {
+  const d = new Date();
+  d.setUTCHours(0, 0, 0, 0);
+  d.setUTCDate(d.getUTCDate() - daysAgo);
+  return d.toISOString().slice(0, 10);
+}
+
+function longDate(isoDate: string): string {
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(
+    new Date(`${isoDate}T00:00:00Z`),
+  );
+}
+
 async function addPasskeyAuthenticator(page: Page, context: BrowserContext): Promise<void> {
   const client: CDPSession = await context.newCDPSession(page);
   await client.send("WebAuthn.enable");
@@ -617,6 +630,91 @@ test.describe("subscriptions — mark from ledger + summarize + CDC survival + o
       await expect(otherPage.getByText("detected")).toHaveCount(2);
     } finally {
       await otherContext?.close();
+      await db.end();
+    }
+  });
+
+  test("real session → a quarterly merchant shows the right monthly equivalent + last charged date, while a stale merchant is marked ended and excluded from the headline", async ({
+    page,
+    context,
+  }) => {
+    const email = `e2e-subscriptions-cadence+${Date.now()}@example.com`;
+    const password = "correct horse battery staple";
+
+    await signUpWithPasskey(page, context, email, password);
+
+    const quarterly1 = dayOffset(187);
+    const quarterly2 = dayOffset(96);
+    const quarterly3 = dayOffset(5);
+    const stale1 = dayOffset(180);
+    const stale2 = dayOffset(150);
+    const stale3 = dayOffset(120);
+
+    const db = new Client({ connectionString: DB_URL });
+    await db.connect();
+    try {
+      const u = await db.query("select id from auth.users where email = $1", [email]);
+      expect(u.rows).toHaveLength(1);
+      const userId = u.rows[0].id as string;
+
+      const acct = await db.query(
+        `insert into financial_accounts (user_id, name, kind, currency, balance_current, balance_updated_at)
+         values ($1, 'Cadence Subscriptions Checking', 'depository', 'USD', 4100, now()) returning id`,
+        [userId],
+      );
+      const accountId = acct.rows[0].id as string;
+
+      await db.query(
+        `insert into transactions
+           (user_id, account_id, source, dedup_key, content_hash, amount, direction, currency, merchant, merchant_entity_id, description, category, kind, occurred_on)
+         values
+           ($1,$2,'plaid','e2e-quarterly-1','quarterly-hash-1',49.99,'debit','USD','QuarterBox','ent-quarterbox','QuarterBox A','ENTERTAINMENT','spend',$3),
+           ($1,$2,'plaid','e2e-quarterly-2','quarterly-hash-2',49.99,'debit','USD','QuarterBox','ent-quarterbox','QuarterBox B','ENTERTAINMENT','spend',$4),
+           ($1,$2,'plaid','e2e-quarterly-3','quarterly-hash-3',49.99,'debit','USD','QuarterBox','ent-quarterbox','QuarterBox C','ENTERTAINMENT','spend',$5),
+           ($1,$2,'plaid','e2e-stale-1','stale-hash-1',12.00,'debit','USD','OldNews Plus','ent-oldnews','OldNews Jan','NEWS','spend',$6),
+           ($1,$2,'plaid','e2e-stale-2','stale-hash-2',12.00,'debit','USD','OldNews Plus','ent-oldnews','OldNews Feb','NEWS','spend',$7),
+           ($1,$2,'plaid','e2e-stale-3','stale-hash-3',12.00,'debit','USD','OldNews Plus','ent-oldnews','OldNews Mar','NEWS','spend',$8)`,
+        [userId, accountId, quarterly1, quarterly2, quarterly3, stale1, stale2, stale3],
+      );
+
+      await page.goto("/subscriptions");
+      await expect(page.getByRole("heading", { name: "Subscriptions" })).toBeVisible({ timeout: 15_000 });
+
+      await expect(page.getByText("$16.66 / month · $199.92 / year")).toBeVisible();
+      await expect(page.getByText("QuarterBox")).toBeVisible();
+      await expect(page.getByText("every 3 months")).toBeVisible();
+      await expect(page.getByText("Last charged " + longDate(quarterly3))).toBeVisible();
+      await expect(page.getByText("$16.66")).toBeVisible();
+
+      await expect(page.getByText("OldNews Plus")).toBeVisible();
+      await expect(page.getByText("every month")).toBeVisible();
+      await expect(page.getByText("Last charged " + longDate(stale3))).toBeVisible();
+      await expect(page.getByText("May have ended")).toBeVisible();
+      await expect(page.getByText(`Not charged since ${longDate(stale3)} — may have ended.`)).toBeVisible();
+      await expect(page.getByText("We found 2 recurring charges — review them below.")).toBeVisible();
+      await expect(page.getByText("detected")).toHaveCount(2);
+
+      const autoFlags = await db.query(
+        `select source, count(*)::int as n
+           from transaction_flags
+          where user_id = $1 and flag_type = 'subscription' and dismissed_at is null
+          group by source
+          order by source`,
+        [userId],
+      );
+      expect(autoFlags.rows).toEqual([{ source: "auto", n: 6 }]);
+
+      const staleRow = page.getByRole("row", {
+        name: new RegExp(`OldNews Plus, \\$12\\.00, billed every month, detected automatically, Last charged ${longDate(stale3)}, Not charged since ${longDate(stale3)} — may have ended\\.`, "i"),
+      });
+      await expect(staleRow.getByText("—")).toBeVisible();
+
+      await page.reload();
+      await expect(page.getByText("$16.66 / month · $199.92 / year")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("Last charged " + longDate(quarterly3))).toBeVisible();
+      await expect(page.getByText(`Not charged since ${longDate(stale3)} — may have ended.`)).toBeVisible();
+      await expect(page.getByText("detected")).toHaveCount(2);
+    } finally {
       await db.end();
     }
   });
