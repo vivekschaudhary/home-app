@@ -2,7 +2,7 @@
 id: WLT-24-3
 bet: WLT-24
 type: story
-status: ready
+status: shipped
 priority: P2
 created: 2026-06-22
 author: PM
@@ -76,5 +76,9 @@ _If post-merge bugs are found, story is re-opened and fixes live under `fixes/`.
 - [2026-06-22] [Engineer] **Two distinct subs at the SAME price from one vendor cannot be split** — severity: low — owner: Engineer — status: accepted — area: data — irreducible from amount + date alone; rare; documented in code + here. Revisit only if a provider exposes per-plan identifiers.
 
 ---
+
+**SHIPPED, 2026-06-22 — PR #99** (squash `e1d1441`). A subscription is now a **(merchant, price)**: a pure `clusterByPrice` single-linkage-splits each merchant's charges on a relative gap (`CLUSTER_MAX_RATIO = 1.25` — **confirmed with the operator against real Sony amounts**, $45 / $13.99 = 3.2×), so `summarizeSubscriptions` + `detectSubscriptions` sub-group per cluster and a multi-sub vendor shows one row + one detection + one durable dismissal per series. The two correctness traps were handled: the detector **and** the sync re-apply skip-sets are **composite-keyed** (`merchant|cluster`) so a dismissed series never revives via its sibling, and removal is **cluster-scoped** (`dismissSubscriptionFlags` for the panel; `dismissSubscriptionSeriesForCharge` resolves the charge's series for the ledger toggle). **No migration** (clusters re-derived from amounts; flag stays per `dedup_key`); UI folded into the one PR (the WLT-24-2 lesson). **Codex review** cleared with no functional blocker; its gated E2E (two-price vendor → two detected rows → durable per-series dismiss → re-mark → second-user isolation) landed **uncommitted** and was committed with Codex co-author (the recurring pattern). Full gate: lint · typecheck · **314 unit tests** (clusterByPrice boundaries, two-Sony summarize/detect, variable-spend still rejected, same-price merge, two-row a11y + series-scoped unmark) · build; **RLS 25/25 on a real Postgres** (no schema/policy change → no RLS delta). **CLEAR tied to HEAD `561597a`.**
+
+**WLT-24 bet:** manual mark (24-1) → auto-detect (24-2) → multi-subscription-per-vendor (24-3), all shipped.
 
 _Story under bet: docs/bets/WLT-24/brief.md_
