@@ -2,7 +2,7 @@
 id: WLT-25-1
 bet: WLT-25
 type: story
-status: ready
+status: shipped
 priority: P2
 created: 2026-06-23
 author: PM
@@ -76,5 +76,9 @@ _If post-merge bugs are found, story is re-opened and fixes live under `fixes/`.
 - [2026-06-23] [Engineer] **Confirm the `flag_type` check constraint's exact name before the migration** — severity: low — owner: Engineer — status: open — area: data — verify on an ephemeral PG; use `drop constraint if exists` + re-add (the migration-verification discipline).
 
 ---
+
+**SHIPPED, 2026-06-23 — PR #108** (squash `b45cdad`). The second transaction overlay, live: **migration 0017** (widen the `flag_type` check to `('subscription','followup')` — constraint name verified + `'followup'` insert/reject tested on an ephemeral Postgres), `packages/db/followups.ts` (per-charge `markFollowup`/`resolveFollowup`/`readFollowupFlags`, **soft-delete resolve** via `dismissed_at` — kept as history, re-flag re-opens), the AAL2 `/api/transactions/followup` route + lib + browser client + funnel events, and the ledger surface (a **"Follow up"/"Done"** action in the WLT-23 row popover — offered on credits too, vs subscriptions which are debit-only; a distinct **amber ⚑** indicator vs the subscription ★; a **"Follow-ups" filter (Open)** composing with the WLT-23-2 filters via the same bounded scan). Per-charge, orthogonal to category AND subscription (`followups.guard.test.ts`). **Codex review** raised two BLOCKERs — both its own handoff deliverables — resolved pre-merge: the `flag_type='followup'` RLS extension (owner CRUD + `dismissed_at` set/clear + cross-tenant deny) and the gated real-path E2E (flag → Open filter → resolve drops → CDC-survival → second-user isolation); each landed **uncommitted** and was committed with co-author (the recurring pattern). RLS re-verified on a real Postgres (CI recipe + 0017): **27/27** (+2 followup cases). Full gate: lint · typecheck · **330 unit tests** (+3 follow-up component tests + the guard) · build. **CLEAR tied to HEAD `ac137d1`.** _(Build note: the work had to be moved off a stray in-progress AAL2 branch onto a clean branch off main — left that branch/PR untouched.)_
+
+**WLT-25 bet:** WLT-25-1 (flag/resolve + Open filter) shipped; the **Done/history view + re-open is WLT-25-2**.
 
 _Story under bet: docs/bets/WLT-25/brief.md_
