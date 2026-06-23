@@ -1,4 +1,12 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import {
+  AAL2_COOKIE,
+  AAL2_RENEW_AFTER_SECONDS,
+  AAL2_TTL_SECONDS,
+  aal2CookieOptions,
+  type Aal2CookieOptions,
+  type Aal2CookieToSet,
+} from "./aal2-constants";
 
 // AAL2 session marker. After a passkey ceremony verifies server-side, the app
 // issues a short-lived HMAC-signed token in an httpOnly cookie. The guard
@@ -7,21 +15,35 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 // Supabase session) before granting app access. This is NOT an API bearer
 // credential — it only attests "this session completed the second factor".
 //
-// The marker SLIDES: while the session stays active, the guard re-mints the
-// token on the validated read path (see `shouldRenewAal2Token` + the guard), so
-// the 1h figure is an INACTIVITY window, not an absolute cap on an active
-// session. Without renewal a never-idle user was forced to re-authenticate ~1h
-// after sign-in — the "forced logout every few hours" defect (contradicting
-// WLT-6 AC2: sessions persist; WLT-7 AC1: AAL2 re-challenge is scoped to
-// sensitive step-up actions, not a blanket hourly logout).
+// The marker SLIDES while the session stays active, so the 1h figure is an
+// INACTIVITY window, not an absolute cap on an active session. Without renewal a
+// never-idle user was forced to re-authenticate ~1h after sign-in — the "forced
+// logout every few hours" defect (contradicting WLT-6 AC2: sessions persist;
+// WLT-7 AC1: AAL2 re-challenge is scoped to sensitive step-up actions, not a
+// blanket hourly logout).
+//
+// RENEWAL SEAM (the #104 follow-up): the renewal must persist on the path a
+// BROWSING user actually takes. `getAal2UserId()` runs during a Server Component
+// render where Next.js forbids `cookies().set()` — so a read-only user's renewal
+// write is swallowed and never lands. The authoritative renewal therefore runs
+// in the MIDDLEWARE (every request, page navigations included, CAN set response
+// cookies), driven by `renewedAal2CookieEdge` (./aal2-edge, WebCrypto). This
+// Node module is the source of truth for the token FORMAT + decision; the Edge
+// twin is kept byte-compatible by `aal2-edge.test.ts`.
+//
+// Constants + the cookie-option shape live in ./aal2-constants (crypto-free) so
+// the Edge middleware can reference them without dragging node:crypto into the
+// Edge bundle. Re-exported here for back-compat (the package barrel re-exports
+// this module).
 
-export const AAL2_COOKIE = "wlt_mfa";
-export const AAL2_TTL_SECONDS = 60 * 60; // 1h of INACTIVITY; slides while active.
-
-// Renew once the token is past this fraction of its life and still valid, so an
-// active session's marker is refreshed well before it can expire mid-use. Half
-// the TTL gives every active user at least one renewal opportunity per window.
-export const AAL2_RENEW_AFTER_SECONDS = AAL2_TTL_SECONDS / 2;
+export {
+  AAL2_COOKIE,
+  AAL2_TTL_SECONDS,
+  AAL2_RENEW_AFTER_SECONDS,
+  aal2CookieOptions,
+  type Aal2CookieOptions,
+  type Aal2CookieToSet,
+};
 
 function b64url(input: Buffer | string): string {
   return Buffer.from(input).toString("base64url");
@@ -109,4 +131,42 @@ export function shouldRenewAal2Token(
   if (payload.exp < nowSeconds) return false; // expired → re-challenge, never auto-renew
   const issuedAt = payload.exp - AAL2_TTL_SECONDS;
   return nowSeconds - issuedAt >= AAL2_RENEW_AFTER_SECONDS;
+}
+
+/**
+ * Side-effect-free renewal decision. Returns a fresh AAL2 cookie to set IFF the
+ * presented `token`:
+ *   - is signature-valid and unexpired,
+ *   - is in its trailing renewal window,
+ *   - binds to THIS `userId` (`sub` match) and THIS `sid` (session match).
+ * Otherwise returns null (no renewal — the caller leaves the marker as-is; an
+ * expired/idle session re-challenges, a forged or mismatched token is ignored).
+ *
+ * The Node-side renewal primitive (route handlers / Server Actions). The
+ * MIDDLEWARE uses the byte-compatible Edge twin (`renewedAal2CookieEdge`); the
+ * two are pinned identical by `aal2-edge.test.ts`. Pure → unit-testable without
+ * Next's cookie store, which is exactly the coverage gap that let the original
+ * defect survive PR #104.
+ */
+export function renewedAal2Cookie(
+  token: string | undefined | null,
+  userId: string,
+  sid: string | null,
+  secret: string,
+  nowSeconds: number = Math.floor(Date.now() / 1000),
+  secure: boolean = process.env.NODE_ENV === "production",
+): Aal2CookieToSet | null {
+  const claims = verifyAal2Token(token, secret, nowSeconds);
+  if (!claims) return null;
+  // Fail closed on identity: only renew a marker that already belongs to this
+  // user AND this live session. (The guard enforces the same binding before
+  // granting access; renewal must never widen it.)
+  if (claims.sub !== userId) return null;
+  if (!claims.sid || !sid || claims.sid !== sid) return null;
+  if (!shouldRenewAal2Token(token, secret, nowSeconds)) return null;
+  return {
+    name: AAL2_COOKIE,
+    value: signAal2Token(userId, sid, secret, AAL2_TTL_SECONDS, nowSeconds),
+    options: aal2CookieOptions(secure),
+  };
 }
