@@ -19,13 +19,13 @@ export async function fetchSubscriptions(): Promise<{ ok: true; view: Subscripti
 
 async function write(
   method: "POST" | "DELETE",
-  dedupKey: string,
+  body: Record<string, unknown>,
 ): Promise<{ ok: true } | { ok: false; error: SubscriptionError }> {
   try {
     const res = await fetch("/api/subscriptions/mark", {
       method,
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ dedupKey }),
+      body: JSON.stringify(body),
     });
     if (!res.ok) return { ok: false, error: res.status === 400 ? "invalid" : "server" };
     return { ok: true };
@@ -34,11 +34,18 @@ async function write(
   }
 }
 
-/** Mark a transaction as a subscription. Reused by the ledger row + the view. */
+/** Mark a transaction as a subscription (marks the whole merchant). Reused by the
+ * ledger row + the view. */
 export function markSubscription(dedupKey: string) {
-  return write("POST", dedupKey);
+  return write("POST", { dedupKey });
 }
-/** Remove a subscription mark. */
-export function unmarkSubscription(dedupKey: string) {
-  return write("DELETE", dedupKey);
+/** Remove ONE price series (WLT-24-3) — pass that row's `dedupKeys` (the cluster), so
+ * removing one of a vendor's subscriptions leaves the others. (Subscriptions panel.) */
+export function unmarkSubscription(dedupKeys: string[]) {
+  return write("DELETE", { dedupKeys });
+}
+/** Unmark from the LEDGER (one charge) — the server dismisses the price series that
+ * charge belongs to, so a sibling series from the same vendor is untouched. */
+export function unmarkSubscriptionFromLedger(dedupKey: string) {
+  return write("DELETE", { dedupKey });
 }

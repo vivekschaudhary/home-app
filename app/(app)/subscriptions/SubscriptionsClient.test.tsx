@@ -61,11 +61,42 @@ describe("SubscriptionsClient (WLT-24-1)", () => {
     expect(screen.getByRole("link", { name: COPY.subscriptions.emptyCta })).toBeTruthy();
   });
 
-  it("unmark removes every charge behind the subscription, then refetches", async () => {
+  it("unmark dismisses the row's price series in ONE call (its dedupKeys), then refetches", async () => {
     render(<SubscriptionsClient initial={VIEW} userId="u1" />);
-    fireEvent.click(screen.getAllByText(COPY.subscriptions.unmarkAction)[0]); // Netflix → 3 dedupKeys
-    await waitFor(() => expect(unmarkSubscriptionMock).toHaveBeenCalledTimes(3));
+    fireEvent.click(screen.getAllByText(COPY.subscriptions.unmarkAction)[0]); // Netflix row
+    await waitFor(() => expect(unmarkSubscriptionMock).toHaveBeenCalledTimes(1));
+    expect(unmarkSubscriptionMock).toHaveBeenCalledWith(["n1", "n2", "n3"]); // exactly that series' keys
     await waitFor(() => expect(screen.getByText(COPY.subscriptions.unmarkedToast)).toBeTruthy());
+  });
+});
+
+// WLT-24-3 — a vendor with two price series renders two rows; removing one touches
+// only that series' dedupKeys (a sibling series is untouched).
+const VIEW_TWO_SONY: SubscriptionsViewDTO = {
+  subscriptions: [
+    { merchant: "Sony PlayStation", normKey: "sony|c:45.00", typicalAmount: 45, cadence: "monthly", occurrences: 3, monthlyEquivalent: 45, dedupKeys: ["b1", "b2", "b3"], source: "user" },
+    { merchant: "Sony PlayStation", normKey: "sony|c:13.99", typicalAmount: 13.99, cadence: "monthly", occurrences: 3, monthlyEquivalent: 13.99, dedupKeys: ["a1", "a2", "a3"], source: "user" },
+  ],
+  monthlyTotal: 58.99,
+  annualTotal: 707.88,
+};
+
+describe("SubscriptionsClient — multi-sub vendor (WLT-24-3)", () => {
+  beforeEach(() => fetchSubscriptionsMock.mockResolvedValue({ ok: true, view: VIEW_TWO_SONY }));
+
+  it("renders two rows for one vendor, distinguished by amount, with distinct a11y names", () => {
+    render(<SubscriptionsClient initial={VIEW_TWO_SONY} userId="u1" />);
+    expect(screen.getAllByText("Sony PlayStation")).toHaveLength(2);
+    // distinct accessible row names (amount + cadence disambiguate the same-named rows)
+    expect(screen.getByLabelText(/Sony PlayStation, \$45\.00, billed every month/)).toBeTruthy();
+    expect(screen.getByLabelText(/Sony PlayStation, \$13\.99, billed every month/)).toBeTruthy();
+  });
+
+  it("removing one series calls unmark with only that series' dedupKeys (sibling untouched)", async () => {
+    render(<SubscriptionsClient initial={VIEW_TWO_SONY} userId="u1" />);
+    fireEvent.click(screen.getAllByText(COPY.subscriptions.unmarkAction)[0]); // first row = $45 series
+    await waitFor(() => expect(unmarkSubscriptionMock).toHaveBeenCalledWith(["b1", "b2", "b3"]));
+    expect(unmarkSubscriptionMock).not.toHaveBeenCalledWith(["a1", "a2", "a3"]); // the $13.99 sibling stays
   });
 });
 

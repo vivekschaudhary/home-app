@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  CLUSTER_MAX_RATIO,
   DETECT_MIN_CONFIDENCE,
   type MarkedTxn,
+  clusterByPrice,
   detectSubscriptions,
   subscriptionMerchantKey,
   summarizeSubscriptions,
@@ -104,6 +106,63 @@ function addDays(date: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+describe("clusterByPrice (WLT-24-3 — a vendor can bill several subscriptions)", () => {
+  const at = (amount: number, i: number): MarkedTxn => ({
+    dedupKey: `${amount}-${i}`,
+    merchant: "Vendor",
+    description: "Vendor",
+    amount,
+    occurredOn: addDays("2026-01-01", i * 30),
+  });
+  const ids = (txns: MarkedTxn[]) => [...clusterByPrice(txns).keys()].sort();
+
+  it("splits genuinely distinct prices (Sony $13.99 vs $45 — 3.2x gap)", () => {
+    expect(CLUSTER_MAX_RATIO).toBe(1.25);
+    expect(ids([at(13.99, 0), at(13.99, 1), at(45, 2), at(45, 3)])).toEqual(["c:13.99", "c:45.00"]);
+  });
+
+  it("keeps a single sub's PRICE CREEP together (Netflix $15.49 → $16.99 → +10%)", () => {
+    expect(ids([at(15.49, 0), at(16.49, 1), at(16.99, 2)])).toEqual(["c:15.49"]); // one cluster
+  });
+
+  it("a single fixed price is one cluster", () => {
+    expect(ids([at(9.99, 0), at(9.99, 1), at(9.99, 2)])).toEqual(["c:9.99"]);
+  });
+
+  it("two distinct subs at the SAME price cannot be split (documented limitation)", () => {
+    expect(ids([at(9.99, 0), at(9.99, 1), at(9.99, 2), at(9.99, 3)])).toEqual(["c:9.99"]); // one cluster
+  });
+});
+
+describe("summarizeSubscriptions × clusters (WLT-24-3)", () => {
+  it("shows a multi-sub vendor as TWO rows with correct amounts + a SUMMED headline", () => {
+    const out = summarizeSubscriptions([
+      tx({ dedupKey: "a1", occurredOn: "2026-01-01", amount: 13.99, merchant: "Sony PlayStation" }),
+      tx({ dedupKey: "a2", occurredOn: "2026-02-01", amount: 13.99, merchant: "Sony PlayStation" }),
+      tx({ dedupKey: "b1", occurredOn: "2026-01-15", amount: 45, merchant: "Sony PlayStation" }),
+      tx({ dedupKey: "b2", occurredOn: "2026-02-15", amount: 45, merchant: "Sony PlayStation" }),
+    ]);
+    expect(out.subscriptions).toHaveLength(2); // the two series, no longer one blended irregular row
+    expect(out.subscriptions.map((s) => s.typicalAmount).sort((a, b) => a - b)).toEqual([13.99, 45]);
+    expect(new Set(out.subscriptions.map((s) => s.normKey)).size).toBe(2); // unique composite keys
+    expect(out.monthlyTotal).toBe(round2(13.99 + 45)); // summed, not one excluded
+  });
+
+  it("a single-cluster vendor is unchanged (one row) — regression guard", () => {
+    const out = summarizeSubscriptions([
+      tx({ dedupKey: "n1", occurredOn: "2026-04-02", amount: 15.49, merchant: "Netflix" }),
+      tx({ dedupKey: "n2", occurredOn: "2026-05-02", amount: 16.99, merchant: "Netflix" }), // +10% creep
+      tx({ dedupKey: "n3", occurredOn: "2026-06-01", amount: 16.99, merchant: "Netflix" }),
+    ]);
+    expect(out.subscriptions).toHaveLength(1);
+    expect(out.subscriptions[0].cadence).toBe("monthly");
+  });
+});
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
 // WLT-24-2 — the custom detector. Build N monthly-spaced charges for one merchant.
 function monthly(
   merchant: string,
@@ -190,6 +249,21 @@ describe("detectSubscriptions (WLT-24-2 — high-precision auto-detection)", () 
       { dedupKey: "s2", merchant: "Gym", merchantEntityId: null, description: "Gym", amount: 10.99, occurredOn: addDays(addDays("2026-01-01", 26), 35) },
     ];
     expect(detectSubscriptions({ txns: shaky })).toHaveLength(0);
+  });
+
+  it("detects each price SERIES of a multi-sub vendor as its own candidate (the WLT-24-3 fix)", () => {
+    // Two Sony subs ($13.99 + $45) on different days — interleaved they'd read as
+    // irregular and BOTH vanish. Per-cluster, each is detected.
+    const txns: MarkedTxn[] = [
+      ...monthly("Sony PlayStation", [13.99, 13.99, 13.99], { start: "2026-01-01" }),
+      ...monthly("Sony PlayStation", [45, 45, 45], { start: "2026-01-15" }),
+    ];
+    const out = detectSubscriptions({ txns });
+    expect(out).toHaveLength(2);
+    const amounts = out.map((c) => c.typicalAmount).sort((a, b) => a - b);
+    expect(amounts).toEqual([13.99, 45]);
+    expect(new Set(out.map((c) => c.compositeKey)).size).toBe(2); // distinct series keys
+    expect(out.every((c) => c.cadence === "monthly")).toBe(true);
   });
 
   it("detects multiple merchants in one pass, most-confident first", () => {
