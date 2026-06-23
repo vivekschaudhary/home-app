@@ -598,6 +598,30 @@ export const COPY = {
     nudgeRegion: "Subscription review",
     nudgeDismissA11y: "Dismiss this review note",
   },
+  // WLT-25-1 — Follow-up flag. docs/bets/WLT-25/stories/WLT-25-1/copy.md verbatim.
+  followups: {
+    flagAction: "Follow up",
+    resolveAction: "Done",
+    indicator: "Follow up",
+    saving: "Saving…",
+    flaggedToast: "Flagged to follow up",
+    resolvedToast: "Marked done",
+    error: "We couldn't save that just now — try again.",
+    errorNetwork: "You appear to be offline — try again when you're back.",
+    errorInvalid: "That didn't go through — give it another try.",
+    retry: "Try again",
+    filterLabel: "Follow-ups",
+    filterHint: "Charges you've flagged to come back to",
+    emptyTitle: "Nothing to follow up on",
+    emptyBody:
+      "Spot a charge you need to deal with — one you don't recognize, a possible double, something to return — and flag it to follow up. It'll show here.",
+  },
+  followupsA11y: {
+    flagA11y: "Flag {merchant} to follow up",
+    resolveA11y: "Mark {merchant} follow-up done",
+    indicatorA11y: "Flagged to follow up",
+    filterA11y: "Show only charges flagged to follow up",
+  },
   // WLT-23-1 — the Transactions ledger. docs/bets/WLT-23/stories/WLT-23-1/copy.md verbatim.
   transactions: {
     title: "Transactions",
