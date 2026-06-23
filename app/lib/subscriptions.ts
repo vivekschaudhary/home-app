@@ -85,7 +85,10 @@ export async function readSubscriptionsView(userId: string): Promise<Subscriptio
       occurredOn: r.occurred_on,
       source: sources.get(r.dedup_key), // 'user' | 'auto' — drives the "detected" tag
     }));
-  return summarizeSubscriptions(marked);
+  // WLT-24-4 — pass today so the summary can flag a series that's overdue vs its
+  // cadence ("may have ended") and drop it from the headline.
+  const asOf = new Date().toISOString().slice(0, 10);
+  return summarizeSubscriptions(marked, asOf);
 }
 
 /** Mark a charge as a subscription — and with it the whole MERCHANT (every active

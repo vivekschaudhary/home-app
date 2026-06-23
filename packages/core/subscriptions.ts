@@ -34,8 +34,17 @@ export interface MarkedTxn {
   source?: "user" | "auto"; // WLT-24-2 — how the flag arose; absent ⇒ treated as 'user'
 }
 
-/** `pending` = too few occurrences to infer; `irregular` = inferred but not a clean cycle. */
-export type SubscriptionCadence = "weekly" | "monthly" | "annual" | "irregular" | "pending";
+/** `pending` = too few occurrences to infer; `irregular` = inferred but not a clean
+ * cycle. WLT-24-4 adds the monthly-multiple cadences (`bimonthly`/`quarterly`/`semiannual`). */
+export type SubscriptionCadence =
+  | "weekly"
+  | "monthly"
+  | "bimonthly"
+  | "quarterly"
+  | "semiannual"
+  | "annual"
+  | "irregular"
+  | "pending";
 
 export interface SubscriptionRow {
   merchant: string; // display name (most-recent occurrence's merchant/description)
@@ -50,6 +59,11 @@ export interface SubscriptionRow {
    * user has marked any charge of the merchant (a user touch claims ownership). The
    * UI tags 'auto' rows "detected" so an auto-mark reads as intentional, not a bug. */
   source: "user" | "auto";
+  /** WLT-24-4 — the latest occurrence's date ('YYYY-MM-DD'); shown as "Last charged …". */
+  lastChargedOn: string;
+  /** WLT-24-4 — true when the series is overdue vs its own cadence (likely no longer
+   * charging): shown with a "may have ended" tag AND excluded from the headline total. */
+  inactive: boolean;
 }
 
 export interface SubscriptionsSummary {
@@ -59,11 +73,20 @@ export interface SubscriptionsSummary {
 }
 
 // Cadence inference bands (median day-interval between consecutive charges).
-// Tolerant — real billing dates drift by a few days.
+// Tolerant — real billing dates drift by a few days — and non-overlapping, with
+// `irregular` gaps between, so an interval that doesn't fit a clean cycle is honestly
+// `irregular` rather than force-fit. WLT-24-4 adds the monthly multiples (every 2/3/6
+// months) so a quarterly charge (e.g. Sony $49.99 at ~91-day intervals) is detected.
 const WEEKLY = { lo: 5, hi: 9 };
 const MONTHLY = { lo: 26, hi: 35 };
+const BIMONTHLY = { lo: 50, hi: 70 }; // ~every 2 months (≈61d)
+const QUARTERLY = { lo: 80, hi: 105 }; // ~every 3 months (≈91d)
+const SEMIANNUAL = { lo: 160, hi: 200 }; // ~every 6 months (≈182d)
 const ANNUAL = { lo: 350, hi: 380 };
 const WEEKS_PER_MONTH = 52 / 12; // ≈ 4.333
+// WLT-24-4 — a series is "may have ended" when it's overdue by a full extra cycle:
+// asOf − lastCharged > medianInterval × OVERDUE_FACTOR (a missed cycle, not mere drift).
+const OVERDUE_FACTOR = 2;
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -86,6 +109,9 @@ function daysBetween(a: string, b: string): number {
 function cadenceFromInterval(days: number): Exclude<SubscriptionCadence, "pending"> {
   if (days >= WEEKLY.lo && days <= WEEKLY.hi) return "weekly";
   if (days >= MONTHLY.lo && days <= MONTHLY.hi) return "monthly";
+  if (days >= BIMONTHLY.lo && days <= BIMONTHLY.hi) return "bimonthly";
+  if (days >= QUARTERLY.lo && days <= QUARTERLY.hi) return "quarterly";
+  if (days >= SEMIANNUAL.lo && days <= SEMIANNUAL.hi) return "semiannual";
   if (days >= ANNUAL.lo && days <= ANNUAL.hi) return "annual";
   return "irregular";
 }
@@ -96,6 +122,12 @@ function monthlyEquivalent(cadence: SubscriptionCadence, typicalAmount: number):
       return round2(typicalAmount);
     case "weekly":
       return round2(typicalAmount * WEEKS_PER_MONTH);
+    case "bimonthly":
+      return round2(typicalAmount / 2);
+    case "quarterly":
+      return round2(typicalAmount / 3);
+    case "semiannual":
+      return round2(typicalAmount / 6);
     case "annual":
       return round2(typicalAmount / 12);
     default:
@@ -158,7 +190,7 @@ export function clusterByPrice(members: readonly MarkedTxn[]): Map<string, Marke
  * with <2 occurrences is `pending` (shown, but excluded from the headline so the
  * total never rests on a guess).
  */
-export function summarizeSubscriptions(txns: readonly MarkedTxn[]): SubscriptionsSummary {
+export function summarizeSubscriptions(txns: readonly MarkedTxn[], asOf?: string): SubscriptionsSummary {
   // Group by normalized merchant; fall back to the description, then the dedup_key
   // (so a merchant-less charge is its own group, never collapsed into a "" bucket).
   const groups = new Map<string, MarkedTxn[]>();
@@ -177,12 +209,18 @@ export function summarizeSubscriptions(txns: readonly MarkedTxn[]): Subscription
       const sorted = [...members].sort((a, b) => a.occurredOn.localeCompare(b.occurredOn));
       const typicalAmount = round2(median(members.map((m) => m.amount)));
       let cadence: SubscriptionCadence = "pending";
+      let medianInterval = 0;
       if (sorted.length >= 2) {
         const intervals: number[] = [];
         for (let i = 1; i < sorted.length; i++) intervals.push(daysBetween(sorted[i - 1].occurredOn, sorted[i].occurredOn));
-        cadence = cadenceFromInterval(median(intervals));
+        medianInterval = median(intervals);
+        cadence = cadenceFromInterval(medianInterval);
       }
       const latest = sorted[sorted.length - 1];
+      // WLT-24-4 — likely no longer charging: overdue by a full extra cycle vs its own
+      // rhythm. Needs `asOf` (passed from the read layer) + an inferred interval.
+      const inactive =
+        asOf != null && medianInterval > 0 && daysBetween(latest.occurredOn, asOf) > medianInterval * OVERDUE_FACTOR;
       subscriptions.push({
         merchant: latest.merchant ?? latest.description ?? "Subscription",
         normKey: `${normKey}|${clusterId}`, // composite — unique per (merchant, price series)
@@ -193,6 +231,8 @@ export function summarizeSubscriptions(txns: readonly MarkedTxn[]): Subscription
         dedupKeys: members.map((m) => m.dedupKey),
         // 'auto' only when every charge in the series is auto-detected; any user mark ⇒ 'user'.
         source: members.every((m) => m.source === "auto") ? "auto" : "user",
+        lastChargedOn: latest.occurredOn,
+        inactive,
       });
     }
   }
@@ -202,7 +242,9 @@ export function summarizeSubscriptions(txns: readonly MarkedTxn[]): Subscription
     (a, b) => (b.monthlyEquivalent ?? -1) - (a.monthlyEquivalent ?? -1) || b.typicalAmount - a.typicalAmount,
   );
 
-  const monthlyTotal = round2(subscriptions.reduce((s, r) => s + (r.monthlyEquivalent ?? 0), 0));
+  // The headline = what's ACTIVELY charging: a likely-ended series is listed (so the
+  // user can act) but not counted, so the running total never includes a dead sub.
+  const monthlyTotal = round2(subscriptions.reduce((s, r) => s + (r.inactive ? 0 : (r.monthlyEquivalent ?? 0)), 0));
   return { subscriptions, monthlyTotal, annualTotal: round2(monthlyTotal * 12) };
 }
 

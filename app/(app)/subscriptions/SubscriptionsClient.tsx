@@ -25,10 +25,25 @@ function fill(template: string, vars: Record<string, string>): string {
 const CADENCE_LABEL: Record<SubscriptionCadence, string> = {
   monthly: S.cadenceMonthly,
   weekly: S.cadenceWeekly,
+  bimonthly: S.cadenceBimonthly,
+  quarterly: S.cadenceQuarterly,
+  semiannual: S.cadenceSemiannual,
   annual: S.cadenceAnnual,
   irregular: S.cadenceIrregular,
   pending: S.cadencePending,
 };
+
+/** "YYYY-MM-DD" → "Jun 1, 2026". Formats in UTC so the calendar date never shifts a
+ * day in a negative-UTC timezone (the date is a wall-clock occurrence, not an instant). */
+function fmtDate(isoDate: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(
+      new Date(`${isoDate}T00:00:00Z`),
+    );
+  } catch {
+    return isoDate;
+  }
+}
 
 export function SubscriptionsClient({ initial, userId }: { initial: SubscriptionsViewDTO; userId: string }) {
   const [view, setView] = useState<SubscriptionsViewDTO>(initial);
@@ -146,11 +161,12 @@ export function SubscriptionsClient({ initial, userId }: { initial: Subscription
         </thead>
         <tbody>
           {view.subscriptions.map((row) => {
-            const counted = row.monthlyEquivalent != null;
-            // WLT-24-3 — a distinct accessible name per row (amount + cadence) so two
-            // same-named vendor rows (e.g. two "Sony PlayStation" series) are
-            // distinguishable to assistive tech; the amount is the disambiguator.
-            const rowLabel =
+            const hasMonthly = row.monthlyEquivalent != null; // a confidently-inferred cadence
+            const counted = hasMonthly && !row.inactive; // contributes to the headline (active)
+            const lastChargedText = fill(S.lastCharged, { date: fmtDate(row.lastChargedOn) });
+            // WLT-24-3/4 — a distinct accessible name per row (amount + cadence + last-charged,
+            // and the inactive state) so two same-named vendor rows are distinguishable.
+            let rowLabel =
               row.source === "auto"
                 ? fill(SA.rowDetectedA11y, { merchant: row.merchant, amount: money(row.typicalAmount), cadence: CADENCE_LABEL[row.cadence] })
                 : fill(SA.rowA11y, {
@@ -159,6 +175,8 @@ export function SubscriptionsClient({ initial, userId }: { initial: Subscription
                     cadence: CADENCE_LABEL[row.cadence],
                     monthly: counted ? money(row.monthlyEquivalent as number) : "—",
                   });
+            rowLabel += `, ${lastChargedText}`;
+            if (row.inactive) rowLabel += `, ${fill(S.inactiveNote, { date: fmtDate(row.lastChargedOn) })}`;
             return (
               <tr key={row.normKey} aria-label={rowLabel} className="block border-b border-gray-200 py-3 md:table-row md:py-0">
                 <td className="block py-0.5 text-base font-medium text-gray-900 md:table-cell md:py-3 md:pr-4 md:text-sm md:font-normal">
@@ -171,6 +189,14 @@ export function SubscriptionsClient({ initial, userId }: { initial: Subscription
                       {S.detectedTag}
                     </span>
                   ) : null}
+                  {row.inactive ? (
+                    <span
+                      aria-hidden="true"
+                      className="ml-2 inline-flex items-center rounded-full bg-amber-50 px-1.5 py-0.5 align-middle text-[10px] font-medium uppercase tracking-wide text-amber-700"
+                    >
+                      {S.inactiveTag}
+                    </span>
+                  ) : null}
                 </td>
                 <td className="block py-0.5 text-gray-700 md:table-cell md:py-3 md:pr-4">
                   <span className="mr-2 text-xs text-gray-500 md:hidden">{S.colAmount}</span>
@@ -179,7 +205,8 @@ export function SubscriptionsClient({ initial, userId }: { initial: Subscription
                 <td className="block py-0.5 text-gray-600 md:table-cell md:py-3 md:pr-4">
                   <span className="mr-2 text-xs text-gray-500 md:hidden">{S.colCadence}</span>
                   {CADENCE_LABEL[row.cadence]}
-                  {!counted ? <span className="ml-2 block text-xs text-gray-400 md:inline">{S.pendingNote}</span> : null}
+                  {!hasMonthly ? <span className="ml-2 block text-xs text-gray-400 md:inline">{S.pendingNote}</span> : null}
+                  <span className="mt-0.5 block text-xs text-gray-400">{lastChargedText}</span>
                 </td>
                 <td className="block py-0.5 text-gray-900 md:table-cell md:py-3 md:pr-4">
                   <span className="mr-2 text-xs text-gray-500 md:hidden">{S.colMonthly}</span>
