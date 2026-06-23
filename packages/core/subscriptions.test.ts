@@ -159,6 +159,87 @@ describe("summarizeSubscriptions × clusters (WLT-24-3)", () => {
   });
 });
 
+describe("longer cadences + last-charged + inactive (WLT-24-4)", () => {
+  const seriesAt = (gapDays: number, amount = 9) =>
+    summarizeSubscriptions([
+      tx({ dedupKey: "g1", occurredOn: "2026-01-01", amount, merchant: "Band" }),
+      tx({ dedupKey: "g2", occurredOn: addDays("2026-01-01", gapDays), amount, merchant: "Band" }),
+    ]).subscriptions[0];
+
+  it("infers the monthly-multiple cadences (every 2/3/6 months) at the band centers", () => {
+    expect(seriesAt(61).cadence).toBe("bimonthly");
+    expect(seriesAt(91).cadence).toBe("quarterly");
+    expect(seriesAt(182).cadence).toBe("semiannual");
+  });
+
+  it("leaves the gaps between bands as irregular (no force-fit)", () => {
+    expect(seriesAt(45).cadence).toBe("irregular"); // 36–49 gap
+    expect(seriesAt(75).cadence).toBe("irregular"); // 71–79 gap
+    expect(seriesAt(130).cadence).toBe("irregular"); // 106–159 gap
+  });
+
+  it("normalizes each longer cadence to a monthly figure", () => {
+    expect(seriesAt(61, 20).monthlyEquivalent).toBe(10); // every 2 months → /2
+    expect(seriesAt(91, 49.99).monthlyEquivalent).toBe(16.66); // every 3 months → /3
+    expect(seriesAt(182, 60).monthlyEquivalent).toBe(10); // every 6 months → /6
+  });
+
+  it("detects the operator's real quarterly Sony $49.99 (91-day intervals → $16.66/mo)", () => {
+    const sony: MarkedTxn[] = [
+      { dedupKey: "s1", merchant: "Sony PlayStation", description: "Sony", amount: 49.99, occurredOn: "2025-12-01" },
+      { dedupKey: "s2", merchant: "Sony PlayStation", description: "Sony", amount: 49.99, occurredOn: "2026-03-02" },
+      { dedupKey: "s3", merchant: "Sony PlayStation", description: "Sony", amount: 49.99, occurredOn: "2026-06-01" },
+    ];
+    const detected = detectSubscriptions({ txns: sony });
+    expect(detected).toHaveLength(1);
+    expect(detected[0].cadence).toBe("quarterly"); // was `irregular` → dropped before WLT-24-4
+    const summary = summarizeSubscriptions(sony, "2026-06-23");
+    expect(summary.subscriptions[0].monthlyEquivalent).toBe(16.66);
+    expect(summary.monthlyTotal).toBe(16.66);
+  });
+
+  it("surfaces the last-charged date", () => {
+    const out = summarizeSubscriptions([
+      tx({ dedupKey: "n1", occurredOn: "2026-04-02", amount: 10, merchant: "Netflix" }),
+      tx({ dedupKey: "n2", occurredOn: "2026-05-02", amount: 10, merchant: "Netflix" }),
+    ]);
+    expect(out.subscriptions[0].lastChargedOn).toBe("2026-05-02");
+  });
+
+  it("flags a series overdue by a full cycle as inactive + drops it from the headline", () => {
+    const txns = [
+      tx({ dedupKey: "m1", occurredOn: "2026-01-01", amount: 10, merchant: "OldSub" }),
+      tx({ dedupKey: "m2", occurredOn: "2026-02-01", amount: 10, merchant: "OldSub" }),
+      tx({ dedupKey: "m3", occurredOn: "2026-03-01", amount: 10, merchant: "OldSub" }),
+    ];
+    // ~30d cadence, last charged Mar 1; asOf Jun 23 → 114d > 60d (2×) → inactive, not counted.
+    const stale = summarizeSubscriptions(txns, "2026-06-23");
+    expect(stale.subscriptions[0].inactive).toBe(true);
+    expect(stale.monthlyTotal).toBe(0);
+    // a recent asOf → active, counted.
+    const active = summarizeSubscriptions(txns, "2026-03-20");
+    expect(active.subscriptions[0].inactive).toBe(false);
+    expect(active.monthlyTotal).toBe(10);
+  });
+
+  it("inactive boundary: exactly 2× the interval is still active; just over flips it", () => {
+    const txns = [
+      tx({ dedupKey: "b1", occurredOn: "2026-01-01", amount: 10, merchant: "B" }),
+      tx({ dedupKey: "b2", occurredOn: "2026-01-31", amount: 10, merchant: "B" }), // 30d interval
+    ];
+    expect(summarizeSubscriptions(txns, addDays("2026-01-31", 60)).subscriptions[0].inactive).toBe(false); // 60 not > 60
+    expect(summarizeSubscriptions(txns, addDays("2026-01-31", 61)).subscriptions[0].inactive).toBe(true); // 61 > 60
+  });
+
+  it("no asOf ⇒ never flags inactive (safe default)", () => {
+    const out = summarizeSubscriptions([
+      tx({ dedupKey: "z1", occurredOn: "2020-01-01", amount: 10, merchant: "Ancient" }),
+      tx({ dedupKey: "z2", occurredOn: "2020-02-01", amount: 10, merchant: "Ancient" }),
+    ]);
+    expect(out.subscriptions[0].inactive).toBe(false);
+  });
+});
+
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }

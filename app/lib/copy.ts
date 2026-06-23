@@ -554,6 +554,14 @@ export const COPY = {
     cadenceAnnual: "every year",
     cadenceIrregular: "irregular",
     cadencePending: "cadence pending",
+    // WLT-24-4 — monthly-multiple cadences (human-scale, never raw day counts).
+    cadenceBimonthly: "every 2 months",
+    cadenceQuarterly: "every 3 months",
+    cadenceSemiannual: "every 6 months",
+    // WLT-24-4 — last charged + the "may have ended" hint.
+    lastCharged: "Last charged {date}",
+    inactiveTag: "May have ended",
+    inactiveNote: "Not charged since {date} — may have ended.",
     pendingNote: "Not counted yet — needs another charge to confirm.",
     markAction: "Mark as a subscription",
     unmarkAction: "Remove from subscriptions",

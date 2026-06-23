@@ -16,8 +16,8 @@ import { SubscriptionsClient } from "./SubscriptionsClient";
 
 const VIEW: SubscriptionsViewDTO = {
   subscriptions: [
-    { merchant: "Netflix", normKey: "netflix", typicalAmount: 15.49, cadence: "monthly", occurrences: 3, monthlyEquivalent: 15.49, dedupKeys: ["n1", "n2", "n3"], source: "user" },
-    { merchant: "New Service", normKey: "newservice", typicalAmount: 99, cadence: "pending", occurrences: 1, monthlyEquivalent: null, dedupKeys: ["x1"], source: "user" },
+    { merchant: "Netflix", normKey: "netflix", typicalAmount: 15.49, cadence: "monthly", occurrences: 3, monthlyEquivalent: 15.49, dedupKeys: ["n1", "n2", "n3"], source: "user", lastChargedOn: "2026-06-15", inactive: false },
+    { merchant: "New Service", normKey: "newservice", typicalAmount: 99, cadence: "pending", occurrences: 1, monthlyEquivalent: null, dedupKeys: ["x1"], source: "user", lastChargedOn: "2026-06-15", inactive: false },
   ],
   monthlyTotal: 15.49,
   annualTotal: 185.88,
@@ -26,8 +26,8 @@ const VIEW: SubscriptionsViewDTO = {
 // WLT-24-2 — a view with an auto-detected subscription (drives the "detected" tag + nudge).
 const VIEW_WITH_DETECTED: SubscriptionsViewDTO = {
   subscriptions: [
-    { merchant: "Netflix", normKey: "netflix", typicalAmount: 15.49, cadence: "monthly", occurrences: 4, monthlyEquivalent: 15.49, dedupKeys: ["n1", "n2", "n3", "n4"], source: "auto" },
-    { merchant: "Spotify", normKey: "spotify", typicalAmount: 10.99, cadence: "monthly", occurrences: 3, monthlyEquivalent: 10.99, dedupKeys: ["s1", "s2", "s3"], source: "user" },
+    { merchant: "Netflix", normKey: "netflix", typicalAmount: 15.49, cadence: "monthly", occurrences: 4, monthlyEquivalent: 15.49, dedupKeys: ["n1", "n2", "n3", "n4"], source: "auto", lastChargedOn: "2026-06-15", inactive: false },
+    { merchant: "Spotify", normKey: "spotify", typicalAmount: 10.99, cadence: "monthly", occurrences: 3, monthlyEquivalent: 10.99, dedupKeys: ["s1", "s2", "s3"], source: "user", lastChargedOn: "2026-06-15", inactive: false },
   ],
   monthlyTotal: 26.48,
   annualTotal: 317.76,
@@ -74,12 +74,41 @@ describe("SubscriptionsClient (WLT-24-1)", () => {
 // only that series' dedupKeys (a sibling series is untouched).
 const VIEW_TWO_SONY: SubscriptionsViewDTO = {
   subscriptions: [
-    { merchant: "Sony PlayStation", normKey: "sony|c:45.00", typicalAmount: 45, cadence: "monthly", occurrences: 3, monthlyEquivalent: 45, dedupKeys: ["b1", "b2", "b3"], source: "user" },
-    { merchant: "Sony PlayStation", normKey: "sony|c:13.99", typicalAmount: 13.99, cadence: "monthly", occurrences: 3, monthlyEquivalent: 13.99, dedupKeys: ["a1", "a2", "a3"], source: "user" },
+    { merchant: "Sony PlayStation", normKey: "sony|c:45.00", typicalAmount: 45, cadence: "monthly", occurrences: 3, monthlyEquivalent: 45, dedupKeys: ["b1", "b2", "b3"], source: "user", lastChargedOn: "2026-06-15", inactive: false },
+    { merchant: "Sony PlayStation", normKey: "sony|c:13.99", typicalAmount: 13.99, cadence: "monthly", occurrences: 3, monthlyEquivalent: 13.99, dedupKeys: ["a1", "a2", "a3"], source: "user", lastChargedOn: "2026-06-15", inactive: false },
   ],
   monthlyTotal: 58.99,
   annualTotal: 707.88,
 };
+
+// WLT-24-4 — a quarterly (longer-cadence) active row + a monthly row that's gone inactive.
+const VIEW_CADENCE_INACTIVE: SubscriptionsViewDTO = {
+  subscriptions: [
+    { merchant: "Sony PlayStation", normKey: "sony|c:49.99", typicalAmount: 49.99, cadence: "quarterly", occurrences: 3, monthlyEquivalent: 16.66, dedupKeys: ["q1", "q2", "q3"], source: "auto", lastChargedOn: "2026-06-01", inactive: false },
+    { merchant: "Old Gym", normKey: "oldgym|c:29.99", typicalAmount: 29.99, cadence: "monthly", occurrences: 4, monthlyEquivalent: 29.99, dedupKeys: ["o1", "o2", "o3", "o4"], source: "user", lastChargedOn: "2026-01-15", inactive: true },
+  ],
+  monthlyTotal: 16.66, // the inactive Old Gym is excluded
+  annualTotal: 199.92,
+};
+
+describe("SubscriptionsClient — longer cadences + last-charged + inactive (WLT-24-4)", () => {
+  beforeEach(() => fetchSubscriptionsMock.mockResolvedValue({ ok: true, view: VIEW_CADENCE_INACTIVE }));
+
+  it("shows the longer-cadence label and the last-charged date", () => {
+    render(<SubscriptionsClient initial={VIEW_CADENCE_INACTIVE} userId="u1" />);
+    expect(screen.getByText(COPY.subscriptions.cadenceQuarterly)).toBeTruthy(); // "every 3 months"
+    expect(screen.getAllByText(/Last charged Jun 1, 2026/).length).toBeGreaterThan(0);
+  });
+
+  it("tags an inactive subscription 'may have ended' (and the headline already excludes it)", () => {
+    render(<SubscriptionsClient initial={VIEW_CADENCE_INACTIVE} userId="u1" />);
+    expect(screen.getByText(COPY.subscriptions.inactiveTag)).toBeTruthy(); // "May have ended" on Old Gym
+    // the row's accessible name carries the inactive note (distinct, for AT)
+    expect(screen.getByLabelText(/Old Gym.*may have ended/i)).toBeTruthy();
+    // headline is the active total only ($16.66), not + $29.99
+    expect(screen.getByText(/\$16\.66 \/ month/)).toBeTruthy();
+  });
+});
 
 describe("SubscriptionsClient — multi-sub vendor (WLT-24-3)", () => {
   beforeEach(() => fetchSubscriptionsMock.mockResolvedValue({ ok: true, view: VIEW_TWO_SONY }));
