@@ -6,9 +6,22 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 // `sub` matches the user (and, when present, whose `sid` matches the live
 // Supabase session) before granting app access. This is NOT an API bearer
 // credential — it only attests "this session completed the second factor".
+//
+// The marker SLIDES: while the session stays active, the guard re-mints the
+// token on the validated read path (see `shouldRenewAal2Token` + the guard), so
+// the 1h figure is an INACTIVITY window, not an absolute cap on an active
+// session. Without renewal a never-idle user was forced to re-authenticate ~1h
+// after sign-in — the "forced logout every few hours" defect (contradicting
+// WLT-6 AC2: sessions persist; WLT-7 AC1: AAL2 re-challenge is scoped to
+// sensitive step-up actions, not a blanket hourly logout).
 
 export const AAL2_COOKIE = "wlt_mfa";
-export const AAL2_TTL_SECONDS = 60 * 60; // 1h; re-challenge after.
+export const AAL2_TTL_SECONDS = 60 * 60; // 1h of INACTIVITY; slides while active.
+
+// Renew once the token is past this fraction of its life and still valid, so an
+// active session's marker is refreshed well before it can expire mid-use. Half
+// the TTL gives every active user at least one renewal opportunity per window.
+export const AAL2_RENEW_AFTER_SECONDS = AAL2_TTL_SECONDS / 2;
 
 function b64url(input: Buffer | string): string {
   return Buffer.from(input).toString("base64url");
@@ -37,16 +50,13 @@ export function signAal2Token(
   return `${body}.${sig}`;
 }
 
-/**
- * Verify an AAL2 token. Returns its claims (`sub`, `sid`) if the signature is
- * valid (timing-safe) and unexpired; otherwise null. Never throws. Callers must
- * still check `sub` against the signed-in user and `sid` against the live session.
- */
-export function verifyAal2Token(
+/** Decode a token's payload IFF the signature is valid (timing-safe). Internal
+ *  shared core for verify + renew so they can't diverge. Returns null on any
+ *  signature / structural failure. Does NOT check expiry — callers decide. */
+function decodeVerifiedPayload(
   token: string | undefined | null,
   secret: string,
-  nowSeconds: number = Math.floor(Date.now() / 1000),
-): Aal2Claims | null {
+): Aal2Payload | null {
   if (!token) return null;
   const dot = token.indexOf(".");
   if (dot <= 0) return null;
@@ -59,9 +69,44 @@ export function verifyAal2Token(
   try {
     const payload = JSON.parse(Buffer.from(body, "base64url").toString()) as Aal2Payload;
     if (typeof payload.sub !== "string" || typeof payload.exp !== "number") return null;
-    if (payload.exp < nowSeconds) return null;
-    return { sub: payload.sub, sid: payload.sid ?? null };
+    return payload;
   } catch {
     return null;
   }
+}
+
+/**
+ * Verify an AAL2 token. Returns its claims (`sub`, `sid`) if the signature is
+ * valid (timing-safe) and unexpired; otherwise null. Never throws. Callers must
+ * still check `sub` against the signed-in user and `sid` against the live session.
+ */
+export function verifyAal2Token(
+  token: string | undefined | null,
+  secret: string,
+  nowSeconds: number = Math.floor(Date.now() / 1000),
+): Aal2Claims | null {
+  const payload = decodeVerifiedPayload(token, secret);
+  if (!payload) return null;
+  if (payload.exp < nowSeconds) return null;
+  return { sub: payload.sub, sid: payload.sid ?? null };
+}
+
+/**
+ * True IFF `token` is currently valid (signature + unexpired) AND has entered
+ * its trailing renewal window — i.e. an ACTIVE session whose marker should be
+ * re-minted now so it never expires mid-use. False for absent / forged /
+ * expired tokens (an expired/idle session is NOT silently renewed — it must
+ * re-challenge). The guard calls this on every validated read; renewing here
+ * makes the TTL a sliding inactivity window rather than an absolute cap.
+ */
+export function shouldRenewAal2Token(
+  token: string | undefined | null,
+  secret: string,
+  nowSeconds: number = Math.floor(Date.now() / 1000),
+): boolean {
+  const payload = decodeVerifiedPayload(token, secret);
+  if (!payload) return false;
+  if (payload.exp < nowSeconds) return false; // expired → re-challenge, never auto-renew
+  const issuedAt = payload.exp - AAL2_TTL_SECONDS;
+  return nowSeconds - issuedAt >= AAL2_RENEW_AFTER_SECONDS;
 }
