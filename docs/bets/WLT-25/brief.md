@@ -8,6 +8,7 @@ portfolio_stub: false
 depends_on: [WLT-24] # the transaction_flags overlay table + the orthogonality discipline
 parallel_with: []
 architecture_required: true
+architecture_status: approved
 created: 2026-06-23
 author: PM
 sources:
