@@ -29,7 +29,8 @@ const markSubscriptionMock = vi.fn<(dk: string) => Promise<{ ok: boolean }>>();
 const unmarkSubscriptionMock = vi.fn<(dk: string) => Promise<{ ok: boolean }>>();
 vi.mock("@/app/lib/subscriptions-client", () => ({
   markSubscription: (dk: string) => markSubscriptionMock(dk),
-  unmarkSubscription: (dk: string) => unmarkSubscriptionMock(dk),
+  // WLT-24-3 — the ledger toggle now dismisses the charge's price series.
+  unmarkSubscriptionFromLedger: (dk: string) => unmarkSubscriptionMock(dk),
 }));
 
 import { TransactionsClient } from "./TransactionsClient";

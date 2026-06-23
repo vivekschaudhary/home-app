@@ -69,10 +69,11 @@ export function SubscriptionsClient({ initial, userId }: { initial: Subscription
 
   async function unmark(row: SubscriptionRow) {
     setBusy(row.normKey);
-    // Unmark every transaction behind the subscription (a row is a merchant group).
-    const results = await Promise.all(row.dedupKeys.map((dk) => unmarkSubscription(dk)));
+    // WLT-24-3 — dismiss exactly this row's price SERIES (its cluster's dedupKeys) in
+    // one call; a sibling series from the same vendor is untouched.
+    const res = await unmarkSubscription(row.dedupKeys);
     setBusy(null);
-    if (results.some((r) => !r.ok)) {
+    if (!res.ok) {
       setToast(S.error);
       return;
     }
@@ -146,8 +147,20 @@ export function SubscriptionsClient({ initial, userId }: { initial: Subscription
         <tbody>
           {view.subscriptions.map((row) => {
             const counted = row.monthlyEquivalent != null;
+            // WLT-24-3 — a distinct accessible name per row (amount + cadence) so two
+            // same-named vendor rows (e.g. two "Sony PlayStation" series) are
+            // distinguishable to assistive tech; the amount is the disambiguator.
+            const rowLabel =
+              row.source === "auto"
+                ? fill(SA.rowDetectedA11y, { merchant: row.merchant, amount: money(row.typicalAmount), cadence: CADENCE_LABEL[row.cadence] })
+                : fill(SA.rowA11y, {
+                    merchant: row.merchant,
+                    amount: money(row.typicalAmount),
+                    cadence: CADENCE_LABEL[row.cadence],
+                    monthly: counted ? money(row.monthlyEquivalent as number) : "—",
+                  });
             return (
-              <tr key={row.normKey} className="block border-b border-gray-200 py-3 md:table-row md:py-0">
+              <tr key={row.normKey} aria-label={rowLabel} className="block border-b border-gray-200 py-3 md:table-row md:py-0">
                 <td className="block py-0.5 text-base font-medium text-gray-900 md:table-cell md:py-3 md:pr-4 md:text-sm md:font-normal">
                   {row.merchant}
                   {row.source === "auto" ? (

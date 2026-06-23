@@ -103,10 +103,60 @@ function monthlyEquivalent(cadence: SubscriptionCadence, typicalAmount: number):
   }
 }
 
+// ── WLT-24-3: price clustering — a vendor can bill MULTIPLE distinct subscriptions
+// (Sony PlayStation → a $13.99 sub AND a $45 sub). A subscription is a (merchant,
+// PRICE), not just a merchant — so within a merchant we split charges into PRICE
+// clusters and treat each as its own series. Single-linkage over the sorted distinct
+// amounts: a gap whose RATIO exceeds CLUSTER_MAX_RATIO starts a new cluster, so a
+// single sub's price CREEP ($15.49→$16.99, +10%) stays together while genuinely
+// distinct prices ($13.99 vs $45, 3.2×) split. The cluster is re-derived from amounts
+// every read/detect run — never persisted; the flag stays per dedup_key (no schema).
+// Limitation: two distinct subs at the SAME price from one vendor can't be split.
+
+/** Adjacent sorted amounts whose ratio exceeds this start a new price cluster (>25%). */
+export const CLUSTER_MAX_RATIO = 1.25;
+
+/** The ascending cluster anchors (each cluster's minimum amount) for a set of amounts. */
+function clusterAnchors(amounts: readonly number[]): number[] {
+  const distinct = [...new Set(amounts)].sort((a, b) => a - b);
+  const anchors: number[] = [];
+  let prev = Number.NEGATIVE_INFINITY;
+  for (const amt of distinct) {
+    if (prev <= 0 || amt / prev > CLUSTER_MAX_RATIO) anchors.push(amt); // a > threshold jump → new cluster
+    prev = amt;
+  }
+  return anchors;
+}
+
+/** The clusterId an amount belongs to = the highest anchor <= it. Stable + re-derived. */
+function clusterIdForAmount(anchors: readonly number[], amount: number): string {
+  let anchor = anchors[0] ?? amount;
+  for (const a of anchors) {
+    if (a <= amount) anchor = a;
+    else break;
+  }
+  return `c:${anchor.toFixed(2)}`;
+}
+
+/** Split a merchant's charges into price clusters (clusterId → members). */
+export function clusterByPrice(members: readonly MarkedTxn[]): Map<string, MarkedTxn[]> {
+  const anchors = clusterAnchors(members.map((m) => m.amount));
+  const clusters = new Map<string, MarkedTxn[]>();
+  for (const m of members) {
+    const id = clusterIdForAmount(anchors, m.amount);
+    const g = clusters.get(id);
+    if (g) g.push(m);
+    else clusters.set(id, [m]);
+  }
+  return clusters;
+}
+
 /**
  * Summarize the user's marked subscriptions. Groups by `normalizeMerchant` (so
- * "NETFLIX.COM" and "Netflix" merge); a group with <2 occurrences is `pending`
- * (shown, but excluded from the headline so the total never rests on a guess).
+ * "NETFLIX.COM" and "Netflix" merge), then sub-groups each merchant by PRICE
+ * cluster (WLT-24-3) so a vendor with two subscriptions shows two rows. A series
+ * with <2 occurrences is `pending` (shown, but excluded from the headline so the
+ * total never rests on a guess).
  */
 export function summarizeSubscriptions(txns: readonly MarkedTxn[]): SubscriptionsSummary {
   // Group by normalized merchant; fall back to the description, then the dedup_key
@@ -120,27 +170,31 @@ export function summarizeSubscriptions(txns: readonly MarkedTxn[]): Subscription
   }
 
   const subscriptions: SubscriptionRow[] = [];
-  for (const [normKey, members] of groups) {
-    const sorted = [...members].sort((a, b) => a.occurredOn.localeCompare(b.occurredOn));
-    const typicalAmount = round2(median(members.map((m) => m.amount)));
-    let cadence: SubscriptionCadence = "pending";
-    if (sorted.length >= 2) {
-      const intervals: number[] = [];
-      for (let i = 1; i < sorted.length; i++) intervals.push(daysBetween(sorted[i - 1].occurredOn, sorted[i].occurredOn));
-      cadence = cadenceFromInterval(median(intervals));
+  for (const [normKey, merchantMembers] of groups) {
+    // WLT-24-3 — split the merchant into price clusters; each cluster is its own
+    // subscription row (so a two-sub vendor shows two rows, summed honestly).
+    for (const [clusterId, members] of clusterByPrice(merchantMembers)) {
+      const sorted = [...members].sort((a, b) => a.occurredOn.localeCompare(b.occurredOn));
+      const typicalAmount = round2(median(members.map((m) => m.amount)));
+      let cadence: SubscriptionCadence = "pending";
+      if (sorted.length >= 2) {
+        const intervals: number[] = [];
+        for (let i = 1; i < sorted.length; i++) intervals.push(daysBetween(sorted[i - 1].occurredOn, sorted[i].occurredOn));
+        cadence = cadenceFromInterval(median(intervals));
+      }
+      const latest = sorted[sorted.length - 1];
+      subscriptions.push({
+        merchant: latest.merchant ?? latest.description ?? "Subscription",
+        normKey: `${normKey}|${clusterId}`, // composite — unique per (merchant, price series)
+        typicalAmount,
+        cadence,
+        occurrences: members.length,
+        monthlyEquivalent: monthlyEquivalent(cadence, typicalAmount),
+        dedupKeys: members.map((m) => m.dedupKey),
+        // 'auto' only when every charge in the series is auto-detected; any user mark ⇒ 'user'.
+        source: members.every((m) => m.source === "auto") ? "auto" : "user",
+      });
     }
-    const latest = sorted[sorted.length - 1];
-    subscriptions.push({
-      merchant: latest.merchant ?? latest.description ?? "Subscription",
-      normKey,
-      typicalAmount,
-      cadence,
-      occurrences: members.length,
-      monthlyEquivalent: monthlyEquivalent(cadence, typicalAmount),
-      dedupKeys: members.map((m) => m.dedupKey),
-      // 'auto' only when every charge is auto-detected; any user mark ⇒ 'user'.
-      source: members.every((m) => m.source === "auto") ? "auto" : "user",
-    });
   }
 
   // Sort by monthly weight (confidently-inferred first, desc), then by typical amount.
@@ -197,11 +251,13 @@ function clamp01(n: number): number {
  * dismissed merchants are filtered on it); `dedupKeys` are the charges to flag. */
 export interface CandidateSubscription {
   merchantKey: string; // subscriptionMerchantKey (entity-id-first)
-  normKey: string; // the normalized grouping/display key
-  dedupKeys: string[]; // the merchant's charges seen in the input (to flag)
+  clusterId: string; // WLT-24-3 — the price cluster within the merchant
+  compositeKey: string; // `${merchantKey}|${clusterId}` — the per-SERIES skip/dismiss key
+  normKey: string; // the grouping/display key (= compositeKey)
+  dedupKeys: string[]; // the SERIES' charges seen in the input (to flag)
   cadence: Exclude<SubscriptionCadence, "pending" | "irregular">;
   occurrences: number;
-  typicalAmount: number; // median of the charges
+  typicalAmount: number; // median of the series' charges
   confidence: number; // 0..1
 }
 
@@ -224,42 +280,52 @@ export function detectSubscriptions(input: { txns: readonly MarkedTxn[] }): Cand
   }
 
   const candidates: CandidateSubscription[] = [];
-  for (const [merchantKey, members] of groups) {
-    // Gate (a) — enough occurrences.
-    if (members.length < DETECT_MIN_OCCURRENCES) continue;
+  for (const [merchantKey, merchantMembers] of groups) {
+    // WLT-24-3 — evaluate each PRICE cluster as its own series, so a vendor with two
+    // subscriptions yields two candidates (and two interleaved subs no longer blend
+    // into one `irregular` group that the cadence gate would drop).
+    for (const [clusterId, members] of clusterByPrice(merchantMembers)) {
+      // Gate (a) — enough occurrences.
+      if (members.length < DETECT_MIN_OCCURRENCES) continue;
 
-    const sorted = [...members].sort((a, b) => a.occurredOn.localeCompare(b.occurredOn));
-    const intervals: number[] = [];
-    for (let i = 1; i < sorted.length; i++) intervals.push(daysBetween(sorted[i - 1].occurredOn, sorted[i].occurredOn));
+      const sorted = [...members].sort((a, b) => a.occurredOn.localeCompare(b.occurredOn));
+      const intervals: number[] = [];
+      for (let i = 1; i < sorted.length; i++) intervals.push(daysBetween(sorted[i - 1].occurredOn, sorted[i].occurredOn));
 
-    // Gate (b) — a clean (non-irregular) cadence.
-    const cadence = cadenceFromInterval(median(intervals));
-    if (cadence === "irregular") continue;
+      // Gate (b) — a clean (non-irregular) cadence.
+      const cadence = cadenceFromInterval(median(intervals));
+      if (cadence === "irregular") continue;
 
-    // Gate (c) — a stable amount (fixed-price subscriptions vary little).
-    const amounts = members.map((m) => m.amount);
-    const amountCV = coefficientOfVariation(amounts);
-    if (amountCV > DETECT_MAX_AMOUNT_CV) continue;
+      // Gate (c) — a stable amount (fixed-price subscriptions vary little). Also
+      // rejects a variable-spend merchant whose amounts single-linkage-chained into
+      // one wide cluster (high CV) — clustering only sub-divides, never invents subs.
+      const amounts = members.map((m) => m.amount);
+      const amountCV = coefficientOfVariation(amounts);
+      if (amountCV > DETECT_MAX_AMOUNT_CV) continue;
 
-    // Confidence — the margin tie-breaker once the hard gates pass.
-    const amountScore = clamp01(1 - amountCV / AMOUNT_CV_DENOM);
-    const regularityScore = clamp01(1 - coefficientOfVariation(intervals) / INTERVAL_CV_DENOM);
-    const occurrenceScore = Math.min(members.length, OCCURRENCE_SATURATION) / OCCURRENCE_SATURATION;
-    const confidence = round2(W_AMOUNT * amountScore + W_REGULARITY * regularityScore + W_OCCURRENCE * occurrenceScore);
-    if (confidence < DETECT_MIN_CONFIDENCE) continue;
+      // Confidence — the margin tie-breaker once the hard gates pass.
+      const amountScore = clamp01(1 - amountCV / AMOUNT_CV_DENOM);
+      const regularityScore = clamp01(1 - coefficientOfVariation(intervals) / INTERVAL_CV_DENOM);
+      const occurrenceScore = Math.min(members.length, OCCURRENCE_SATURATION) / OCCURRENCE_SATURATION;
+      const confidence = round2(W_AMOUNT * amountScore + W_REGULARITY * regularityScore + W_OCCURRENCE * occurrenceScore);
+      if (confidence < DETECT_MIN_CONFIDENCE) continue;
 
-    candidates.push({
-      merchantKey,
-      normKey: merchantKey,
-      dedupKeys: members.map((m) => m.dedupKey),
-      cadence,
-      occurrences: members.length,
-      typicalAmount: round2(median(amounts)),
-      confidence,
-    });
+      const compositeKey = `${merchantKey}|${clusterId}`;
+      candidates.push({
+        merchantKey,
+        clusterId,
+        compositeKey,
+        normKey: compositeKey,
+        dedupKeys: members.map((m) => m.dedupKey),
+        cadence,
+        occurrences: members.length,
+        typicalAmount: round2(median(amounts)),
+        confidence,
+      });
+    }
   }
   // Most-confident first (deterministic; the write path flags them all anyway).
-  candidates.sort((a, b) => b.confidence - a.confidence || a.merchantKey.localeCompare(b.merchantKey));
+  candidates.sort((a, b) => b.confidence - a.confidence || a.compositeKey.localeCompare(b.compositeKey));
   return candidates;
 }
 

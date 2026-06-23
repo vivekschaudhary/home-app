@@ -14,7 +14,7 @@ import {
   fetchTransactions,
   recordTransactionsFiltered,
 } from "@/app/lib/transactions-client";
-import { markSubscription, unmarkSubscription } from "@/app/lib/subscriptions-client";
+import { markSubscription, unmarkSubscriptionFromLedger } from "@/app/lib/subscriptions-client";
 
 const C = COPY.transactions;
 const A = COPY.transactionsA11y;
@@ -86,7 +86,7 @@ export function TransactionsClient({
   // existing popover (AC2). Orthogonal to category — never touches the row's
   // category/budget. No optimistic revert: the row flips only on success.
   async function toggleSubscription(r: TransactionRowDTO) {
-    const res = r.isSubscription ? await unmarkSubscription(r.dedupKey) : await markSubscription(r.dedupKey);
+    const res = r.isSubscription ? await unmarkSubscriptionFromLedger(r.dedupKey) : await markSubscription(r.dedupKey);
     if (!res.ok) {
       setToast(res.error === "network" ? SUB.errorNetwork : res.error === "invalid" ? SUB.errorInvalid : SUB.error);
       return;

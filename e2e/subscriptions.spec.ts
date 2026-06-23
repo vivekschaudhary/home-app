@@ -442,4 +442,182 @@ test.describe("subscriptions — mark from ledger + summarize + CDC survival + o
       await db.end();
     }
   });
+
+  test("real session → a two-price vendor becomes two detected rows, one dismissed row stays gone, a user re-mark revives the merchant, and a second user stays isolated", async ({
+    browser,
+    page,
+    context,
+  }) => {
+    const email = `e2e-subscriptions-clusters-u1+${Date.now()}@example.com`;
+    const otherEmail = `e2e-subscriptions-clusters-u2+${Date.now()}@example.com`;
+    const password = "correct horse battery staple";
+
+    await signUpWithPasskey(page, context, email, password);
+
+    const db = new Client({ connectionString: DB_URL });
+    let otherContext: BrowserContext | null = null;
+    await db.connect();
+    try {
+      const u = await db.query("select id from auth.users where email = $1", [email]);
+      expect(u.rows).toHaveLength(1);
+      const userId = u.rows[0].id as string;
+
+      const acct = await db.query(
+        `insert into financial_accounts (user_id, name, kind, currency, balance_current, balance_updated_at)
+         values ($1, 'Cluster Subscriptions Checking', 'depository', 'USD', 5200, now()) returning id`,
+        [userId],
+      );
+      const accountId = acct.rows[0].id as string;
+
+      await db.query(
+        `insert into transactions
+           (user_id, account_id, source, dedup_key, content_hash, amount, direction, currency, merchant, merchant_entity_id, description, category, kind, occurred_on)
+         values
+           ($1,$2,'plaid','e2e-clusterplay-low-1','clusterplay-low-hash-1',13.99,'debit','USD','ClusterPlay','ent-clusterplay','ClusterPlay Basic Jan','ENTERTAINMENT','spend',$3),
+           ($1,$2,'plaid','e2e-clusterplay-low-2','clusterplay-low-hash-2',13.99,'debit','USD','ClusterPlay','ent-clusterplay','ClusterPlay Basic Feb','ENTERTAINMENT','spend',$4),
+           ($1,$2,'plaid','e2e-clusterplay-low-3','clusterplay-low-hash-3',13.99,'debit','USD','ClusterPlay','ent-clusterplay','ClusterPlay Basic Mar','ENTERTAINMENT','spend',$5),
+           ($1,$2,'plaid','e2e-clusterplay-low-4','clusterplay-low-hash-4',13.99,'debit','USD','ClusterPlay','ent-clusterplay','ClusterPlay Basic Apr','ENTERTAINMENT','spend',$6),
+           ($1,$2,'plaid','e2e-clusterplay-high-1','clusterplay-high-hash-1',45.00,'debit','USD','ClusterPlay','ent-clusterplay','ClusterPlay Premium Jan','ENTERTAINMENT','spend',$3),
+           ($1,$2,'plaid','e2e-clusterplay-high-2','clusterplay-high-hash-2',45.00,'debit','USD','ClusterPlay','ent-clusterplay','ClusterPlay Premium Feb','ENTERTAINMENT','spend',$4),
+           ($1,$2,'plaid','e2e-clusterplay-high-3','clusterplay-high-hash-3',45.00,'debit','USD','ClusterPlay','ent-clusterplay','ClusterPlay Premium Mar','ENTERTAINMENT','spend',$5),
+           ($1,$2,'plaid','e2e-clusterplay-high-4','clusterplay-high-hash-4',45.00,'debit','USD','ClusterPlay','ent-clusterplay','ClusterPlay Premium Apr','ENTERTAINMENT','spend',$6)`,
+        [userId, accountId, monthDay(3), monthDay(2), monthDay(1), monthDay(0)],
+      );
+
+      await page.goto("/subscriptions");
+      await expect(page.getByRole("heading", { name: "Subscriptions" })).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("ClusterPlay")).toHaveCount(2);
+      await expect(page.getByText("$58.99 / month · $707.88 / year")).toBeVisible();
+      await expect(page.getByText("$13.99")).toBeVisible();
+      await expect(page.getByText("$45.00")).toBeVisible();
+      await expect(page.getByText("We found 2 recurring charges — review them below.")).toBeVisible();
+      await expect(page.getByText("detected")).toHaveCount(2);
+
+      const initialRows = await db.query(
+        `select source, count(*)::int as n
+           from transaction_flags
+          where user_id = $1 and flag_type = 'subscription' and dismissed_at is null
+          group by source
+          order by source`,
+        [userId],
+      );
+      expect(initialRows.rows).toEqual([{ source: "auto", n: 8 }]);
+
+      const lowPriceRow = page.getByRole("row", {
+        name: /ClusterPlay, \$13\.99, billed every month, detected automatically/i,
+      });
+      await lowPriceRow.getByRole("button", { name: "Remove from subscriptions" }).click();
+      await expect(page.getByText("Removed from subscriptions")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("ClusterPlay")).toHaveCount(1);
+      await expect(page.getByText("$45.00 / month · $540.00 / year")).toBeVisible();
+      await expect(page.getByText("$13.99")).toHaveCount(0);
+      await expect(page.getByText("$45.00")).toBeVisible();
+      await expect(page.getByText("We found 1 recurring charge — review it below.")).toBeVisible();
+      await expect(page.getByText("detected")).toHaveCount(1);
+
+      const dismissedLowSeries = await db.query(
+        `select
+           count(*) filter (where dismissed_at is null)::int as active,
+           count(*) filter (where dismissed_at is not null)::int as dismissed
+         from transaction_flags
+        where user_id = $1 and dedup_key like 'e2e-clusterplay-low-%'`,
+        [userId],
+      );
+      expect(dismissedLowSeries.rows).toEqual([{ active: 0, dismissed: 4 }]);
+
+      await db.query(
+        `insert into transactions
+           (user_id, account_id, source, dedup_key, content_hash, amount, direction, currency, merchant, merchant_entity_id, description, category, kind, occurred_on)
+         values
+           ($1,$2,'plaid','e2e-clusterplay-low-5','clusterplay-low-hash-5',13.99,'debit','USD','ClusterPlay','ent-clusterplay','ClusterPlay Basic May','ENTERTAINMENT','spend',$3)`,
+        [userId, accountId, monthDay(-1)],
+      );
+
+      await page.reload();
+      await expect(page.getByText("ClusterPlay")).toHaveCount(1);
+      await expect(page.getByText("$45.00 / month · $540.00 / year")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("$13.99")).toHaveCount(0);
+      await expect(page.getByText("We found 1 recurring charge — review it below.")).toBeVisible();
+      await expect(page.getByText("detected")).toHaveCount(1);
+
+      const postReloadLowSeries = await db.query(
+        `select
+           count(*) filter (where dismissed_at is null)::int as active,
+           count(*) filter (where dismissed_at is not null)::int as dismissed
+         from transaction_flags
+        where user_id = $1 and dedup_key like 'e2e-clusterplay-low-%'`,
+        [userId],
+      );
+      expect(postReloadLowSeries.rows).toEqual([{ active: 0, dismissed: 4 }]);
+
+      await page.goto("/transactions");
+      await expect(page.getByRole("heading", { name: "Transactions" })).toBeVisible({ timeout: 15_000 });
+      const clusterPlayPicker = page.getByRole("button", { name: /Change the category of ClusterPlay \(\$13\.99\)/i }).first();
+      await clusterPlayPicker.click();
+      await page.getByRole("button", { name: "Mark as a subscription" }).click();
+      await expect(page.getByText("Marked as a subscription")).toBeVisible({ timeout: 15_000 });
+
+      const userOwnedMerchant = await db.query(
+        `select source, count(*)::int as n
+           from transaction_flags
+          where user_id = $1
+            and flag_type = 'subscription'
+            and dismissed_at is null
+            and dedup_key like 'e2e-clusterplay-%'
+          group by source
+          order by source`,
+        [userId],
+      );
+      expect(userOwnedMerchant.rows).toEqual([{ source: "user", n: 9 }]);
+
+      await page.goto("/subscriptions");
+      await expect(page.getByText("ClusterPlay")).toHaveCount(2);
+      await expect(page.getByText("$58.99 / month · $707.88 / year")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("$13.99")).toBeVisible();
+      await expect(page.getByText("$45.00")).toBeVisible();
+      await expect(page.getByText("detected")).toHaveCount(0);
+      await expect(page.getByText("We found 1 recurring charge — review it below.")).toHaveCount(0);
+      await expect(page.getByText("We found 2 recurring charges — review them below.")).toHaveCount(0);
+
+      otherContext = await browser.newContext();
+      const otherPage = await otherContext.newPage();
+      await signUpWithPasskey(otherPage, otherContext, otherEmail, password);
+
+      const otherUser = await db.query("select id from auth.users where email = $1", [otherEmail]);
+      expect(otherUser.rows).toHaveLength(1);
+      const otherUserId = otherUser.rows[0].id as string;
+      const otherAcct = await db.query(
+        `insert into financial_accounts (user_id, name, kind, currency, balance_current, balance_updated_at)
+         values ($1, 'Other Cluster Checking', 'depository', 'USD', 2600, now()) returning id`,
+        [otherUserId],
+      );
+      const otherAccountId = otherAcct.rows[0].id as string;
+      await db.query(
+        `insert into transactions
+           (user_id, account_id, source, dedup_key, content_hash, amount, direction, currency, merchant, merchant_entity_id, description, category, kind, occurred_on)
+         values
+           ($1,$2,'plaid','e2e-othercluster-low-1','othercluster-low-hash-1',13.99,'debit','USD','ClusterPlay','ent-clusterplay-other','Other ClusterPlay Basic Jan','ENTERTAINMENT','spend',$3),
+           ($1,$2,'plaid','e2e-othercluster-low-2','othercluster-low-hash-2',13.99,'debit','USD','ClusterPlay','ent-clusterplay-other','Other ClusterPlay Basic Feb','ENTERTAINMENT','spend',$4),
+           ($1,$2,'plaid','e2e-othercluster-low-3','othercluster-low-hash-3',13.99,'debit','USD','ClusterPlay','ent-clusterplay-other','Other ClusterPlay Basic Mar','ENTERTAINMENT','spend',$5),
+           ($1,$2,'plaid','e2e-othercluster-low-4','othercluster-low-hash-4',13.99,'debit','USD','ClusterPlay','ent-clusterplay-other','Other ClusterPlay Basic Apr','ENTERTAINMENT','spend',$6),
+           ($1,$2,'plaid','e2e-othercluster-high-1','othercluster-high-hash-1',45.00,'debit','USD','ClusterPlay','ent-clusterplay-other','Other ClusterPlay Premium Jan','ENTERTAINMENT','spend',$3),
+           ($1,$2,'plaid','e2e-othercluster-high-2','othercluster-high-hash-2',45.00,'debit','USD','ClusterPlay','ent-clusterplay-other','Other ClusterPlay Premium Feb','ENTERTAINMENT','spend',$4),
+           ($1,$2,'plaid','e2e-othercluster-high-3','othercluster-high-hash-3',45.00,'debit','USD','ClusterPlay','ent-clusterplay-other','Other ClusterPlay Premium Mar','ENTERTAINMENT','spend',$5),
+           ($1,$2,'plaid','e2e-othercluster-high-4','othercluster-high-hash-4',45.00,'debit','USD','ClusterPlay','ent-clusterplay-other','Other ClusterPlay Premium Apr','ENTERTAINMENT','spend',$6)`,
+        [otherUserId, otherAccountId, monthDay(3), monthDay(2), monthDay(1), monthDay(0)],
+      );
+
+      await otherPage.goto("/subscriptions");
+      await expect(otherPage.getByRole("heading", { name: "Subscriptions" })).toBeVisible({ timeout: 15_000 });
+      await expect(otherPage.getByText("ClusterPlay")).toHaveCount(2);
+      await expect(otherPage.getByText("$58.99 / month · $707.88 / year")).toBeVisible();
+      await expect(otherPage.getByText("$13.99")).toBeVisible();
+      await expect(otherPage.getByText("$45.00")).toBeVisible();
+      await expect(otherPage.getByText("We found 2 recurring charges — review them below.")).toBeVisible();
+      await expect(otherPage.getByText("detected")).toHaveCount(2);
+    } finally {
+      await otherContext?.close();
+      await db.end();
+    }
+  });
 });

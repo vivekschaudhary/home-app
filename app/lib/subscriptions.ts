@@ -8,9 +8,10 @@ import { createServerSupabase } from "@vc1023/passkey-2fa";
 import { FUNNEL_EVENTS, type MarkedTxn, type SubscriptionsSummary, summarizeSubscriptions } from "@wealth/core";
 import {
   detectAndFlagSubscriptionsForUser,
+  dismissSubscriptionFlags,
+  dismissSubscriptionSeriesForCharge,
   markMerchantSubscription,
   readSubscriptionFlagSources,
-  unmarkMerchantSubscription,
 } from "@wealth/db/subscriptions";
 import { emitFunnel } from "@wealth/db/emit";
 import { readAllPaged } from "@wealth/db/paged";
@@ -102,18 +103,36 @@ export async function markSubscription(userId: string, dedupKey: string): Promis
   return { ok: true };
 }
 
-/** Remove (DISMISS) the subscription from the charge's whole merchant. WLT-24-2:
- * a durable SOFT-delete — the detector won't re-add a dismissed merchant. Emits
- * `subscription_dismissed` (the false-positive / curation signal). */
-export async function unmarkSubscription(userId: string, dedupKey: string): Promise<SubscriptionWriteResult> {
-  if (!dedupKey || typeof dedupKey !== "string") return { ok: false, error: "invalid" };
+/** Remove (DISMISS) one price SERIES — exactly the passed charges (a cluster), not
+ * the whole merchant (WLT-24-3), so removing one of a vendor's subscriptions leaves
+ * the others. A durable SOFT-delete — the detector won't re-add a dismissed series.
+ * Emits `subscription_dismissed` (the false-positive / curation signal). */
+export async function unmarkSubscription(userId: string, dedupKeys: readonly string[]): Promise<SubscriptionWriteResult> {
+  if (!Array.isArray(dedupKeys) || dedupKeys.length === 0 || !dedupKeys.every((k) => typeof k === "string" && k)) {
+    return { ok: false, error: "invalid" };
+  }
   const supabase = await createServerSupabase();
   try {
-    await unmarkMerchantSubscription(supabase, userId, dedupKey);
+    await dismissSubscriptionFlags(supabase, userId, dedupKeys);
   } catch {
     return { ok: false, error: "save_failed" };
   }
-  await emitFunnel(FUNNEL_EVENTS.SUBSCRIPTION_DISMISSED, userId, { action: "unmark" });
+  await emitFunnel(FUNNEL_EVENTS.SUBSCRIPTION_DISMISSED, userId, { action: "unmark", series: dedupKeys.length });
+  return { ok: true };
+}
+
+/** Unmark from the LEDGER (one charge). WLT-24-3 — dismiss the price SERIES that
+ * charge belongs to (resolved server-side), so toggling off a $13.99 Sony charge
+ * never removes a sibling $45 Sony subscription. */
+export async function unmarkSubscriptionFromLedger(userId: string, dedupKey: string): Promise<SubscriptionWriteResult> {
+  if (!dedupKey || typeof dedupKey !== "string") return { ok: false, error: "invalid" };
+  const supabase = await createServerSupabase();
+  try {
+    await dismissSubscriptionSeriesForCharge(supabase, userId, dedupKey);
+  } catch {
+    return { ok: false, error: "save_failed" };
+  }
+  await emitFunnel(FUNNEL_EVENTS.SUBSCRIPTION_DISMISSED, userId, { action: "unmark", from: "ledger" });
   return { ok: true };
 }
 
