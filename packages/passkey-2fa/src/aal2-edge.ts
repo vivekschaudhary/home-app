@@ -18,8 +18,8 @@
 
 import {
   AAL2_COOKIE,
-  AAL2_RENEW_AFTER_SECONDS,
-  AAL2_TTL_SECONDS,
+  aal2RenewAfterSeconds,
+  aal2TtlSeconds,
   type Aal2CookieToSet,
 } from "./aal2-constants";
 
@@ -99,7 +99,9 @@ async function signToken(
   secret: string,
   nowSeconds: number,
 ): Promise<string> {
-  const body = strToB64url(JSON.stringify({ sub: userId, sid, exp: nowSeconds + AAL2_TTL_SECONDS }));
+  // Effective (possibly preview-compressed) TTL — read the same source as the
+  // Node mint so a compressed clock yields a compressed marker on BOTH seams.
+  const body = strToB64url(JSON.stringify({ sub: userId, sid, exp: nowSeconds + aal2TtlSeconds() }));
   const sig = await hmacB64url(body, secret);
   return `${body}.${sig}`;
 }
@@ -126,9 +128,12 @@ export async function renewedAal2CookieEdge(
   if (payload.sub !== userId) return null;
   const claimSid = payload.sid ?? null;
   if (!claimSid || !sid || claimSid !== sid) return null;
-  // Renewal window: past half-life and still valid.
-  const issuedAt = payload.exp - AAL2_TTL_SECONDS;
-  if (nowSeconds - issuedAt < AAL2_RENEW_AFTER_SECONDS) return null;
+  // Renewal window: past the EFFECTIVE half-life and still valid. Derive issuance
+  // from the effective TTL so a preview/dev clock-compression shrinks the trigger
+  // in lockstep with the Node seam (otherwise this would stretch a compressed
+  // marker back to a full hour — the Edge/Node drift Codex flagged on #104).
+  const issuedAt = payload.exp - aal2TtlSeconds();
+  if (nowSeconds - issuedAt < aal2RenewAfterSeconds()) return null;
   return {
     name: AAL2_COOKIE,
     value: await signToken(userId, sid, secret, nowSeconds),
@@ -137,7 +142,7 @@ export async function renewedAal2CookieEdge(
       secure,
       sameSite: "strict",
       path: "/",
-      maxAge: AAL2_TTL_SECONDS,
+      maxAge: aal2TtlSeconds(),
     },
   };
 }
