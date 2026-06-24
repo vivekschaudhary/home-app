@@ -2,7 +2,7 @@
 id: WLT-25-2
 bet: WLT-25
 type: story
-status: ready
+status: shipped
 priority: P2
 created: 2026-06-23
 author: PM
@@ -71,5 +71,9 @@ _If post-merge bugs are found, story is re-opened and fixes live under `fixes/`.
 - _none_
 
 ---
+
+**SHIPPED, 2026-06-24 — PR #111** (squash `f10db2d`). The closing slice of the Follow-up bet. **No schema change** — surfaces the Done side of WLT-25-1's soft-delete resolve: `readFollowupStatuses` (`dedup_key → open|done` in one paginated read), `reopenFollowupFlag` (reuses `markFollowup`, which already clears `dismissed_at`; distinct `transaction_followup_reopened` event), the ledger read exposes a per-row `followupStatus: open|done|null` (replacing the WLT-25-1 boolean), the `followup` filter param goes `open|done`, and the bounded scan generalizes to match the chosen status. UI: an **Open/Done segmented toggle** on the Follow-ups filter (default Open), a **"Re-open"** row action on Done rows, a muted "Done" tag in the Done view (vs the amber open ⚑), Open-vs-Done empty states. Per-charge, orthogonal to category AND subscription. **Codex review CLEAR (no findings)**; its gated E2E (extends the follow-up real-path: flag → resolve → Done filter → re-open → Open → CDC-survival → second-user isolation) landed **uncommitted** + was committed with co-author (the recurring pattern). **No RLS delta** (no schema/policy change; `supabase/tests/` untouched). Gate: lint · typecheck · **374 unit tests** (+2 WLT-25-2 component) · build. **CLEAR tied to HEAD `0b81a6c`.** _(Committed with path-specific staging to avoid an unrelated in-progress Compass-framework upgrade sitting uncommitted in the tree.)_
+
+**WLT-25 bet COMPLETE** — WLT-25-1 (flag/resolve + Open filter) + WLT-25-2 (Done view + re-open): the full flag → handle → review-what-you-handled → re-open loop, on the shared `transaction_flags` substrate, orthogonal to category and subscription.
 
 _Story under bet: docs/bets/WLT-25/brief.md_
