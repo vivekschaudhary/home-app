@@ -63,6 +63,15 @@ export const FUNNEL_EVENTS = {
   // manual-vs-detected split and the false-positive (dismissal) rate falsifiable.
   SUBSCRIPTION_DETECTED: "subscription_detected",
   SUBSCRIPTION_DISMISSED: "subscription_dismissed",
+  // WLT-25-1 — Follow-up overlay: a user flagged a charge "follow up" and resolved
+  // one ("done"). The created-AND-resolved loop is the bet's key metric (used + acted
+  // on, not write-only); followups_viewed = a visit to the Follow-ups filter.
+  TRANSACTION_FOLLOWUP_FLAGGED: "transaction_followup_flagged",
+  TRANSACTION_FOLLOWUP_RESOLVED: "transaction_followup_resolved",
+  FOLLOWUPS_VIEWED: "followups_viewed",
+  // WLT-25-2 — a user re-opened a resolved follow-up (Done → Open). Distinct from
+  // _flagged so the "changed my mind" signal is separable from a fresh flag.
+  TRANSACTION_FOLLOWUP_REOPENED: "transaction_followup_reopened",
 } as const;
 
 export type FunnelEvent = (typeof FUNNEL_EVENTS)[keyof typeof FUNNEL_EVENTS];

@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import {
   AAL2_COOKIE,
   aal2CookieOptions,
+  aal2TtlSeconds,
   renewedAal2Cookie,
   signAal2Token,
   verifyAal2Token,
@@ -43,7 +44,9 @@ async function currentSessionId(): Promise<string | null> {
  *  sliding-renewal so the cookie options can't drift between them. */
 async function writeAal2Cookie(userId: string, sid: string | null): Promise<void> {
   const store = await cookies();
-  store.set(AAL2_COOKIE, signAal2Token(userId, sid, mfaSecret()), aal2CookieOptions());
+  // maxAge tracks the effective (possibly compressed) TTL — same value signAal2Token
+  // stamps into the token's exp — so cookie + token expire together.
+  store.set(AAL2_COOKIE, signAal2Token(userId, sid, mfaSecret()), aal2CookieOptions(undefined, aal2TtlSeconds()));
 }
 
 /** User id IFF the session has AAL1 (Supabase) AND a valid AAL2 token whose

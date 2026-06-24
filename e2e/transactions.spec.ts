@@ -495,4 +495,190 @@ test.describe("transactions ledger — owner-scoped reads + filters + keyset pag
       await db.end();
     }
   });
+
+  test("real session → follow up flags a charge, Done shows resolved rows, re-open returns one to Open, a flagged CDC revision stays flagged, and a second user stays isolated", async ({
+    browser,
+    page,
+    context,
+  }) => {
+    const email = `e2e-transactions-followup-u1+${Date.now()}@example.com`;
+    const otherEmail = `e2e-transactions-followup-u2+${Date.now()}@example.com`;
+    const password = "correct horse battery staple";
+
+    await signUpWithPasskey(page, context, email, password);
+
+    const db = new Client({ connectionString: DB_URL });
+    let otherContext: BrowserContext | null = null;
+    await db.connect();
+    try {
+      const u = await db.query("select id from auth.users where email = $1", [email]);
+      expect(u.rows).toHaveLength(1);
+      const userId = u.rows[0].id as string;
+
+      const acct = await db.query(
+        `insert into financial_accounts (user_id, name, kind, currency, balance_current, balance_updated_at)
+         values ($1, 'Followup Checking', 'depository', 'USD', 1800, now()) returning id`,
+        [userId],
+      );
+      const accountId = acct.rows[0].id as string;
+
+      await db.query(
+        `insert into transactions
+           (user_id, account_id, source, dedup_key, content_hash, amount, direction, currency, merchant, description, category, pending, occurred_on)
+         values
+           ($1,$2,'plaid','e2e-followup-resolve','followup-resolve-hash',24.10,'debit','USD','Needs Review','Needs Review original','SHOPPING',false,$3),
+           ($1,$2,'plaid','e2e-followup-cdc','followup-cdc-hash',88.25,'debit','USD','Pending Refund','Pending Refund original','SHOPPING',false,$4),
+           ($1,$2,'plaid','e2e-followup-plain','followup-plain-hash',12.00,'debit','USD','Ordinary Charge','Ordinary Charge original','FOOD_AND_DRINK',false,$5)`,
+        [userId, accountId, isoDay(-2), isoDay(-1), isoDay(0)],
+      );
+
+      await page.goto("/transactions");
+      await expect(page.getByRole("heading", { name: "Transactions" })).toBeVisible({ timeout: 15_000 });
+
+      await page.getByRole("button", { name: /Change the category of Needs Review \(\$24\.10\).*Shopping/i }).click();
+      await page.getByRole("menuitem", { name: "Flag Needs Review to follow up" }).click();
+      await expect(page.getByText("Flagged to follow up")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByLabel("Flagged to follow up")).toHaveCount(1);
+
+      const resolveFlags = await db.query(
+        `select dedup_key, flag_type, source, dismissed_at is null as open
+           from transaction_flags
+          where user_id = $1 and dedup_key = 'e2e-followup-resolve'`,
+        [userId],
+      );
+      expect(resolveFlags.rows).toEqual([
+        { dedup_key: "e2e-followup-resolve", flag_type: "followup", source: "user", open: true },
+      ]);
+
+      await page.getByRole("button", { name: "Show only charges flagged to follow up" }).click();
+      await expect(page.getByText("Needs Review")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("Ordinary Charge")).toHaveCount(0);
+
+      await page.getByRole("button", { name: /Change the category of Needs Review \(\$24\.10\).*Shopping/i }).click();
+      await page.getByRole("menuitem", { name: "Mark Needs Review follow-up done" }).click();
+      await expect(page.getByText("Marked done")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("Nothing to follow up on")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("Spot a charge you need to deal with")).toBeVisible();
+
+      const resolvedFlag = await db.query(
+        `select dismissed_at is not null as dismissed
+           from transaction_flags
+          where user_id = $1 and dedup_key = 'e2e-followup-resolve'`,
+        [userId],
+      );
+      expect(resolvedFlag.rows).toEqual([{ dismissed: true }]);
+
+      await page.getByRole("button", { name: "Done" }).click();
+      await expect(page.getByText("Needs Review")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("Done")).toBeVisible();
+      await expect(page.getByText("Ordinary Charge")).toHaveCount(0);
+
+      await page.getByRole("button", { name: /Change the category of Needs Review \(\$24\.10\).*Shopping/i }).click();
+      await page.getByRole("menuitem", { name: "Re-open Needs Review follow-up" }).click();
+      await expect(page.getByText("Re-opened")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("Nothing resolved yet")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("Follow-ups you mark done will show here")).toBeVisible();
+
+      const reopenedFlag = await db.query(
+        `select dismissed_at is null as open
+           from transaction_flags
+          where user_id = $1 and dedup_key = 'e2e-followup-resolve'`,
+        [userId],
+      );
+      expect(reopenedFlag.rows).toEqual([{ open: true }]);
+
+      await page.getByRole("button", { name: "Open" }).click();
+      await expect(page.getByText("Needs Review")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByLabel("Flagged to follow up")).toHaveCount(1);
+
+      await page.getByRole("button", { name: "Show only charges flagged to follow up" }).click();
+      await expect(page.getByText("Ordinary Charge")).toBeVisible({ timeout: 15_000 });
+
+      await page.getByRole("button", { name: /Change the category of Pending Refund \(\$88\.25\).*Shopping/i }).click();
+      await page.getByRole("menuitem", { name: "Flag Pending Refund to follow up" }).click();
+      await expect(page.getByText("Flagged to follow up")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByLabel("Flagged to follow up")).toHaveCount(1);
+
+      await page.getByRole("button", { name: "Show only charges flagged to follow up" }).click();
+      await expect(page.getByText("Pending Refund")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("Needs Review")).toHaveCount(0);
+
+      const revisedTxn = await db.query(
+        `insert into transactions
+           (user_id, account_id, source, dedup_key, content_hash, amount, direction, currency, merchant, description, category, pending, occurred_on)
+         values
+           ($1,$2,'plaid','e2e-followup-cdc','followup-cdc-hash-revised',88.25,'debit','USD','Pending Refund Revised','Pending Refund revised','SHOPPING',false,$3)
+         returning id`,
+        [userId, accountId, isoDay(1)],
+      );
+      const priorTxn = await db.query(
+        `select id
+           from transactions
+          where user_id = $1 and dedup_key = 'e2e-followup-cdc' and content_hash = 'followup-cdc-hash' and superseded_by is null`,
+        [userId],
+      );
+      expect(priorTxn.rows).toHaveLength(1);
+      await db.query("update transactions set superseded_by = $2 where id = $1", [
+        priorTxn.rows[0].id as string,
+        revisedTxn.rows[0].id as string,
+      ]);
+
+      await page.reload();
+      await expect(page.getByRole("heading", { name: "Transactions" })).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByRole("button", { name: "Show only charges flagged to follow up" })).toHaveAttribute("aria-pressed", "true");
+      await expect(page.getByText("Pending Refund Revised")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByLabel("Flagged to follow up")).toHaveCount(1);
+      await expect(page.getByText("Pending Refund")).toHaveCount(0);
+
+      const cdcFlags = await db.query(
+        `select dedup_key, dismissed_at is null as open
+           from transaction_flags
+          where user_id = $1 and dedup_key = 'e2e-followup-cdc'`,
+        [userId],
+      );
+      expect(cdcFlags.rows).toEqual([{ dedup_key: "e2e-followup-cdc", open: true }]);
+
+      otherContext = await browser.newContext();
+      const otherPage = await otherContext.newPage();
+      await signUpWithPasskey(otherPage, otherContext, otherEmail, password);
+
+      const otherUser = await db.query("select id from auth.users where email = $1", [otherEmail]);
+      expect(otherUser.rows).toHaveLength(1);
+      const otherUserId = otherUser.rows[0].id as string;
+      const otherAcct = await db.query(
+        `insert into financial_accounts (user_id, name, kind, currency, balance_current, balance_updated_at)
+         values ($1, 'Other Followup Checking', 'depository', 'USD', 990, now()) returning id`,
+        [otherUserId],
+      );
+      const otherAccountId = otherAcct.rows[0].id as string;
+      await db.query(
+        `insert into transactions
+           (user_id, account_id, source, dedup_key, content_hash, amount, direction, currency, merchant, description, category, pending, occurred_on)
+         values
+           ($1,$2,'plaid','e2e-followup-other','followup-other-hash',19.50,'debit','USD','Other Followup','Other followup original','SHOPPING',false,$3)`,
+        [otherUserId, otherAccountId, isoDay(0)],
+      );
+      await db.query(
+        `insert into transaction_flags (user_id, dedup_key, flag_type, source)
+         values ($1,'e2e-followup-other','followup','user')`,
+        [otherUserId],
+      );
+
+      await otherPage.goto("/transactions");
+      await expect(otherPage.getByRole("heading", { name: "Transactions" })).toBeVisible({ timeout: 15_000 });
+      await otherPage.getByRole("button", { name: "Show only charges flagged to follow up" }).click();
+      await expect(otherPage.getByText("Other Followup")).toBeVisible({ timeout: 15_000 });
+      await expect(otherPage.getByText("Pending Refund Revised")).toHaveCount(0);
+      await expect(otherPage.getByText("Needs Review")).toHaveCount(0);
+      await expect(otherPage.getByLabel("Flagged to follow up")).toHaveCount(1);
+
+      await page.goto("/transactions");
+      await page.getByRole("button", { name: "Show only charges flagged to follow up" }).click();
+      await expect(page.getByText("Pending Refund Revised")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("Other Followup")).toHaveCount(0);
+    } finally {
+      await otherContext?.close();
+      await db.end();
+    }
+  });
 });

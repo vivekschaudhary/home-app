@@ -15,11 +15,14 @@ import {
   recordTransactionsFiltered,
 } from "@/app/lib/transactions-client";
 import { markSubscription, unmarkSubscriptionFromLedger } from "@/app/lib/subscriptions-client";
+import { flagFollowup, reopenFollowup, resolveFollowup } from "@/app/lib/followups-client";
 
 const C = COPY.transactions;
 const A = COPY.transactionsA11y;
 const SUB = COPY.subscriptions;
 const SUBA = COPY.subscriptionsA11y;
+const FU = COPY.followups;
+const FUA = COPY.followupsA11y;
 
 // Select sentinel for the "all" (unfiltered) option — distinct from a real account
 // id (uuid) and from the "" category value (the null-category "Other" bucket).
@@ -76,6 +79,7 @@ export function TransactionsClient({
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [accountId, setAccountId] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null); // null = all, "" = Other
+  const [followupFilter, setFollowupFilter] = useState<"open" | "done" | null>(null); // WLT-25-1/2 — Follow-ups filter (Open/Done)
   const [mode, setMode] = useState<Mode>("idle");
   const [pageError, setPageError] = useState<boolean>(initialError);
   const [moreError, setMoreError] = useState(false);
@@ -94,19 +98,42 @@ export function TransactionsClient({
     setRows((rs) => rs.map((x) => (x.dedupKey === r.dedupKey ? { ...x, isSubscription: !r.isSubscription } : x)));
     setToast(r.isSubscription ? SUB.unmarkedToast : SUB.markedToast);
   }
+
+  // WLT-25-1 — flag / resolve a charge "follow up", from the same row popover.
+  // Per-charge, orthogonal to category AND subscription. No optimistic revert.
+  async function toggleFollowup(r: TransactionRowDTO) {
+    const status = r.followupStatus; // null | "open" | "done"
+    const res =
+      status === "open" ? await resolveFollowup(r.dedupKey) // Done
+      : status === "done" ? await reopenFollowup(r.dedupKey) // Re-open
+      : await flagFollowup(r.dedupKey); // Follow up
+    if (!res.ok) {
+      setToast(res.error === "network" ? FU.errorNetwork : res.error === "invalid" ? FU.errorInvalid : FU.error);
+      return;
+    }
+    // null→open (flag), open→done (resolve), done→open (re-open).
+    const next: "open" | "done" = status === "open" ? "done" : "open";
+    // If the row no longer matches the active Open/Done filter, it leaves the list.
+    setRows((rs) =>
+      followupFilter !== null && next !== followupFilter
+        ? rs.filter((x) => x.dedupKey !== r.dedupKey)
+        : rs.map((x) => (x.dedupKey === r.dedupKey ? { ...x, followupStatus: next } : x)),
+    );
+    setToast(status === "open" ? FU.resolvedToast : status === "done" ? FU.reopenedToast : FU.flaggedToast);
+  }
   const didMount = useRef(false);
 
   // Replace the list with a fresh first page for the current filters + search.
   // Auto-continues through empty filtered pages (bounded) so a sparse category
   // filter never strands matches behind the scan cap's continuation cursor.
   const loadPage = useCallback(
-    async (f: { accountId: string | null; category: string | null; q: string }) => {
+    async (f: { accountId: string | null; category: string | null; q: string; followup: "open" | "done" | null }) => {
       setMode("loadingPage");
       setPageError(false);
       setMoreError(false);
       let cursor: string | null = null;
       for (let i = 0; i < AUTO_SCAN_LIMIT; i++) {
-        const res = await fetchTransactions({ cursor, accountId: f.accountId, category: f.category, q: f.q });
+        const res = await fetchTransactions({ cursor, accountId: f.accountId, category: f.category, q: f.q, followup: f.followup });
         if (!res.ok) {
           setMode("idle");
           setPageError(true);
@@ -136,7 +163,7 @@ export function TransactionsClient({
     setMoreError(false);
     let cursor: string | null = nextCursor;
     for (let i = 0; i < AUTO_SCAN_LIMIT; i++) {
-      const res = await fetchTransactions({ cursor, accountId, category: categoryFilter, q: debouncedQuery });
+      const res = await fetchTransactions({ cursor, accountId, category: categoryFilter, q: debouncedQuery, followup: followupFilter });
       if (!res.ok) {
         setMode("idle");
         setMoreError(true);
@@ -153,7 +180,7 @@ export function TransactionsClient({
       }
       cursor = res.page.nextCursor;
     }
-  }, [nextCursor, accountId, categoryFilter, debouncedQuery]);
+  }, [nextCursor, accountId, categoryFilter, debouncedQuery, followupFilter]);
 
   // Debounce the search box → a settled value the load effect watches.
   useEffect(() => {
@@ -169,8 +196,8 @@ export function TransactionsClient({
       didMount.current = true;
       return;
     }
-    void loadPage({ accountId, category: categoryFilter, q: debouncedQuery });
-  }, [accountId, categoryFilter, debouncedQuery, loadPage]);
+    void loadPage({ accountId, category: categoryFilter, q: debouncedQuery, followup: followupFilter });
+  }, [accountId, categoryFilter, debouncedQuery, followupFilter, loadPage]);
 
   // The category-filter options (the user's categories) — fetched once on mount.
   // Also the option set the in-row recategorize picker (WLT-23-3) chooses from.
@@ -191,7 +218,7 @@ export function TransactionsClient({
       const res = await recategorizeTransaction({ dedupKey: row.dedupKey, categoryId, applyToMerchant });
       if (!res.ok) return res;
       if (applyToMerchant) {
-        await loadPage({ accountId, category: categoryFilter, q: debouncedQuery });
+        await loadPage({ accountId, category: categoryFilter, q: debouncedQuery, followup: followupFilter });
       } else {
         const newName = categories.find((c) => c.id === categoryId)?.name ?? "";
         setToast(fill(C.recatSaved, { category: humanizeCategory(newName || null) }));
@@ -206,7 +233,7 @@ export function TransactionsClient({
       }
       return res;
     },
-    [categories, accountId, categoryFilter, debouncedQuery, loadPage],
+    [categories, accountId, categoryFilter, debouncedQuery, followupFilter, loadPage],
   );
 
   const createCat = useCallback(async (name: string, kind: "essential" | "discretionary"): Promise<CreateResult> => {
@@ -228,14 +255,19 @@ export function TransactionsClient({
     setCategoryFilter(value === ALL ? null : value);
     recordTransactionsFiltered();
   }
+  function setFollowup(next: "open" | "done" | null) {
+    setFollowupFilter(next);
+    recordTransactionsFiltered();
+  }
   function clearFilters() {
     setAccountId(null);
     setCategoryFilter(null);
+    setFollowupFilter(null);
     setQuery("");
     setDebouncedQuery("");
   }
 
-  const filtersActive = accountId !== null || categoryFilter !== null;
+  const filtersActive = accountId !== null || categoryFilter !== null || followupFilter !== null;
   const searchActive = debouncedQuery.trim().length > 0;
   const anyActive = filtersActive || searchActive;
   const showList = rows.length > 0;
@@ -276,6 +308,40 @@ export function TransactionsClient({
           ))}
           {hasOther ? <option value="">{humanizeCategory("")}</option> : null}
         </select>
+        {/* WLT-25-1/2 — the Follow-ups filter (toggle on→Open) + an Open/Done segmented
+            control when active (WLT-25-2). */}
+        <button
+          type="button"
+          onClick={() => setFollowup(followupFilter === null ? "open" : null)}
+          aria-pressed={followupFilter !== null}
+          aria-label={FUA.filterA11y}
+          title={FU.filterHint}
+          className={`rounded-md border px-3 py-2 text-sm ${
+            followupFilter !== null ? "border-amber-400 bg-amber-50 text-amber-800" : "border-gray-300 text-gray-700"
+          }`}
+        >
+          {FU.filterLabel}
+        </button>
+        {followupFilter !== null ? (
+          <div role="group" aria-label={FUA.toggleA11y} className="inline-flex overflow-hidden rounded-md border border-gray-300 text-sm">
+            <button
+              type="button"
+              onClick={() => setFollowup("open")}
+              aria-pressed={followupFilter === "open"}
+              className={`px-3 py-2 ${followupFilter === "open" ? "bg-gray-900 text-white" : "text-gray-700"}`}
+            >
+              {FU.toggleOpen}
+            </button>
+            <button
+              type="button"
+              onClick={() => setFollowup("done")}
+              aria-pressed={followupFilter === "done"}
+              className={`border-l border-gray-300 px-3 py-2 ${followupFilter === "done" ? "bg-gray-900 text-white" : "text-gray-700"}`}
+            >
+              {FU.toggleDone}
+            </button>
+          </div>
+        ) : null}
         {anyActive ? (
           <button
             type="button"
@@ -300,7 +366,7 @@ export function TransactionsClient({
       ) : pageError ? (
         <p role="alert" className="py-8 text-center text-sm text-red-600">
           {C.error}{" "}
-          <button type="button" onClick={() => void loadPage({ accountId, category: categoryFilter, q: debouncedQuery })} className="underline">
+          <button type="button" onClick={() => void loadPage({ accountId, category: categoryFilter, q: debouncedQuery, followup: followupFilter })} className="underline">
             {C.retry}
           </button>
         </p>
@@ -341,6 +407,25 @@ export function TransactionsClient({
                         ★ {SUB.markIndicator}
                       </span>
                     ) : null}
+                    {/* WLT-25-1 — the follow-up indicator (distinct glyph + colour from
+                        the subscription ★); the flag/resolve ACTION lives in the popover. */}
+                    {r.followupStatus === "open" ? (
+                      <span
+                        className="ml-2 rounded-full bg-amber-50 px-2 py-0.5 align-middle text-xs font-medium text-amber-700"
+                        aria-label={FUA.indicatorA11y}
+                      >
+                        ⚑ {FU.indicator}
+                      </span>
+                    ) : null}
+                    {/* WLT-25-2 — a muted "Done" tag, only while viewing the Done filter. */}
+                    {r.followupStatus === "done" && followupFilter === "done" ? (
+                      <span
+                        className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 align-middle text-xs font-medium text-gray-500"
+                        aria-label={FUA.doneIndicatorA11y}
+                      >
+                        {FU.doneIndicator}
+                      </span>
+                    ) : null}
                   </td>
                   <td
                     className={`block py-0.5 md:table-cell md:py-3 md:pr-4 md:text-right ${
@@ -363,8 +448,9 @@ export function TransactionsClient({
                       canRemember={!!r.merchant}
                       onPick={(categoryId, applyToMerchant) => handleRecat(r, categoryId, applyToMerchant)}
                       onCreate={createCat}
-                      extraActions={
-                        r.direction === "debit"
+                      extraActions={[
+                        // Subscriptions are debit-only; a follow-up applies to any charge.
+                        ...(r.direction === "debit"
                           ? [
                               {
                                 key: "subscription",
@@ -376,8 +462,24 @@ export function TransactionsClient({
                                 onSelect: () => toggleSubscription(r),
                               },
                             ]
-                          : undefined
-                      }
+                          : []),
+                        {
+                          // WLT-25-1/2 — null → "Follow up", open → "Done", done → "Re-open".
+                          key: "followup",
+                          label:
+                            r.followupStatus === "open"
+                              ? FU.resolveAction
+                              : r.followupStatus === "done"
+                                ? FU.reopenAction
+                                : FU.flagAction,
+                          a11yLabel: fill(
+                            r.followupStatus === "open" ? FUA.resolveA11y : r.followupStatus === "done" ? FUA.reopenA11y : FUA.flagA11y,
+                            { merchant: r.merchant || r.description },
+                          ),
+                          pressed: r.followupStatus !== null,
+                          onSelect: () => toggleFollowup(r),
+                        },
+                      ]}
                     />
                   </td>
                   <td className="block py-0.5 text-gray-600 md:table-cell md:py-3">
@@ -443,8 +545,16 @@ export function TransactionsClient({
           </div>
         </div>
       ) : filtersActive ? (
-        // Empty — an account/category filter (± search) matched nothing.
-        <p className="py-8 text-center text-sm text-gray-600">{C.emptyFiltered}</p>
+        // WLT-25-1/2 — the Follow-ups filter alone with nothing in the chosen Open/Done
+        // set gets its own honest nudge; any other filter combo gets the generic line.
+        followupFilter !== null && accountId === null && categoryFilter === null && !searchActive ? (
+          <div className="py-8 text-center">
+            <p className="text-sm font-medium text-gray-900">{followupFilter === "done" ? FU.emptyDoneTitle : FU.emptyTitle}</p>
+            <p className="mx-auto mt-1 max-w-sm text-sm text-gray-600">{followupFilter === "done" ? FU.emptyDoneBody : FU.emptyBody}</p>
+          </div>
+        ) : (
+          <p className="py-8 text-center text-sm text-gray-600">{C.emptyFiltered}</p>
+        )
       ) : searchActive ? (
         // Empty — search returned nothing (the search stays editable to recover).
         <p className="py-8 text-center text-sm text-gray-600">{fill(C.emptySearch, { query: debouncedQuery.trim() })}</p>

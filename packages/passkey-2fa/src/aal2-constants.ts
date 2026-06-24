@@ -26,13 +26,18 @@ export interface Aal2CookieOptions {
 
 export function aal2CookieOptions(
   secure: boolean = process.env.NODE_ENV === "production",
+  // WLT (#104+#107 integration) — the cookie's maxAge tracks the EFFECTIVE TTL, so a
+  // preview/dev clock-compression (aal2TtlSeconds()) shrinks the cookie + token
+  // together. Stays Edge-safe (no aal2TtlSeconds import here): the Node caller passes
+  // it; the default is the baked-in production TTL.
+  maxAgeSeconds: number = AAL2_TTL_SECONDS,
 ): Aal2CookieOptions {
   return {
     httpOnly: true,
     secure,
     sameSite: "strict",
     path: "/",
-    maxAge: AAL2_TTL_SECONDS,
+    maxAge: maxAgeSeconds,
   };
 }
 

@@ -2,7 +2,18 @@
 
 Reference utility scripts and templates that complement Compass workflows. Each entry is single-file. Adopt as-is or fork for team-specific needs.
 
-**Owner convention:** scripts in this directory are operated by the **Project Manager** role (matching the existing `/status` + `/plan` ownership of "make work visible" jobs). The `agent-handoff.yml` template is consumed by Engineer / Reviewer roles through CI rather than invoked by PM directly — it lives here because it ships with Compass as a reference, alongside `token-usage.py`.
+**Owner convention:** scripts in this directory are operated by the **Delivery Manager** agent (matching the existing `/status` + `/plan` ownership of "make work visible" jobs). Renamed from Project Manager in v0.3.15. The `agent-handoff.yml` template is consumed by Engineer / Reviewer agents through CI rather than invoked by Delivery Manager directly — it lives here because it ships with Compass as a reference, alongside `token-usage.py`.
+
+---
+
+## `sync-into-consumer.py` — sync a consumer's embedded Compass copy (#114)
+
+Keeps a consumer project's **embedded** framework copy current with the live framework, for teams that use the interactive `/skills` surface (which reads the embedded `compass/` + `.claude/skills`) alongside the orchestrator. **Dry-run by default**; `--apply` performs it after backing up the consumer's `compass/`. Overwrites the framework machinery, preserves the consumer's own files (`config.yaml`, `docs/`, `.github/`, …), prunes the framework's meta-logs. See MIGRATION.md → "Keeping a consumer in sync."
+
+```bash
+python3 compass/scripts/sync-into-consumer.py <consumer-dir>            # dry-run (plan only)
+python3 compass/scripts/sync-into-consumer.py <consumer-dir> --apply    # perform + backup
+```
 
 ---
 
@@ -80,7 +91,7 @@ The script reads these markers from the workflow file referenced by the session'
 - **Debugging / explainability** — when a workflow run feels expensive, see where the tokens went
 - **Team reporting** — aggregate across many sessions (current script handles one at a time; team-wide rollup is v0.3.x+ territory)
 
-PM-owned by convention — see `compass/roles/project-manager.md` for token-usage rollup as a PM responsibility.
+Delivery-Manager-owned by convention — see `compass/agents/delivery-manager.md` (Task `rollup-token-usage`) for token-usage rollup as a Delivery Manager responsibility. (Renamed + migrated v0.3.15; legacy role file `compass/roles/project-manager.md` retained during v0.3.x grace period.)
 
 ---
 
@@ -133,7 +144,7 @@ The template ships with four reviewer blocks (Codex / Claude headless / Gemini /
 
 ### Manual fallback always supported
 
-If the template isn't installed, the Engineer → Reviewer handoff stays manual exactly as it was pre-v0.3.5: terminal → `codex` → reviewer prompt → PR. Both paths terminate at the same place (findings as PR comment); automation removes the tool-switch only. See `compass/roles/reviewer.md` → "How you're invoked."
+If the template isn't installed, the Engineer → Reviewer handoff stays manual exactly as it was pre-v0.3.5: terminal → `codex` → reviewer prompt → PR. Both paths terminate at the same place (findings as PR comment); automation removes the tool-switch only. See `compass/agents/reviewer.md` task `review-pr` for the full review process (migrated from `compass/roles/reviewer.md` in v0.3.16).
 
 ---
 
@@ -206,6 +217,96 @@ For semantic verification (did the Codex CLI surface ACTUALLY change?), an LLM i
 
 ---
 
+## `check-agent-cap.py` — `[agent-file-compression]` mechanical defense (v0.3.22)
+
+Walks `compass/agents/*.md`; checks each file against the OpenAI Custom GPT Instructions ~8000-char cap; reports overages; exits non-zero when any **chatgpt-targeted** agent exceeds the cap.
+
+Per the `[agent-file-compression]` Compass-original pattern in `compass/framework/canon.md` (v0.3.22). Ships with v0.3.22's codification as the mechanical defense Retro #007 named for the drift signal "Custom GPT cap compounding without structural defense."
+
+### What it produces
+
+- **Per-file table** — every agent file with size + overage/headroom + chatgpt-target flag
+- **FAIL group** — chatgpt-targeted agents exceeding the cap (these silently truncate on paste into the OpenAI Custom GPT Instructions field)
+- **WARN group** — non-chatgpt agents exceeding the cap (cap doesn't strictly apply for them; flagged for future awareness if migration adds chatgpt support)
+- **OK group** — agents within cap (chatgpt-targeted) or with cap N/A (non-chatgpt)
+- Markdown report at stdout + (optionally) a file via `--out`
+
+### Usage
+
+```bash
+# Walk compass/agents/ in current dir; default cap 8000
+python compass/scripts/check-agent-cap.py
+
+# Override cap
+python compass/scripts/check-agent-cap.py --cap 10000
+
+# Override repo root (for CI running from a different cwd)
+python compass/scripts/check-agent-cap.py --root /path/to/compass
+
+# Write report to file
+python compass/scripts/check-agent-cap.py --out report.md
+
+# Suppress stdout (still writes --out + still returns exit code) — for CI gating
+python compass/scripts/check-agent-cap.py --quiet --out cap-report.md
+```
+
+### Exit codes
+
+- `0` — every chatgpt-targeted agent fits the cap (non-chatgpt WARNs are OK)
+- `1` — at least one chatgpt-targeted agent exceeds the cap (CI gating signal)
+- `2` — usage error (e.g., bad `--root` path; agents directory missing)
+
+### Host-aware enforcement
+
+The OpenAI Custom GPT Instructions cap is OpenAI-specific. Agents whose `preferred_hosts:` excludes `chatgpt` can technically exceed the cap and still function. The script enforces strictly only on chatgpt-targeted agents; non-chatgpt overages are surfaced as WARN (visibility, not failure).
+
+This matches the `[user-as-load-bearing-oversight]` aspirational refinement (canon v0.3.20): mechanical checks should catch the cases they CAN reason about, and report — not fail — the ones they shouldn't unilaterally decide.
+
+### Accuracy honesty
+
+- **Character count is UTF-8 byte length.** OpenAI's actual cap is measured against the Custom GPT Instructions field's storage limit; the script approximates it as 8000 bytes. Real cap may be slightly different — adjust `--cap` if your testing shows OpenAI's threshold is different at the time of measurement.
+- **No content-aware analysis.** The script knows when a file is too big; it doesn't suggest cuts (that's LLM work). For compression strategy, see the `[agent-file-compression]` entry in `compass/framework/canon.md` + reference example at `compass/agents/delivery-manager.md` (v0.3.18 trim: 21,714 → 7,960).
+- **`preferred_hosts:` parsing is line-regex-based.** Multi-line YAML lists or `&anchor` references in frontmatter would parse as no hosts (treated as non-chatgpt → WARN, not FAIL). Compass-style frontmatter is single-line so this isn't a real issue today.
+
+### Automated execution
+
+Recommended: add to `.github/workflows/freshness-check.yml` alongside `check-freshness.py`, OR ship as its own `.github/workflows/agent-cap-check.yml` that runs on every PR touching `compass/agents/`. Either way, surfaces cap violations within the PR review loop so they never compound across multiple releases (as they did v0.3.15 → v0.3.18, per Retro #007).
+
+For local pre-commit, wire into `.git/hooks/pre-commit` (CI gating remains the source of truth; local hooks are optional convenience).
+
+### When to use this
+
+- **Automatic (preferred):** CI runs on every PR touching `compass/agents/`. Failure blocks merge until trim lands.
+- **Manual pre-edit:** before adding content to an agent file, run the script to see current headroom — gives you the budget you're editing into.
+- **Manual post-edit:** after trim work (like v0.3.21's pm.md + researcher.md compression), run to verify the trim closed the overage.
+- **Pre-release:** before a Compass version bump, run as a release-gate check.
+
+Delivery-Manager-owned by convention — see `compass/agents/delivery-manager.md` for the visibility-tasks ownership pattern.
+
+---
+
+## `consistency-check.py` — commit-time drift backstop (#93, v0.4.0-alpha-9)
+
+Mechanizes the drift classes the retro full-surface audits kept catching (Retro #017/#018/#019). Computes the truth and compares — **no arguments needed** (unlike `pre-push-consistency-check.py`, which needs the human to name the amended term).
+
+### What it checks
+- **Dispatch-graph count** — AGENTS.md "N of 17 workflows" == actual count of `compass/workflows/*.md` containing `## Dispatch graph`.
+- **Catalog count** — AGENTS.md "7 shapes / N patterns" == `### ` entries under canon.md `## Compass-original patterns`.
+- **Version self-claims** — no hardcoded `alpha-<N>` in README / CLAUDE / `orchestrator/run.py` / `orchestrator/README.md` (CHANGELOG.md is the single source).
+
+### Usage
+```bash
+python3 compass/scripts/consistency-check.py            # exit 0 consistent, 1 drift
+```
+
+### Enable as a shared git hook (once per clone)
+```bash
+git config core.hooksPath compass/scripts/githooks
+```
+`compass/scripts/githooks/pre-commit` then runs this check + the orchestrator tests on every commit. Also enforced in CI via `.github/workflows/consistency-check.yml`. This is the commit-time complement to rule 8's term-sweep; together they close the Principle #17 gap for framework-edit sessions.
+
+---
+
 ## Future scripts + templates
 
 Reference implementations may join this directory as Compass evolves. Candidates:
@@ -216,5 +317,6 @@ Reference implementations may join this directory as Compass evolves. Candidates
 - **Cross-agent codex parser** — `token-usage-codex.py` for attributing Codex CLI session tokens (parallel to `token-usage.py` for Claude Code; same protocol, different log format)
 - **Semantic freshness extension** — LLM-driven content-level check for files flagged by `check-freshness.py` (round 2.5 — narrows the false-positive rate when external sources change cosmetically without affecting Compass)
 - **Consumer version sync** (v0.4+) — Compass framework updates auto-propagate to consuming repos as PRs. Pull-bridge round 3.
+- **`sync-from-gdrive.py`** — for the `[external-primary-with-cached-pointer]` candidate pattern (1 instance observed in consumer work, 2026-06-08): given `primary: gdrive://<file-id>` in artifact frontmatter, refresh the inlined cache from the Doc + bump `last_synced:`. Codify pattern + ship script when 2nd instance appears.
 
 Add scripts here when problems are structurally hard to solve with markdown docs alone. **Keep them single-file and minimal-dependency** — same discipline as `token-usage.py` (stdlib-only Python) and `agent-handoff.yml` (vanilla GitHub Actions).

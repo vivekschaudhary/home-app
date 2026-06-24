@@ -11,6 +11,7 @@ import { createServerSupabase } from "@vc1023/passkey-2fa";
 import { effectiveCategory } from "@wealth/core";
 import { readCategoryAssignments } from "@wealth/db/categories";
 import { readSubscriptionFlags } from "@wealth/db/subscriptions";
+import { readFollowupStatuses } from "@wealth/db/followups";
 import type { LedgerAccountDTO, TransactionRowDTO } from "./transactions-client";
 
 export const PAGE_SIZE = 50; // keeps each keyset query well under the 1000-row cap
@@ -103,7 +104,7 @@ const SELECT_COLS = "id, occurred_on, merchant, description, amount, direction, 
 
 export async function readTransactionsPage(
   userId: string,
-  opts: { cursor?: string | null; search?: string | null; accountId?: string | null; category?: string | null; limit?: number } = {},
+  opts: { cursor?: string | null; search?: string | null; accountId?: string | null; category?: string | null; followup?: "open" | "done" | null; limit?: number } = {},
 ): Promise<TransactionsPageResult> {
   const supabase = await createServerSupabase();
   const limit = clampLimit(opts.limit);
@@ -114,15 +115,20 @@ export async function readTransactionsPage(
   // Category filter (RESOLVED name): present (incl. "" = the Other bucket) = a
   // filter; null/undefined = all categories.
   const category = opts.category ?? null;
+  // WLT-25-1/2 — the "Follow-ups" filter: 'open' | 'done' keeps only rows in that
+  // follow-up state; null = off. Composes with account/category/search via the
+  // same bounded scan.
+  const followup: "open" | "done" | null = opts.followup === "open" || opts.followup === "done" ? opts.followup : null;
 
   // Shared owner-scoped reads: the saved-category map + the account names (also the
   // account-filter options + `hasAccount` for the empty state) + a bounded probe for
   // whether the null-category "Other" bucket exists (gates that filter option, AC2).
-  const [assignments, accountsRes, otherProbe, subscriptionFlags] = await Promise.all([
+  const [assignments, accountsRes, otherProbe, subscriptionFlags, followupStatuses] = await Promise.all([
     readCategoryAssignments(supabase, userId),
     supabase.from("financial_accounts").select("id, name").eq("user_id", userId),
     supabase.from("transactions").select("dedup_key").eq("user_id", userId).is("category", null).limit(200),
     readSubscriptionFlags(supabase, userId), // WLT-24-1 — the per-row "subscription" indicator
+    readFollowupStatuses(supabase, userId), // WLT-25-1/2 — per-row follow-up state (open/done)
   ]);
   const accountName = new Map<string, string>();
   for (const a of (accountsRes.data ?? []) as { id: string; name: string }[]) accountName.set(a.id, a.name);
@@ -147,6 +153,7 @@ export async function readTransactionsPage(
     account: (r.account_id && accountName.get(r.account_id)) || "",
     pending: r.pending === true,
     isSubscription: subscriptionFlags.has(r.dedup_key), // WLT-24-1
+    followupStatus: followupStatuses.get(r.dedup_key) ?? null, // WLT-25-1/2 — open | done | null
   });
 
   // One keyset chunk starting strictly after `from` — account + search applied in
@@ -165,8 +172,9 @@ export async function readTransactionsPage(
     return q;
   };
 
-  // No category filter → the simple keyset path (the common case; the WLT-23-1 shape).
-  if (category === null) {
+  // No resolved-category / follow-up filter → the simple keyset path (the common case;
+  // the WLT-23-1 shape). Both in-memory filters share the bounded scan below.
+  if (category === null && followup === null) {
     const { data, error } = await fetchChunk(decodeCursor(opts.cursor), limit + 1);
     if (error) return { ok: false };
     const fetched = (data ?? []) as TxnRow[];
@@ -199,7 +207,11 @@ export async function readTransactionsPage(
       scanned++;
       cursor = { occurredOn: r.occurred_on, id: r.id }; // advance past this row
       const row = mapRow(r);
-      if (row.category === category) matched.push(row);
+      // Match BOTH active filters (resolved category and/or open follow-up); each is
+      // resolved in JS — no value reaches the filter grammar (injection-safe).
+      const matchesCategory = category === null || row.category === category;
+      const matchesFollowup = followup === null || row.followupStatus === followup;
+      if (matchesCategory && matchesFollowup) matched.push(row);
       if (matched.length >= limit) break;
     }
     if (chunk.length < PAGE_SIZE) {
