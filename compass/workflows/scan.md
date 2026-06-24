@@ -22,7 +22,7 @@ Continuous quality scanner for the product lifecycle. Modeled on Snyk / Semgrep 
 ## Process
 
 1. Verify bet exists (or `--all` mode).
-2. **Load Scanner role context** (`compass/roles/scanner.md`).
+2. **Load Scanner agent context** (`compass/agents/scanner.md`, migrated v0.3.32).
 3. **Determine current phase** from bet frontmatter + artifact statuses:
    - Brief exists, status `proposed` → **Product** (in review)
    - Brief `approved`, no architecture → **Architecture** (or Build if arch declined)
@@ -88,11 +88,13 @@ Each check has: ID · phase · severity · confidence-derivation hints · suppre
 |---|---|---|---|---|
 | BUILD-01 | AC test coverage incomplete (AC items without test references) | High | Yes (DRI per AC) | feature, architectural-initiative |
 | BUILD-02 | Test layer coverage incomplete (missing unit / API / component per role definition) | High | Yes (DRI) | feature, architectural-initiative |
-| BUILD-03 | E2E coverage gap (Codex E2E missing for AC user flows) | High | Yes (DRI) | feature |
+| BUILD-03 | E2E coverage gap (Automation E2E missing for AC user flows) | High | Yes (DRI) | feature |
 | BUILD-04 | Open review BLOCKERs on PRs | Critical | No | all |
 | BUILD-05 | Security review skipped (touches auth/PII/payments/secrets/external input/sessions) | Critical | No (non-suppressible) | any bet touching above |
 | BUILD-06 | Architecture drift undetected (Architect compliance check absent on PR) | High | Yes (DRI) | feature, architectural-initiative |
 | BUILD-07 | Performance budget exceeded (budget defined in arch doc, exceeded in CI) | High | Yes (DRI) | as above |
+| BUILD-08 | Per-surface vertical test missing (`[per-surface-vertical-test]`) — a data surface has no test traversing the real auth→authz(RLS)→render vertical on a prod-like build; mocked-auth / service-role / dev-build only | High | Yes (DRI per surface) | feature, architectural-initiative |
+| BUILD-09 | Test-data cleanup missing (`orphaned-test-data`) — a data-mutating E2E test has no teardown deleting or soft-deleting the records it creates; story lacks the cleanup AC | Medium | Yes (DRI) | feature, architectural-initiative |
 
 ### Phase 4: Production Ready (new — currently silent in Compass)
 
