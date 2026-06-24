@@ -35,3 +35,17 @@ export async function resolveFollowupFlag(userId: string, dedupKey: string): Pro
   await emitFunnel(FUNNEL_EVENTS.TRANSACTION_FOLLOWUP_RESOLVED, userId, {});
   return { ok: true };
 }
+
+/** Re-open a resolved follow-up (Done → Open). WLT-25-2 — the write is `markFollowup`
+ * (it already clears `dismissed_at`); only the funnel event differs from a fresh flag. */
+export async function reopenFollowupFlag(userId: string, dedupKey: string): Promise<FollowupWriteResult> {
+  if (!dedupKey || typeof dedupKey !== "string") return { ok: false, error: "invalid" };
+  const supabase = await createServerSupabase();
+  try {
+    await markFollowup(supabase, userId, dedupKey);
+  } catch {
+    return { ok: false, error: "save_failed" };
+  }
+  await emitFunnel(FUNNEL_EVENTS.TRANSACTION_FOLLOWUP_REOPENED, userId, {});
+  return { ok: true };
+}

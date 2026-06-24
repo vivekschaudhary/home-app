@@ -69,6 +69,9 @@ export const FUNNEL_EVENTS = {
   TRANSACTION_FOLLOWUP_FLAGGED: "transaction_followup_flagged",
   TRANSACTION_FOLLOWUP_RESOLVED: "transaction_followup_resolved",
   FOLLOWUPS_VIEWED: "followups_viewed",
+  // WLT-25-2 — a user re-opened a resolved follow-up (Done → Open). Distinct from
+  // _flagged so the "changed my mind" signal is separable from a fresh flag.
+  TRANSACTION_FOLLOWUP_REOPENED: "transaction_followup_reopened",
 } as const;
 
 export type FunnelEvent = (typeof FUNNEL_EVENTS)[keyof typeof FUNNEL_EVENTS];

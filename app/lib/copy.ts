@@ -615,12 +615,24 @@ export const COPY = {
     emptyTitle: "Nothing to follow up on",
     emptyBody:
       "Spot a charge you need to deal with — one you don't recognize, a possible double, something to return — and flag it to follow up. It'll show here.",
+    // WLT-25-2 — the Open/Done toggle + re-open + the Done view.
+    toggleOpen: "Open",
+    toggleDone: "Done",
+    doneIndicator: "Done",
+    reopenAction: "Re-open",
+    reopenedToast: "Re-opened",
+    emptyDoneTitle: "Nothing resolved yet",
+    emptyDoneBody: "Follow-ups you mark done will show here — so you can look back, or re-open one if it still needs you.",
   },
   followupsA11y: {
     flagA11y: "Flag {merchant} to follow up",
     resolveA11y: "Mark {merchant} follow-up done",
     indicatorA11y: "Flagged to follow up",
     filterA11y: "Show only charges flagged to follow up",
+    // WLT-25-2
+    toggleA11y: "Show open or done follow-ups",
+    reopenA11y: "Re-open {merchant} follow-up",
+    doneIndicatorA11y: "Follow-up resolved",
   },
   // WLT-23-1 — the Transactions ledger. docs/bets/WLT-23/stories/WLT-23-1/copy.md verbatim.
   transactions: {

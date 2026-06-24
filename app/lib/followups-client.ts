@@ -5,13 +5,13 @@ export type FollowupError = "invalid" | "server" | "network";
 
 async function write(
   method: "POST" | "DELETE",
-  dedupKey: string,
+  body: Record<string, unknown>,
 ): Promise<{ ok: true } | { ok: false; error: FollowupError }> {
   try {
     const res = await fetch("/api/transactions/followup", {
       method,
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ dedupKey }),
+      body: JSON.stringify(body),
     });
     if (!res.ok) return { ok: false, error: res.status === 400 ? "invalid" : "server" };
     return { ok: true };
@@ -22,9 +22,14 @@ async function write(
 
 /** Flag a charge to follow up (POST). */
 export function flagFollowup(dedupKey: string) {
-  return write("POST", dedupKey);
+  return write("POST", { dedupKey });
 }
 /** Resolve a follow-up — "Done" (DELETE → soft-delete server-side). */
 export function resolveFollowup(dedupKey: string) {
-  return write("DELETE", dedupKey);
+  return write("DELETE", { dedupKey });
+}
+/** Re-open a resolved follow-up — Done → Open (WLT-25-2). Same write as flag; the
+ * `reopen` flag distinguishes the funnel event server-side. */
+export function reopenFollowup(dedupKey: string) {
+  return write("POST", { dedupKey, reopen: true });
 }

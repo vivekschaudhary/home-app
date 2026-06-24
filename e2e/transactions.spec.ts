@@ -496,7 +496,7 @@ test.describe("transactions ledger — owner-scoped reads + filters + keyset pag
     }
   });
 
-  test("real session → follow up flags a charge, the Open filter shows it, resolve drops it, a flagged CDC revision stays flagged, and a second user stays isolated", async ({
+  test("real session → follow up flags a charge, Done shows resolved rows, re-open returns one to Open, a flagged CDC revision stays flagged, and a second user stays isolated", async ({
     browser,
     page,
     context,
@@ -567,6 +567,29 @@ test.describe("transactions ledger — owner-scoped reads + filters + keyset pag
         [userId],
       );
       expect(resolvedFlag.rows).toEqual([{ dismissed: true }]);
+
+      await page.getByRole("button", { name: "Done" }).click();
+      await expect(page.getByText("Needs Review")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("Done")).toBeVisible();
+      await expect(page.getByText("Ordinary Charge")).toHaveCount(0);
+
+      await page.getByRole("button", { name: /Change the category of Needs Review \(\$24\.10\).*Shopping/i }).click();
+      await page.getByRole("menuitem", { name: "Re-open Needs Review follow-up" }).click();
+      await expect(page.getByText("Re-opened")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("Nothing resolved yet")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("Follow-ups you mark done will show here")).toBeVisible();
+
+      const reopenedFlag = await db.query(
+        `select dismissed_at is null as open
+           from transaction_flags
+          where user_id = $1 and dedup_key = 'e2e-followup-resolve'`,
+        [userId],
+      );
+      expect(reopenedFlag.rows).toEqual([{ open: true }]);
+
+      await page.getByRole("button", { name: "Open" }).click();
+      await expect(page.getByText("Needs Review")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByLabel("Flagged to follow up")).toHaveCount(1);
 
       await page.getByRole("button", { name: "Show only charges flagged to follow up" }).click();
       await expect(page.getByText("Ordinary Charge")).toBeVisible({ timeout: 15_000 });

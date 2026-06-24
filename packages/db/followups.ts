@@ -11,22 +11,24 @@ import { readAllPaged } from "./paged";
 
 type SupabaseClientT = ReturnType<typeof createServiceSupabase>;
 
-/** The set of `dedup_key`s with an OPEN follow-up (`dismissed_at is null`). Drives
- * the per-row ledger indicator AND the "Follow-ups" filter. Paginated past the cap. */
-export async function readFollowupFlags(client: SupabaseClientT, userId: string): Promise<Set<string>> {
-  const rows = await readAllPaged<{ dedup_key: string }>(
+export type FollowupStatus = "open" | "done";
+
+/** Each flagged charge's follow-up state: `dedup_key` → 'open' (`dismissed_at is
+ * null`) or 'done' (resolved). One paginated read covers both the per-row indicator
+ * AND the Open/Done filter (WLT-25-2). */
+export async function readFollowupStatuses(client: SupabaseClientT, userId: string): Promise<Map<string, FollowupStatus>> {
+  const rows = await readAllPaged<{ dedup_key: string; dismissed_at: string | null }>(
     (from, to) =>
       client
         .from("transaction_flags")
-        .select("dedup_key")
+        .select("dedup_key, dismissed_at")
         .eq("user_id", userId)
         .eq("flag_type", "followup")
-        .is("dismissed_at", null)
         .order("dedup_key", { ascending: true })
         .range(from, to),
-    "followup-flags",
+    "followup-statuses",
   );
-  return new Set(rows.map((r) => r.dedup_key));
+  return new Map(rows.map((r) => [r.dedup_key, r.dismissed_at == null ? "open" : "done"]));
 }
 
 /** Flag ONE charge "follow up" (per `dedup_key`). The upsert clears `dismissed_at`,
