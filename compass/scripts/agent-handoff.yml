@@ -94,20 +94,39 @@ jobs:
       # Each block: install CLI · invoke with reviewer prompt + diff · write review.md.
       # ─────────────────────────────────────────────────────────────────────
 
-      # ── Option A: Codex (OpenAI) ─────────────────────────────────────────
-      - name: Install Codex CLI
-        run: npm install -g @openai/codex
-        # VERIFY: install command + package name per https://github.com/openai/codex
-      - name: Run Codex review
+      # ── Option A: Compass dispatcher (default) ───────────────────────────
+      # LLM is determined by preferred_hosts: in compass/agents/reviewer.md —
+      # not hardcoded here. dispatch.py reads the frontmatter, calls router.py,
+      # and dispatches to whichever host has a valid API key (codex → gemini order).
+      # Set whichever key matches your reviewer's preferred_hosts.
+      #
+      # --context-files injects project/bet context so the reviewer understands
+      # WHAT the PR is supposed to accomplish (brief, architecture, PROJECT.md).
+      # Without it, the agent only sees the diff — no architectural intent.
+      # Omit --context-files for pure structural/syntax reviews; include it for
+      # reviews that require understanding the bet's design decisions.
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install SDK dependencies
+        run: pip install openai anthropic google-generativeai
+      - name: Run reviewer via Compass dispatcher
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}       # for codex / chatgpt
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }} # for claude
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}       # for gemini
         run: |
-          codex exec \
-            --prompt-file .codex/prompts/reviewer.md \
-            --input pr.diff \
-            --output review.md
-        # VERIFY: codex CLI flags against current docs. Placeholder names;
-        # actual headless-mode flags may differ. Treat as a starting point.
+          python3 compass/scripts/dispatch.py \
+            --agent-file compass/agents/reviewer.md \
+            --task review-pr \
+            --input-file pr.diff \
+            --output review.md \
+            --context-files PROJECT.md \
+                             docs/foundation/product.md \
+                             docs/foundation/architecture.md
+          # To scope to a specific bet, add its artifacts:
+          #   --context-files PROJECT.md docs/bets/CB-4/brief.md docs/bets/CB-4/architecture.md
 
       # ── Option B: Claude Code headless (Anthropic) ───────────────────────
       # - name: Install Claude Code CLI

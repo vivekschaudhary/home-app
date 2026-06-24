@@ -3,57 +3,47 @@ workflow: triage
 step: 1
 agent: support
 task: classify-intake
-generated: 2026-06-21 22:57
+generated: 2026-06-23 13:25
 ---
-
-Before I classify this, I need to flag something: this report is thin, and classification quality depends on impact/urgency signals I don't have yet. Let me work with what's here and call out the gaps.
 
 ## Intake Classification
 
-**Raw item:** "As a user when I go to the accounts page, I see that my US bank account says error"
+**Item read:** User reports being logged off "after every few hours" and speculates about cookie/JWT storage as the cause. They flag it as "looks like an enhancement but need to triage first."
 
-### Classification: `bug` (tentative — pending impact signal)
+### Classification: `bug`
 
-**Rationale:** A specific user is seeing defective behavior in shipped code — a bank account displaying "error" on the accounts page. There's no signal this is an active outage (only one reporter, no scope/blast-radius data), so it doesn't meet the `incident` bar. It's defective behavior in a shipped feature → `bug`.
+**Category:** `bug` — defective behavior in shipped code (not an active outage).
 
-**But this classification is fragile.** The category could shift based on answers to the questions below:
+**Rationale (impact/urgency, not framing):**
+- The reporter frames it as an enhancement and speculates about a technical root cause (cookies/JWT). I'm classifying by *observed behavior*, not their guess. Being unexpectedly logged off after a few hours is **defective behavior in shipped code**, not a missing capability.
+- This isn't an `enhancement`: the user isn't asking for a new capability — they're describing existing auth/session behavior that is broken or misbehaving. A session that silently expires every few hours is almost certainly an unintended token-lifetime/refresh defect, not a feature request.
+- This isn't an `incident`: no evidence of production-wide degradation, data loss, or security breach. Single-reporter, intermittent, app remains usable. **Severity: not P0.**
+- This isn't `not-an-issue`: short forced re-auth cycles are plausibly a real refresh-token/sliding-session defect, not working-as-intended. (If a confirmed short session TTL turns out to be an intentional security policy, the Engineer's reproduction-from-code step will surface that — that's their call now, not mine to pre-judge.)
 
-| If… | Then category becomes… |
-|---|---|
-| Many users / all US accounts are erroring right now | `incident` (production degraded) |
-| It's working-as-intended (e.g. bank requires re-auth) | `not-an-issue` |
-| It's a known recurring failure with an upstream cause | `problem` |
+**Note on routing the cause:** This *touches* WLT-1 (Identity & MFA onboarding) functionally, but I am **not** matching it to a bet — bets are for enhancements/problems. A defect goes to `/fix`, where the tool-capable Engineer reproduces from the code and diagnoses whether it's a JWT expiry, refresh-token, or cookie-persistence issue. I do **not** diagnose the cookie-vs-JWT question myself — that's the Engineer's reproduction job (`triage-and-fix`, v0.3.50).
 
-### Recommended route: `/fix`
-
-Standalone bug, no outage signal → triage and fix path.
-
----
-
-## Why I'm not escalating further yet (`[refuse-escalate]`)
-
-I cannot reproduce or assess impact from this report. To firm up the classification and route, I need:
-
-1. **Scope** — is this one account, all your US accounts, or are other users reporting it? (single-user vs. widespread = bug vs. incident)
-2. **The actual error** — what exact text/code does it show? "error" alone isn't reproducible.
-3. **When it started** — first time, or worked before? Recent change on your end (new bank connection, password change)?
-4. **Severity signal** — can you still transact / see balances, or is the account fully unusable?
-
-I'm classifying by **observed impact, not reporter framing** — and right now the observed impact is "one account shows an error string," which is P2/P3 territory absent wider scope.
+### Intake summary (for hand-off)
+- **Classification:** `bug` (defective session/auth behavior in shipped code)
+- **Impact:** intermittent forced logout every few hours; single reporter; app remains usable; no data loss/security breach observed
+- **Severity:** not P0 — annoyance-level, no outage
+- **Recommended command:** `/fix` (Engineer reproduces from code; do **not** prejudge cookie vs JWT)
+- **Override available:** if recurrence pattern points to a systemic session-lifetime design flaw across many users, this could be re-cast as a `problem` for planned investigation — human's call at the gate.
 
 ---
 
-## TL;DR
-- Classified incoming item as **`bug`** (tentative); not an incident — no widespread-impact signal.
-- Severity unknown — needs scope + error detail before it can be set.
-- **Next action:** human confirms/overrides route at the gate; reporter to supply the 4 details above.
+**Tool note:** No `mcp_sentry` / `mcp_pagerduty` / `mcp_jira` connected this session. I have no error-rate or session-telemetry data to confirm scope (one user vs. many), and no ticket was created. Discipline applied: classified on the single report only and flagged scope as an open question rather than inflating severity. Please confirm whether other users are affected — that could shift this toward `problem`.
 
-**Files created/modified:** none (no ticketing tool connected — see below).
-
-**Next recommended command:** `/fix` once route is confirmed and reproduction details are gathered.
-
-**Open questions/risks:** classification may flip to `incident` if scope is wide, or `not-an-issue` if working-as-intended. Cannot reproduce yet.
+**Open question / risk:** Is this isolated to one user or widespread? Scope changes the route (isolated `bug` → `/fix`; widespread session-expiry pattern → `problem` for planned investigation).
 
 ---
 
-⚠️ **Tools missing — discipline applied:** No `mcp_jira` / `mcp_linear` (intake summary written here in chat — you create the ticket manually), no `mcp_sentry` / `mcp_pagerduty` (no error/alert data — I'm relying on your manual report; absence noted). **This run halts at the routing gate — confirm `/fix` or override the category before I proceed.**
+**TL;DR**
+- Reporter's "enhancement" guess overridden → classified as a **`bug`** (broken session behavior in shipped code).
+- **Severity: not P0** — intermittent, single reporter, no outage/data loss.
+- Routing to Engineer for reproduction-from-code; I do not diagnose cookie-vs-JWT.
+
+**Files created/modified:** none (no ticketing tool connected; intake summary recorded inline above).
+
+**Halting at the routing gate** — confirm or override the category/route before I hand off.
+
+**Next command:** fix
