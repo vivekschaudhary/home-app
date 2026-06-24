@@ -13,8 +13,9 @@ export async function GET(req: Request) {
   if (!userId) return Response.json({ error: "unauthorized" }, { status: 401 });
 
   const params = new URL(req.url).searchParams;
-  const followup = params.get("followup") === "1";
-  // WLT-25-1 — once per Follow-ups view (the first page, not each Load-more).
+  const followupParam = params.get("followup");
+  const followup = followupParam === "open" || followupParam === "done" ? followupParam : null;
+  // WLT-25-1/2 — once per Follow-ups view (the first page, not each Load-more).
   if (followup && !params.get("cursor")) await emitFunnel(FUNNEL_EVENTS.FOLLOWUPS_VIEWED, userId, {});
   const result = await readTransactionsPage(userId, {
     cursor: params.get("cursor"),

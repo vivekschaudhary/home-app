@@ -34,9 +34,11 @@ vi.mock("@/app/lib/subscriptions-client", () => ({
 }));
 const flagFollowupMock = vi.fn<(dk: string) => Promise<{ ok: boolean }>>();
 const resolveFollowupMock = vi.fn<(dk: string) => Promise<{ ok: boolean }>>();
+const reopenFollowupMock = vi.fn<(dk: string) => Promise<{ ok: boolean }>>();
 vi.mock("@/app/lib/followups-client", () => ({
   flagFollowup: (dk: string) => flagFollowupMock(dk),
   resolveFollowup: (dk: string) => resolveFollowupMock(dk),
+  reopenFollowup: (dk: string) => reopenFollowupMock(dk),
 }));
 
 import { TransactionsClient } from "./TransactionsClient";
@@ -78,7 +80,7 @@ const r = (over: Partial<TransactionRowDTO> & { id: string }): TransactionRowDTO
   account: "Everyday Checking",
   pending: false,
   isSubscription: false,
-  isFollowup: false,
+  followupStatus: null,
   ...over,
 });
 
@@ -147,7 +149,7 @@ describe("TransactionsClient — pagination (AC4)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Load more transactions" }));
 
     await waitFor(() => expect(screen.getByText("Costco")).toBeTruthy());
-    expect(fetchTransactionsMock).toHaveBeenCalledWith({ cursor: "CUR1", accountId: null, category: null, q: "", followup: false });
+    expect(fetchTransactionsMock).toHaveBeenCalledWith({ cursor: "CUR1", accountId: null, category: null, q: "", followup: null });
     // nextCursor now null → the end marker replaces the button
     expect(screen.getByText("You're all caught up — that's everything.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Load more transactions" })).toBeNull();
@@ -180,7 +182,7 @@ describe("TransactionsClient — search (AC5)", () => {
       target: { value: "amazon" },
     });
 
-    await waitFor(() => expect(fetchTransactionsMock).toHaveBeenCalledWith({ cursor: null, accountId: null, category: null, q: "amazon", followup: false }));
+    await waitFor(() => expect(fetchTransactionsMock).toHaveBeenCalledWith({ cursor: null, accountId: null, category: null, q: "amazon", followup: null }));
     await waitFor(() => expect(screen.getByText("Amazon")).toBeTruthy());
     expect(screen.queryByText("Blue Bottle")).toBeNull();
   });
@@ -218,7 +220,7 @@ describe("TransactionsClient — empty + error states (AC6)", () => {
 
     expect(screen.getByRole("alert")).toBeTruthy();
     fireEvent.click(screen.getByText("Try again"));
-    await waitFor(() => expect(fetchTransactionsMock).toHaveBeenCalledWith({ cursor: null, accountId: null, category: null, q: "", followup: false }));
+    await waitFor(() => expect(fetchTransactionsMock).toHaveBeenCalledWith({ cursor: null, accountId: null, category: null, q: "", followup: null }));
     await waitFor(() => expect(screen.getByText("Blue Bottle")).toBeTruthy());
   });
 });
@@ -236,7 +238,7 @@ describe("TransactionsClient — filters (AC1/AC3/AC5/AC7)", () => {
       target: { value: "22222222-2222-4222-8222-222222222222" },
     });
     await waitFor(() =>
-      expect(fetchTransactionsMock).toHaveBeenCalledWith({ cursor: null, accountId: "22222222-2222-4222-8222-222222222222", category: null, q: "", followup: false }),
+      expect(fetchTransactionsMock).toHaveBeenCalledWith({ cursor: null, accountId: "22222222-2222-4222-8222-222222222222", category: null, q: "", followup: null }),
     );
     expect(recordTransactionsFilteredMock).toHaveBeenCalledTimes(1);
 
@@ -248,7 +250,7 @@ describe("TransactionsClient — filters (AC1/AC3/AC5/AC7)", () => {
     await screen.findByRole("option", { name: "Food And Drink" }); // wait for the async category options (flaky in CI otherwise)
     fireEvent.change(screen.getByLabelText("Filter by category"), { target: { value: "FOOD_AND_DRINK" } });
     await waitFor(() =>
-      expect(fetchTransactionsMock).toHaveBeenCalledWith({ cursor: null, accountId: "22222222-2222-4222-8222-222222222222", category: "FOOD_AND_DRINK", q: "", followup: false }),
+      expect(fetchTransactionsMock).toHaveBeenCalledWith({ cursor: null, accountId: "22222222-2222-4222-8222-222222222222", category: "FOOD_AND_DRINK", q: "", followup: null }),
     );
     expect(recordTransactionsFilteredMock).toHaveBeenCalledTimes(2);
   });
@@ -275,7 +277,7 @@ describe("TransactionsClient — filters (AC1/AC3/AC5/AC7)", () => {
     await waitFor(() => expect(screen.getByText("Deep Match")).toBeTruthy());
     expect(screen.queryByText("No transactions match these filters.")).toBeNull();
     // the second fetch used the continuation cursor C2
-    expect(fetchTransactionsMock).toHaveBeenCalledWith({ cursor: "C2", accountId: null, category: "FOOD_AND_DRINK", q: "", followup: false });
+    expect(fetchTransactionsMock).toHaveBeenCalledWith({ cursor: "C2", accountId: null, category: "FOOD_AND_DRINK", q: "", followup: null });
   });
 
   it("renders the 'Other' category option only when the user has a null-category bucket (hasOther)", () => {
@@ -297,7 +299,7 @@ describe("TransactionsClient — filters (AC1/AC3/AC5/AC7)", () => {
     // clear → unfiltered refetch
     fetchTransactionsMock.mockResolvedValueOnce({ ok: true, page: page({ nextCursor: null }) });
     fireEvent.click(screen.getByText("Clear filters"));
-    await waitFor(() => expect(fetchTransactionsMock).toHaveBeenLastCalledWith({ cursor: null, accountId: null, category: null, q: "", followup: false }));
+    await waitFor(() => expect(fetchTransactionsMock).toHaveBeenLastCalledWith({ cursor: null, accountId: null, category: null, q: "", followup: null }));
   });
 });
 
@@ -347,11 +349,22 @@ describe("TransactionsClient — recategorize from the row (WLT-23-3)", () => {
     expect(screen.queryByRole("menuitem", { name: /as a subscription/ })).toBeNull();
   });
 
-  it("WLT-25-1 — the Follow-ups filter fetches with followup=true", async () => {
-    fetchTransactionsMock.mockResolvedValue({ ok: true, page: page({ rows: [r({ id: "t1", isFollowup: true })] }) });
+  it("WLT-25-1/2 — the Follow-ups filter fetches Open by default", async () => {
+    fetchTransactionsMock.mockResolvedValue({ ok: true, page: page({ rows: [r({ id: "t1", followupStatus: "open" })] }) });
     render(<TransactionsClient initial={page()} initialError={false} />);
     fireEvent.click(screen.getByRole("button", { name: "Show only charges flagged to follow up" }));
-    await waitFor(() => expect(fetchTransactionsMock).toHaveBeenCalledWith(expect.objectContaining({ followup: true })));
+    await waitFor(() => expect(fetchTransactionsMock).toHaveBeenCalledWith(expect.objectContaining({ followup: "open" })));
+  });
+
+  it("WLT-25-2 — the Done toggle fetches followup=done; a Done row offers Re-open", async () => {
+    fetchTransactionsMock.mockResolvedValue({ ok: true, page: page({ rows: [r({ id: "t1", followupStatus: "done" })] }) });
+    render(<TransactionsClient initial={page()} initialError={false} />);
+    fireEvent.click(screen.getByRole("button", { name: "Show only charges flagged to follow up" })); // → Open
+    fireEvent.click(screen.getByRole("button", { name: "Done" })); // → Done
+    await waitFor(() => expect(fetchTransactionsMock).toHaveBeenCalledWith(expect.objectContaining({ followup: "done" })));
+    // the Done row's popover offers Re-open (not Done/Follow up)
+    fireEvent.click(await screen.findByRole("button", { name: /Change the category of Blue Bottle/ }));
+    expect(await screen.findByRole("menuitem", { name: "Re-open Blue Bottle follow-up" })).toBeTruthy();
   });
 
   it("offers 'Always categorize this merchant' only when the row has a merchant (AC3 edge)", async () => {
