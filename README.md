@@ -1,80 +1,96 @@
-> **Status:** Early. Used by the author on real projects. Public for transparency, not actively soliciting users. Feedback welcome via Discussions; no support promises.
+# Wealth — financial intelligence for everyone
 
-# Compass
+> Give every person — regardless of income, net worth, or financial literacy — the orchestration layer of private wealth management: **watching, flagging, planning, and acting** on their real financial data. Automated infrastructure, not advice.
 
-> Product development with direction.
+`wealth-platform` is a personal-finance platform that automates the *orchestration* layer the wealthy pay advisors for — on top of a user's real, aggregated accounts — rather than replacing human judgment. The user's own decisions are always the source of truth; providers and detectors only ever *signal*.
 
-A vendor-neutral product development framework. Compass holds the shape of work from problem → ship → measure → learn, with AI tools playing roles across the lifecycle.
+> **Status:** Phase 1 (Foundation). Dogfooded by the author on real accounts; not yet open for sign-ups.
 
-## What Compass is
+---
 
-A markdown-based framework that any AI tool can read. The framework lives in `compass/`. **Agents are self-sufficient, surface-independent units** (`compass/agents/<agent>.md`) — the same agent file runs on ChatGPT Custom GPT Instructions, Claude Code session, Codex prompt, Gemini system message, or as a CrewAI / LangGraph agent definition. **Host wrappers** (`CLAUDE.md`, future host analogs) are thin runtime-notes, not role authorities. Per `[agent-as-surface-independent-unit]` (canon v0.3.14).
+## What's shipped
 
-## Core ideas
+**Authentication & onboarding**
+- Passkey (WebAuthn) + TOTP **two-factor**, MFA-required — AAL2 enforced on every app route, sliding session renewal.
+- Intent-first onboarding + a workflow engine (declare a goal → an assembled, running workflow).
 
-- **Every initiative is a bet.** Foundation product, OKRs, features, architectural initiatives — all measurable bets with a hypothesis, key metric, and an outcome: **won / learning / inconclusive**.
-- **Bets contain stories.** Stories contain implementation, tests, fixes, ops.
-- **Agents own tasks; workflows sequence agents.** 13 agent files in `compass/agents/` (migrating from `compass/roles/`; v0.3.14 ships pm + researcher + engineer, rest follow incrementally). Each agent file is self-sufficient: identity + inlined principles + tools required + task definitions (gate/work/postcondition) + refusal rules + handoffs. Workflow files in `compass/workflows/` are **thin dispatch graphs** that sequence `<agent>.<task>` references — they don't embed methodology; the methodology lives in the agent task definitions where it belongs.
-- **Surface-independent by design.** Each agent declares `preferred_hosts: [...]` in its own frontmatter (e.g., `pm.md` runs on ChatGPT or Claude; `engineer.md` prefers CLI hosts with filesystem access). Paste any agent file into the host's system-prompt slot → it works. **Cross-host orchestration today is human-dispatched** (open the right host for the active step); **v0.4 ships the orchestrator** that walks dispatch graphs and dispatches agents per step automatically. **Default Reviewer ≠ Implementer** for review independence — Compass empirically validates Claude implements, Codex reviews; the cross-model split is preserved structurally via agent `preferred_hosts:`. Per `[agent-as-surface-independent-unit]` (canon v0.3.14). *Legacy:* `compass/config.yaml.tool_assignments:` deprecated in v0.3.14; removed in v0.4.
-- **Discipline holds always.** Full review on every PR, no shortcuts under pressure.
-- **Decisions, Risks, Issues** logged at every stage (DRI logs).
-- **Compass scans your product like Snyk scans your code.** A continuous quality scanner runs across six SDLC phases — Product, Architecture, Build, Production Ready, GTM, Operate — and produces *findings, not failures*. Each finding has severity (Critical / High / Medium / Low) + confidence + location + reason + fix. Measurement is automatic (no manual self-assessment). Suppressions are explicit, justified, logged in DRI. Owners decide; the scanner informs.
+**Accounts & data**
+- **Plaid** account aggregation (OAuth / zero-knowledge — bank credentials are never stored), 24-month history, **background auto-sync** via Inngest with CDC-safe re-syncs.
 
-## The flow
+**Budget & Spending**
+- Per-category budgets with a **recommended figure from your own history**, this-month actuals, over/under, and a 12-month year-spread.
+- **Honest totals:** transfers and credit-card payments are excluded from spending (no double-counting), via a region-pluggable transaction `kind` seam.
+- **Category correction that sticks:** recategorize a charge or "remember the merchant"; your choice survives Plaid re-syncs and every surface (budget, recap, anomalies) reads the same resolved category.
 
-17 workflows, grouped by **when you reach for them**. Several Observe workflows are auto-invoked by others — marked `[auto]` and rarely called by hand.
+**Transactions ledger**
+- A searchable, account/category-filterable, keyset-paginated **all-accounts ledger** — see, find, and correct every transaction in place.
 
-### 1. Bootstrap — once per project
+**Subscriptions** (a transaction overlay)
+- **Auto-detected** recurring charges across weekly / monthly / **every 2·3·6 months** / annual cadences, **per price** (a vendor with two plans shows two rows), with a typical amount, monthly-equivalent, **last-charged date**, and a **"may have ended"** hint. Every auto-mark is a signal you can override or dismiss durably.
 
-Sequenced. Run in order on a new repo.
+**Follow-ups** (a transaction overlay)
+- **Flag** any charge to revisit, see your open list, mark it **Done**, and **re-open** it later — orthogonal to category and subscription.
+
+**Insight**
+- Weekly **recap** + **anomaly** surfacing (high-precision, never alarming).
+
+**Coming next:** Debt · Goals · Investments.
+
+---
+
+## Architecture
+
+| Layer | Choice |
+|---|---|
+| Web | **Next.js 15** App Router · **React 19** · Tailwind · deployed on **Vercel** |
+| Data | **Supabase Postgres** with **Row-Level Security** (owner-scoped on every table) + Supabase Auth **AAL2** |
+| Aggregation | **Plaid** behind a swappable provider adapter (OAuth, no stored credentials) |
+| Background | **Inngest** (account sync, rule/overlay re-apply, recap) |
+| Repo | **pnpm** monorepo |
+
+**Packages** (`packages/`):
+- `@wealth/core` — pure, unit-tested compute (budgets, cadence/subscription detection, recap, anomalies — no I/O)
+- `@wealth/db` — owner-scoped data access (paginated reads, the saved-decision resolvers)
+- `@wealth/aggregation` — Plaid behind a swappable adapter (classification at the provider boundary)
+- `@wealth/jobs` — Inngest functions (sync, re-apply, recap)
+- `@wealth/ui` · `@wealth/contracts` · `@vc1023/passkey-2fa` (reusable passkey + 2FA for Next.js + Supabase)
+
+**Design principles in the data model**
+- **Providers signal, humans decide** — provider data (Plaid taxonomy, detectors) sets a *default*; the user's overridable decision is the persisted truth, resolved at read.
+- **Orthogonal transaction overlays** — category, subscription, and follow-up are independent axes on one `transaction_flags` substrate; a charge can be all three at once and they never leak into each other.
+- **Schema is expand-only** and auto-applied on deploy; reads are paginated/keyset (no unbounded fetches); writes survive Plaid CDC re-syncs via a stable `dedup_key`.
+
+---
+
+## Security & compliance
+
+MFA-required · sensitive financial data · targeting **PCI DSS / SOC 2 / GDPR**. Aggregation is OAuth / zero-knowledge (no bank credentials stored). Every table is owner-scoped under RLS; the second-factor (AAL2) boundary is enforced once for every app route. RLS policies are proven by a live-Postgres test suite, and access-controlled flows by gated real-path E2Es, on every change.
+
+---
+
+## Built with Compass
+
+This product is developed with **[Compass](compass/)** — an embedded, AI-native product-development framework (it lives in `compass/`). Every change is a **bet → stories → PRs**, with:
+- **Cross-model review independence** — one model implements, an *independent* model reviews each PR (RLS suites + gated E2Es are authored by the reviewer, not the implementer).
+- **Decisions / Risks / Issues** logged at every stage, and each merge's clearance tied to an exact commit.
+- A continuous, Snyk-style quality **scanner** across the SDLC phases.
+
+See `SETUP.md` and `compass/` for the framework itself.
+
+---
+
+## Repo layout
 
 ```
-/setup-product                  → Foundation product bet (PM + Researcher)
-/setup-foundation-architecture  → Foundation architecture bet + data model (Enterprise Architect)
-/create-bet-portfolio           → MVP wedge: 3-6 stub briefs + dependency graph (PM + Researcher)
+app/                     Next.js App Router — the (app) shell + routes
+  (app)/dashboard · accounts · budget · transactions · subscriptions · settings   (live)
+  (app)/debt · goals · investments                                                (coming)
+packages/                pnpm monorepo — core · db · aggregation · jobs · ui · contracts · passkey-2fa
+supabase/migrations/     Postgres schema — RLS, expand-only, auto-applied on deploy
+docs/                    foundation (product · architecture) · bets · status
+compass/                 the Compass dev framework
 ```
 
-### 2. Plan — per bet
+---
 
-Define what a bet is, design it, decompose into shippable slices.
-
-```
-/create-brief                   → New bet — fresh OR promote portfolio stub (PM + Researcher)
-/create-bet-architecture        → Bet-level technical strategy (Architect + Enterprise Arch)
-/create-story                   → One shippable slice under the bet (PM, +Designer/UX Writer if UI)
-```
-
-### 3. Execute — per story / event
-
-Do the work. Build for stories; the others for the reactive cases.
-
-```
-/build <story>                  → Engineer implements + Codex reviews + Architect compliance
-/fix <ticket>                   → Bug flow (Support → Engineer → Codex)
-/triage <alert>                 → Incident response (Engineer + Support + PO awareness)
-/ops <change>                   → Infra / config / non-code changes (Enterprise Arch + Codex)
-```
-
-### 4. Observe — rolling visibility
-
-You invoke `/status`, `/scan`, `/metrics` on demand. `/plan`, `/dashboard`, `/measure` typically run themselves.
-
-```
-/status                         → Project Manager's rolling status
-/scan <bet>                     → Snyk-style continuous quality scanner — 6 SDLC phases
-/metrics                        → Outcomes (won/learning/inconclusive) + open-findings posture
-/plan                           → Living time-bound schedule (run manually or via cron)
-/dashboard             [auto]   → Single-file HTML view of all living artifacts
-                                  (refreshed by /scan, /metrics, /plan, /status)
-/measure <bet>         [cron]   → Cron-driven bet outcome resolution
-```
-
-> **Phase transitions:** flip the artifact's `status:` field directly (`proposed` → `approved` → `in-build` → `shipped` → etc.). No canonical "advance" command — that's what status fields are for.
-
-## Get started
-
-## Heads-up: AI tool memory persists across folder deletion
-
-If you reuse a folder path for a new Compass project (delete + recreate at the same path), AI tools may carry stale context from the prior project. See `SETUP.md` → "Starting fresh at the same folder path" for the cleanup steps.
-
-Read `SETUP.md`.
+_Built in the open, dogfooded on real money. Foundation product: "Wealth at Your Fingertips."_
