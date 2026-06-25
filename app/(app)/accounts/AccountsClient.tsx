@@ -49,6 +49,10 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
   const [syncing, setSyncing] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const preSyncRef = useRef<Map<string, string | null>>(new Map());
+  // Set of connectionIds that were active (and therefore triggered) at sync time.
+  // Completion requires ALL of these to have a changed lastSyncedAt, so a
+  // multi-connection household doesn't stop polling after just the first one finishes.
+  const activeIdsRef = useRef<Set<string>>(new Set());
 
   const refresh = useCallback(async () => {
     setConnections(await fetchConnections());
@@ -63,6 +67,9 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
       const current = await fetchConnections();
       setConnections(current);
       preSyncRef.current = new Map(current.map((c) => [c.connectionId, c.lastSyncedAt]));
+      activeIdsRef.current = new Set(
+        current.filter((c) => c.healthStatus === "active").map((c) => c.connectionId),
+      );
       const triggered = await triggerRefresh();
       if (triggered) setSyncing(true);
     })();
@@ -98,16 +105,24 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
   }, [syncing]);
 
   // Detect sync completion: the Inngest job updates last_synced_at once it has
-  // written fresh balances — any change past the pre-trigger snapshot means the
-  // page is now showing current data.
+  // written fresh balances. Requires ALL active connections that were triggered
+  // to have a changed lastSyncedAt so multi-connection households don't stop
+  // polling after only the first one finishes.
   useEffect(() => {
     if (!syncing) return;
     const snapshot = preSyncRef.current;
-    const done = connections.some((c) => {
-      const prev = snapshot.get(c.connectionId) ?? null;
+    const activeIds = activeIdsRef.current;
+    if (activeIds.size === 0) {
+      setSyncing(false);
+      return;
+    }
+    const allDone = [...activeIds].every((id) => {
+      const c = connections.find((conn) => conn.connectionId === id);
+      if (!c) return true; // connection removed — treat as done
+      const prev = snapshot.get(id) ?? null;
       return c.lastSyncedAt !== null && c.lastSyncedAt !== prev;
     });
-    if (done) setSyncing(false);
+    if (allDone) setSyncing(false);
   }, [connections, syncing]);
 
   const onPlaidSuccess = useCallback(

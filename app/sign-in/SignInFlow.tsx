@@ -227,7 +227,18 @@ export function SignInFlow() {
   // with the success message, regardless of which factor (passkey or TOTP)
   // cleared it. Both challenge paths funnel here before the redirect fires.
   if (success) {
-    return <Toast message={COPY.signinSuccess} />;
+    return (
+      <AuthCard>
+        {/* role="alert" (aria-live=assertive) fires immediately on render so SR users
+            hear the confirmation before the 900 ms router.push fires. Toast also
+            renders for sighted users but uses polite, which can be pre-empted by
+            the navigation. */}
+        <p role="alert" className="sr-only">
+          {COPY.signinSuccess}
+        </p>
+        <Toast message={COPY.signinSuccess} />
+      </AuthCard>
+    );
   }
 
   // step === "challenge", authenticator-app sub-step (AC3)

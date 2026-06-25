@@ -76,6 +76,7 @@ describe("POST /api/aggregation/connections/refresh", () => {
       stubConn({ connectionId: "conn-ok", healthStatus: "active" }),
       stubConn({ connectionId: "conn-reauth", healthStatus: "needs_reauth" }),
       stubConn({ connectionId: "conn-err", healthStatus: "error" }),
+      stubConn({ connectionId: "conn-disconnected", healthStatus: "disconnected" }),
     ]);
 
     const res = await POST();
