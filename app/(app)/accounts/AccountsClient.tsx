@@ -73,6 +73,11 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
       const triggered = await triggerRefresh();
       if (triggered) setSyncing(true);
     })();
+    // Run exactly once on mount. Adding `refresh` or any other dep would re-run
+    // this effect on every render cycle, re-triggering the snapshot + background
+    // refresh instead of capturing a single point-in-time baseline. StrictMode
+    // double-invocation is intentional — the second run snapshots the same data
+    // and fires a deduplicated Inngest event (30 s window).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -219,6 +224,7 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
                     kind={a.kind}
                     mask={a.mask}
                     balance={a.balanceCurrent}
+                    balanceAvailable={a.balanceAvailable}
                     status={status}
                     statusLabel={label}
                     lastSyncedLabel={
@@ -226,7 +232,7 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
                         ? COPY.accounts.rowLastSynced.replace("{time}", relativeTime(conn.lastSyncedAt))
                         : null
                     }
-                    ariaLabel={`${conn.institutionName ?? a.name} ${a.kind}${a.mask ? ` ending in ${a.mask}` : ""} — ${label}${a.balanceCurrent ? `, balance ${a.balanceCurrent}` : ""}`}
+                    ariaLabel={`${conn.institutionName ?? a.name} ${a.kind}${a.mask ? ` ending in ${a.mask}` : ""} — ${label}${a.balanceCurrent ? `, current balance ${a.balanceCurrent}` : ""}${a.balanceAvailable ? `, available balance ${a.balanceAvailable}` : ""}`}
                     action={
                       <button
                         type="button"

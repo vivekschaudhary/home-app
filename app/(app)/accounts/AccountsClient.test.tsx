@@ -105,7 +105,9 @@ describe("AccountsClient — mount-trigger and sync indicator", () => {
     vi.useFakeTimers();
     try {
       render(<AccountsClient initialConnections={[CONNECTION]} />);
-      // flush the async mount effect (two awaited Promises: fetchConnections + triggerRefresh)
+      // waitFor cannot be used here: its polling relies on setTimeout, which is
+      // mocked by vi.useFakeTimers(). Instead, flush exactly two microtask ticks —
+      // one per awaited call in the mount effect (fetchConnections, then triggerRefresh).
       await act(() => Promise.resolve());
       await act(() => Promise.resolve());
       expect(screen.getByText(COPY.accounts.syncing)).toBeTruthy();
@@ -127,6 +129,8 @@ describe("AccountsClient — mount-trigger and sync indicator", () => {
     vi.useFakeTimers();
     try {
       render(<AccountsClient initialConnections={[CONNECTION]} />);
+      // See comment above: two microtask flushes cover the two awaited calls in
+      // the mount effect under fake timers where waitFor cannot poll.
       await act(() => Promise.resolve());
       await act(() => Promise.resolve());
       expect(screen.getByText(COPY.accounts.syncing)).toBeTruthy();
