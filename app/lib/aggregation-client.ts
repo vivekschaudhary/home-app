@@ -67,6 +67,21 @@ export async function fetchConnections(): Promise<ConnectionView[]> {
   }
 }
 
+export async function triggerRefresh(): Promise<boolean> {
+  try {
+    const res = await fetch("/api/aggregation/connections/refresh", { method: "POST" });
+    if (!res.ok) {
+      console.error("[aggregation] triggerRefresh: non-OK response", res.status);
+      return false;
+    }
+    const data = (await res.json()) as { triggered?: number };
+    return (data.triggered ?? 0) > 0;
+  } catch (err) {
+    console.error("[aggregation] triggerRefresh: fetch failed", err);
+    return false;
+  }
+}
+
 export async function disconnectConnection(id: string): Promise<boolean> {
   try {
     const res = await fetch(`/api/aggregation/connections/${id}/disconnect`, { method: "POST" });

@@ -205,7 +205,10 @@ export function SignInFlow() {
             {COPY.signin.cta}
           </Button>
           <p className="text-center text-sm">
-            <Link href="/forgot" className="font-medium text-gray-500 underline hover:text-gray-700">
+            <Link
+              href="/forgot"
+              className="font-medium text-gray-500 underline hover:text-gray-700"
+            >
               {COPY.forgot.link}
             </Link>
           </p>
@@ -226,6 +229,13 @@ export function SignInFlow() {
   if (success) {
     return (
       <AuthCard>
+        {/* role="alert" (aria-live=assertive) fires immediately on render so SR users
+            hear the confirmation before the 900 ms router.push fires. Toast also
+            renders for sighted users but uses polite, which can be pre-empted by
+            the navigation. */}
+        <p role="alert" className="sr-only">
+          {COPY.signinSuccess}
+        </p>
         <Toast message={COPY.signinSuccess} />
       </AuthCard>
     );
@@ -308,8 +318,13 @@ export function SignInFlow() {
           {/* When passkeys can't be used here, surface the honest no-backup
               explainer directly (no passkey to fall back from). */}
           {!passkeysSupported || showNoBackup ? (
-            <div className="rounded-md border border-gray-200 bg-gray-50 p-3 text-left" role="status">
-              <p className="text-sm font-medium text-gray-900">{COPY.signinFallback.noBackupTitle}</p>
+            <div
+              className="rounded-md border border-gray-200 bg-gray-50 p-3 text-left"
+              role="status"
+            >
+              <p className="text-sm font-medium text-gray-900">
+                {COPY.signinFallback.noBackupTitle}
+              </p>
               <p className="mt-1 text-sm text-gray-600">{COPY.signinFallback.noBackupBody}</p>
             </div>
           ) : (

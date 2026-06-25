@@ -78,7 +78,7 @@ export function createPlaidProvider(): AggregationProvider {
     },
 
     async fetchAccounts({ accessSecret }) {
-      const res = await plaidClient().accountsGet({ access_token: accessSecret });
+      const res = await plaidClient().accountsBalanceGet({ access_token: accessSecret });
       return res.data.accounts
         .map(mapAccount)
         .filter((a): a is NonNullable<typeof a> => a !== null);
