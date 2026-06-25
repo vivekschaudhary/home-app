@@ -7,6 +7,15 @@ import { handlers } from "@/app/lib/aggregation";
 // always fresh (not just as-of the last webhook or 6-hour cron). Inngest
 // debounces duplicate sends per connection (30 s window), collapsing rapid
 // navigations into a single sync.
+//
+// Security posture:
+//   Auth:  AAL2 required — getAal2UserId() returns null (→ 401) for any request
+//          without a valid AAL2 session cookie.
+//   CSRF:  Session cookies are SameSite=Lax (Supabase default). Cross-site
+//          POST requests cannot carry the session cookie, so no separate
+//          anti-CSRF token is required. The AAL2 check is a further backstop.
+//   Abuse: Inngest deduplicates refresh events per connectionId within a 30 s
+//          window; rapid navigation or duplicate calls collapse into one sync.
 export const runtime = "nodejs";
 
 export async function POST() {
