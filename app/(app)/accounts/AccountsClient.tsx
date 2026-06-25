@@ -78,7 +78,6 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
     // refresh instead of capturing a single point-in-time baseline. StrictMode
     // double-invocation is intentional — the second run snapshots the same data
     // and fires a deduplicated Inngest event (30 s window).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // While ANY connection is still in its import window, poll so transactions +
