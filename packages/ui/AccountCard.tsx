@@ -8,7 +8,8 @@ interface AccountCardProps {
   accountName: string;
   kind: string;
   mask: string | null;
-  balance: string | null; // decimal-as-string
+  balance: string | null; // decimal-as-string — current balance
+  balanceAvailable?: string | null; // decimal-as-string — available balance
   currency?: string;
   status: Status;
   statusLabel: string;
@@ -35,6 +36,7 @@ export function AccountCard({
   kind,
   mask,
   balance,
+  balanceAvailable,
   currency = "USD",
   status,
   statusLabel,
@@ -67,7 +69,16 @@ export function AccountCard({
       </div>
       <div className="flex shrink-0 flex-col items-end gap-2">
         {balance != null ? (
-          <p className="text-sm font-semibold text-gray-900">{formatMoney(balance, currency)}</p>
+          <div className="text-right">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-gray-400">Current</p>
+            <p className="text-sm font-semibold text-gray-900">{formatMoney(balance, currency)}</p>
+          </div>
+        ) : null}
+        {balanceAvailable != null ? (
+          <div className="text-right">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-gray-400">Available</p>
+            <p className="text-sm font-semibold text-gray-900">{formatMoney(balanceAvailable, currency)}</p>
+          </div>
         ) : null}
         {action}
       </div>
