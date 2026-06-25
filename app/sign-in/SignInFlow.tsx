@@ -205,7 +205,10 @@ export function SignInFlow() {
             {COPY.signin.cta}
           </Button>
           <p className="text-center text-sm">
-            <Link href="/forgot" className="font-medium text-gray-500 underline hover:text-gray-700">
+            <Link
+              href="/forgot"
+              className="font-medium text-gray-500 underline hover:text-gray-700"
+            >
               {COPY.forgot.link}
             </Link>
           </p>
@@ -224,11 +227,7 @@ export function SignInFlow() {
   // with the success message, regardless of which factor (passkey or TOTP)
   // cleared it. Both challenge paths funnel here before the redirect fires.
   if (success) {
-    return (
-      <AuthCard>
-        <Toast message={COPY.signinSuccess} />
-      </AuthCard>
-    );
+    return <Toast message={COPY.signinSuccess} />;
   }
 
   // step === "challenge", authenticator-app sub-step (AC3)
@@ -308,8 +307,13 @@ export function SignInFlow() {
           {/* When passkeys can't be used here, surface the honest no-backup
               explainer directly (no passkey to fall back from). */}
           {!passkeysSupported || showNoBackup ? (
-            <div className="rounded-md border border-gray-200 bg-gray-50 p-3 text-left" role="status">
-              <p className="text-sm font-medium text-gray-900">{COPY.signinFallback.noBackupTitle}</p>
+            <div
+              className="rounded-md border border-gray-200 bg-gray-50 p-3 text-left"
+              role="status"
+            >
+              <p className="text-sm font-medium text-gray-900">
+                {COPY.signinFallback.noBackupTitle}
+              </p>
               <p className="mt-1 text-sm text-gray-600">{COPY.signinFallback.noBackupBody}</p>
             </div>
           ) : (
