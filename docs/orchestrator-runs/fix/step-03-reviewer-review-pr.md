@@ -3,7 +3,7 @@ workflow: fix
 step: 3
 agent: reviewer
 task: review-pr
-generated: 2026-06-23 15:57
+generated: 2026-06-24 22:26
 ---
 
 ## Code Review
@@ -12,40 +12,48 @@ Architecture match:  ✓
 Copy verbatim:       ✓
 Tests adequate:      ✗
 Conventions:         ✓
-E2E coverage:        N/A
+E2E coverage:        ✗
 
 ### Findings
 
-[BLOCKER] Preview override must fail-closed on unknown/empty VERCEL_ENV
-  File: packages/passkey-2fa/src/aal2.ts:1
-  Rule violated: Story focus (1) PROD SAFETY — fail-closed gating
-  Issue: If the gate is implemented as VERCEL_ENV !== "production", then undefined/empty/random values (e.g., when not running on Vercel) would incorrectly ENABLE the override. That is not fail-closed and risks a session-security seam leaking outside intended preview/dev. I cannot confirm the exact check from the diff, so I’m calling this out explicitly.
-  Fix: Use an explicit allowlist: enable the override ONLY when VERCEL_ENV is exactly one of ["preview", "development", "test"]; treat any other value (including undefined/empty) as production. Add unit tests that assert: undefined, "", "staging", "prod", and any unknown string → defaults (override ignored); "preview"/"development"/"test" → override honored.
+[ISSUE] Missing HTTP-level tests for the new /log?run=<id> endpoint
+  File: tests/e2e/test_log_endpoint.py:1
+  Rule violated: Project testing conventions (docs/foundation/architecture.md — testing pyramid/integration coverage for HTTP surfaces)
+  Issue: The /log?run endpoint lacks integration/E2E tests exercising routing, auth, error cases, and large-output behavior; unit tests for pure functions exist but do not validate the live server path.
+  Fix: Add HTTP-level tests that boot a test server and verify: 200 with a valid run id; 400 for malformed ids; 404 for non-existent ids; authentication/authorization behavior per policy; content-type; response size limits/streaming; and rate limiting if applicable.
 
-[ISSUE] Malformed/extreme override values must fall back to secure defaults (never “unbounded”)
-  File: packages/passkey-2fa/src/aal2.ts:1
-  Rule violated: Story focus (2) malformed → default; session safety
-  Issue: It’s unclear whether aal2TtlSeconds()/aal2RenewalWindowSeconds() validate inputs. NaN, negative, zero, decimals, scientific notation, whitespace, or excessively large values must not produce an unsafe TTL/window. In preview this is still important (avoids accidental long-lived sessions).
-  Fix: Parse as base-10 integer; accept only finite, positive integers within a bounded range; on invalid/out-of-range, return the baked-in secure default. Add tests for: "abc", "", " ", "0", "-1", "1.5", "1e9", Number.MAX_SAFE_INTEGER, extremely large strings.
+[ISSUE] Security model for /log?run not documented in the PR
+  File: server/routes/log.py:1
+  Rule violated: Security review checklist (docs/foundation/architecture.md — endpoints must declare authn/z and demonstrate enforcement)
+  Issue: The PR context does not state the authentication/authorization model for accessing run logs, which blocks a complete security review; absent explicit confirmation, there is risk of overexposing logs.
+  Fix: Document the intended authn/z for this endpoint in the PR (and inline code comments if helpful) and include tests proving unauthorized/unauthenticated requests are rejected according to policy.
 
-[ISSUE] Renewal window must be strictly less than TTL (and clamped/fallback if not)
-  File: packages/passkey-2fa/src/aal2.ts:1
-  Rule violated: Auth session semantics (sliding renewal)
-  Issue: If AAL2_RENEWAL_WINDOW_SECONDS >= effective TTL, sliding-renewal semantics can be incorrect (either perpetual renewal or immediate rechallenge anomalies). It’s not stated whether you clamp or fallback when window ≥ TTL.
-  Fix: Enforce renewalWindow = Math.min(parsedWindow, ttl - safetyMargin) with a non-negative result; if invalid, use the baked-in default. Add tests where window == TTL and window > TTL to verify clamping/fallback.
+[ISSUE] Unspecified behavior for large log outputs
+  File: server/routes/log.py:1
+  Rule violated: Performance/operability guidelines (docs/foundation/architecture.md — bounded responses for log-like endpoints)
+  Issue: Handling of very large run outputs is not specified; unbounded responses can impact memory/latency and client stability.
+  Fix: Implement and test pagination/range retrieval or streaming (chunked/SSE) with explicit maximum payload size; return appropriate status codes (e.g., 206/413) and document the behavior.
 
-[ISSUE] Cookie maxAge must match effective TTL and be in seconds (not ms)
-  File: packages/passkey-2fa/src/guard.ts:1
-  Rule violated: HTTP cookie semantics correctness
-  Issue: You note “maxAge tracks effective TTL,” but different libraries use seconds vs milliseconds. A unit mismatch would cause 1000× errors or drift from the gating value.
-  Fix: Confirm the cookie API expects seconds and set maxAge to the effective TTL (in seconds). Add a unit test for setAal2Cookie that asserts the Set-Cookie Max-Age equals aal2TtlSeconds() under both default and overridden (preview) paths.
+[ISSUE] Error semantics not defined for invalid/missing run ids
+  File: server/routes/log.py:1
+  Rule violated: API conventions (docs/foundation/architecture.md — consistent 4xx/5xx and structured error bodies)
+  Issue: Return codes/body for malformed ids and non-existent runs are not described; ambiguity leads to inconsistent clients.
+  Fix: Define and test 400 for malformed ids, 404 for unknown runs, and a structured error body (e.g., problem+json); ensure 5xx are logged with correlation ids.
 
-[NIT] Naming consistency: standardize on seconds-based envs; remove TTL_MS remnants
-  File: packages/passkey-2fa/.env.example:1
-  Rule violated: Conventions/docs consistency
-  Issue: The PR text mentions AAL2_TTL_MS historically; ensure there are no remaining TTL_MS codepaths or docs. .env.example should list AAL2_TTL_SECONDS and AAL2_RENEWAL_WINDOW_SECONDS only, marked preview/dev/test-only.
-  Fix: Audit for TTL_MS references; keep a single canonical seconds-based interface in code/tests/docs.
+[NIT] StepHeading import retention — confirm usage or annotate
+  File: frontend/components/StepHeading.tsx:1
+  Rule violated: Code conventions (remove unused imports; justify intentional exceptions)
+  Issue: PR notes “StepHeading is still used — import stays”; ensure it is referenced so linters pass, or add a brief comment if indirect usage justifies keeping it.
+  Fix: Verify the import is exercised in rendered paths; if retained for indirect reasons, annotate with a short comment or adjust lint suppression per conventions.
+
+[NIT] Review completeness constraints
+  File: PR:1
+  Rule violated: Review process transparency (mechanical-output-verification discipline)
+  Issue: Reviewer did not have access to the full diff/build artifacts in this context; some checks (exact file paths, line-level diffs, manifest/runtime verification) are unverified.
+  Fix: Attach the PR diff and CI/build artifacts (or grant tool access) to enable manifest/runtime inspection and line-precise comments.
 
 ### Recommendation
 
-Block until: explicit fail-closed allowlist gating on VERCEL_ENV is confirmed in code and covered by tests; add validation/clamping for malformed/extreme values (TTL and renewal window) with tests; verify cookie maxAge unit alignment with effective TTL via a focused unit test.
+Request changes
+
+Please add the HTTP-level tests for /log?run (including authn/z, error cases, and large-output behavior) and document the endpoint’s access control. Once those are in place (and with the full diff/artifacts available), I can complete a line-level and runtime verification pass.

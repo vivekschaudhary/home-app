@@ -83,7 +83,6 @@ export function SignInFlow() {
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
   const challengeHeadingRef = useRef<HTMLHeadingElement>(null);
-  const successHeadingRef = useRef<HTMLHeadingElement>(null);
   const codeRef = useRef<HTMLInputElement>(null);
   // Guards against concurrent challenges — e.g. React StrictMode double-invoking
   // the auto-challenge effect in dev would otherwise race two ceremonies.
@@ -124,12 +123,6 @@ export function SignInFlow() {
       setSubStep("totp");
     }
   }, [step, passkeysSupported, factors, subStep]);
-
-  // Move focus to the success heading once the second factor clears so screen
-  // readers announce the welcome state instead of the now-removed prompt.
-  useEffect(() => {
-    if (success) successHeadingRef.current?.focus();
-  }, [success]);
 
   async function onTotpSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -233,7 +226,6 @@ export function SignInFlow() {
   if (success) {
     return (
       <AuthCard>
-        <StepHeading ref={successHeadingRef}>{COPY.signinSuccess}</StepHeading>
         <Toast message={COPY.signinSuccess} />
       </AuthCard>
     );
