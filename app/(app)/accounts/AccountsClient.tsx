@@ -10,6 +10,7 @@ import {
   disconnectConnection,
   fetchConnections,
   startLink,
+  triggerRefresh,
 } from "@/app/lib/aggregation-client";
 import { COPY } from "@/app/lib/copy";
 import { isImporting, statusFor } from "./import-state";
@@ -45,22 +46,28 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [disconnectTarget, setDisconnectTarget] = useState<ConnectionView | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const preSyncRef = useRef<Map<string, string | null>>(new Map());
 
   const refresh = useCallback(async () => {
     setConnections(await fetchConnections());
   }, []);
 
-  // Reconcile with the live server state on mount (#36). This page is
-  // force-dynamic and changes out-of-band — the connect modal, background sync —
-  // and Next can hand a STALE prefetched payload (e.g. cached while the user had
-  // no accounts, before connecting). Without this, an empty/stale initial render
-  // persists on navigate-back and never recovers; trusting `initialConnections`
-  // forever is the bug. The server render stays the fast first paint; this
-  // guarantees correctness.
+  // On mount: reconcile with live DB state, snapshot the current lastSyncedAt
+  // values, then fire a background balance refresh via Inngest. Sequenced so the
+  // snapshot reflects the actual DB state at trigger time (not the SSR payload,
+  // which could lag if Next.js served a prefetched version).
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    void (async () => {
+      const current = await fetchConnections();
+      setConnections(current);
+      preSyncRef.current = new Map(current.map((c) => [c.connectionId, c.lastSyncedAt]));
+      const triggered = await triggerRefresh();
+      if (triggered) setSyncing(true);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // While ANY connection is still in its import window, poll so transactions +
   // the settled state surface. Server-derived (created_at) → this resumes after
@@ -73,6 +80,35 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
     }, 3000);
     return () => clearInterval(t);
   }, [anyImporting, refresh]);
+
+  // While syncing (background balance refresh): poll every 5 s. Skip when
+  // anyImporting — that 3 s interval covers it.
+  useEffect(() => {
+    if (!syncing || anyImporting) return;
+    const id = setInterval(() => void refresh(), 5000);
+    return () => clearInterval(id);
+  }, [syncing, anyImporting, refresh]);
+
+  // Hard stop: give up waiting after 120 s regardless of whether we detected
+  // a lastSyncedAt change (covers slow or silently-failed Inngest jobs).
+  useEffect(() => {
+    if (!syncing) return;
+    const t = setTimeout(() => setSyncing(false), 120_000);
+    return () => clearTimeout(t);
+  }, [syncing]);
+
+  // Detect sync completion: the Inngest job updates last_synced_at once it has
+  // written fresh balances — any change past the pre-trigger snapshot means the
+  // page is now showing current data.
+  useEffect(() => {
+    if (!syncing) return;
+    const snapshot = preSyncRef.current;
+    const done = connections.some((c) => {
+      const prev = snapshot.get(c.connectionId) ?? null;
+      return c.lastSyncedAt !== null && c.lastSyncedAt !== prev;
+    });
+    if (done) setSyncing(false);
+  }, [connections, syncing]);
 
   const onPlaidSuccess = useCallback(
     async (publicToken: string) => {
@@ -192,6 +228,10 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
             {anyImporting ? (
               <p aria-live="polite" className="text-sm text-gray-500">
                 {COPY.accounts.importingNote}
+              </p>
+            ) : syncing ? (
+              <p aria-live="polite" className="text-sm text-gray-500">
+                {COPY.accounts.syncing}
               </p>
             ) : null}
             <div className="max-w-xs">
