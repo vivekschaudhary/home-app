@@ -1,0 +1,171 @@
+---
+id: WLT-26-ARCH
+bet: WLT-26
+status: proposed
+created: 2026-06-25
+authors: [Architect, Enterprise/Solution Architect]
+area_tags: [frontend, backend, data, spending, dashboard]
+---
+
+# Technical Design: Dashboard Intelligence — Transaction Anomalies + Category Spend Insights
+
+## Decision
+
+Build both sub-features by **reusing the shipped anomaly substrate** (the WLT-15/18 `anomalies` table + the daily Inngest scan) and the **shipped hand-rolled-SVG chart pattern** (`YearSpread.tsx`) — **no new table, no new charting dependency**.
+
+- **Sub-feature A (anomalies):** add two new `kind`s — `new_merchant` and `category_spike` — to the pure detector `packages/core/anomaly.ts` and the daily scan `packages/jobs/recap/anomaly-scan.ts`. They persist to the existing `anomalies` table (service-role INSERT, off the request path — the foundation's stated reason for Inngest). **Dismiss reuses the existing owner-`status`-only mechanism** (`status='dismissed'`, trigger-enforced) — there is **no** `anomaly_dismissals` table and **no** `transaction_flags` extension. **Monthly suppression** is the existing `dedup_key` idiom: `category_spike` encodes the month (re-evaluates next month, exactly like the shipped `low_balance`); `new_merchant` keys on the debut transaction's stable `dedup_key` (a merchant is "new" once — permanent, exactly like the shipped `large_charge`). The dashboard reads open anomalies of these two kinds and renders an **Anomaly panel**; dismiss → the existing `PATCH /api/anomaly/[id]` route. PII posture is preserved: `summary` stays amounts/enums/date only — the merchant name for a `new_merchant` row is resolved **at read time** by joining the live transaction on `dedup_key`, never stored in `anomalies`.
+- **Sub-feature B (category chart):** a **top-10-categories bar chart with a rolling-average reference line**, rendered with the **existing custom-SVG idiom** (`YearSpread.tsx` already draws bars + a dashed reference line for the budget `cap`) — **Recharts is declined** (it would be an unnecessary foundational-stack deviation; the established pattern already covers bar + line). The aggregation reuses the **budget read+pure-compute pattern**: an owner-scoped `readAllPaged` transactions read bounded to a rolling 6-month window, aggregated by a new pure `@wealth/core` compute (the median/trailing-month machinery in `budget.ts`), top-10 applied after aggregation. Each bar links to the **WLT-23 ledger** at `/transactions?category=<resolved>&month=<YYYY-MM>` (additive plumbing on the shipped category filter).
+
+Everything is **within the foundational stack** (Postgres + RLS + Route Handlers + Inngest + the existing React/Tailwind/SVG frontend). **No new tool, service, framework, data store, runtime, or major dependency.**
+
+## Context
+
+- **The anomaly substrate already exists and already does what the brief asked a new table to do.** `supabase/migrations/0009_anomalies.sql` ships the foundational `Anomaly` entity with: `dedup_key` idempotency (`unique(user_id, dedup_key)`), a `status` lifecycle (`open/surfaced/acted/dismissed`), an **owner-`status`-only UPDATE trigger** (`anomalies_status_only` — the user may dismiss, nothing else), a same-user composite FK to `financial_accounts`, a **PII-free `summary` jsonb** (amounts/enums/date — *no merchant/description*), and a `metrics_anomaly_weekly` view that already computes the **detect/surface/act/dismiss counts** — i.e. the brief's "<50% dismiss rate" guardrail is **already measurable**. The daily Inngest scan (`packages/jobs/recap/anomaly-scan.ts`, cron `0 9 * * *`) fans out over active-connection users, feeds the pure `detectAnomalies(...)` rules the user's resolved-category transactions + balances, and `upsert(... onConflict: user_id,dedup_key, ignoreDuplicates)`. The brief proposed a fresh `anomaly_dismissals` table and weighed it only against `transaction_flags`; it did **not** account for this shipped substrate. The brief explicitly deferred the dismissal data model + suppression semantics to the Architect (brief open-questions #2, the DRI Issue, and "Owner: Architect to confirm at architecture pass") — this design exercises that mandate.
+- **Charts are hand-rolled SVG with no charting dependency — by precedent.** `app/(app)/budget/YearSpread.tsx` is a custom SVG bar chart (its header comment: *"drawn as a custom SVG bar chart (no charting dependency)"*) that **already draws a dashed horizontal reference line** for the budget `cap` (`<line ... strokeDasharray="3 3">`) plus the load-bearing a11y pattern (`aria-hidden` SVG + an `sr-only` data table). The brief's "Recharts `ComposedChart` (bar + reference line)" is exactly this, already solved in-stack. No charting library exists anywhere in the repo (`grep -ri recharts` → none).
+- **The ledger filter is shipped and partially ready.** `readTransactionsPage(userId, opts)` (`app/lib/transactions.ts`) already accepts a **resolved-`category`** filter with a bounded over-fetch keyset scan (WLT-23-2). It does **not** yet accept a `month` filter, and `app/(app)/transactions/page.tsx` does not yet read `searchParams`. Both are small additive extensions.
+- **Patterns to reuse (all shipped):** the daily anomaly scan + pure detector (`@wealth/core/anomaly.ts`); `effectiveCategory` + `readCategoryAssignments` + `readCategorySpendingFlags` (resolve the user's category, drop transfers/payments — the WLT-22 discipline already applied inside the scan); `normalizeMerchant` (WLT-22-3/4) for new-merchant grouping; `readAllPaged` (the 1000-row-cap guardrail, `@wealth/db/paged`); the budget pure-compute machinery (`computeMonthlySeries`, `median`, `trailingMonths` in `@wealth/core/budget.ts`); `FUNNEL_EVENTS.ANOMALY_SURFACED` / `ANOMALY_DISMISSED` (already defined); the YearSpread SVG + a11y pattern; OPS-2 migrate-on-deploy + the WLT-25 constraint-rename verification discipline.
+- **Foundational-stack deviation gate: PASS (cleared, no deviation).** The one item that *would* deviate — adding **Recharts** as a charting framework — is **declined** in favor of the in-stack custom-SVG pattern. No new table is introduced (the existing Postgres `anomalies` table is reused). The detection extension rides the existing Inngest job. Therefore **no `/setup-foundation-architecture` amendment is required.** (Had Recharts been adopted, it would have required an ADR amendment first — logged in role-activity as a deviation-pressure instance.)
+
+## Approach
+
+### Components affected
+
+- **`packages/core/anomaly.ts`** (edit) — extend the pure detector:
+  - Add `merchant?: string | null` and `dedupKey: string` to `AnomalyTxn` (the scan already `select`s `dedup_key`).
+  - New rule `newMerchants(...)`: group debits in the window by `normalizeMerchant(merchant)`; a merchant whose **earliest** in-window occurrence is within the recent flag window AND has **no prior occurrence before the window** is a debut. Emit one candidate per debut, `kind:'new_merchant'`, `severity:'info'`, `transactionId = debutTxn.id`, `dedupKey = 'new_merchant:' + debutTxn.dedupKey` (CDC-stable, PII-free), `summary = { amount, date }` (**no merchant** — resolved at read).
+  - New rule `categorySpikes(...)`: per resolved category, compute the **rolling N-month average** of monthly debit totals over the trailing window (reuse the `budget.ts` median/trailing-month logic); flag when the **current month so far is on pace to exceed `SPIKE_MULTIPLE` × that average** (start `SPIKE_MULTIPLE = 1.75`, in the conservative 1.5–2× band; an Engineer-escalation constant like the existing `LARGE_CHARGE_MULTIPLE`). `kind:'category_spike'`, `severity:'attention'`, `transactionId = null`, `dedupKey = 'category_spike:' + category + ':' + month`, `summary = { category: humanizeCategory(cat), amount: projected, baseline: avg, multiple }`.
+  - **History gate:** neither new rule emits for a user with **< 2 distinct months** of category history (a `MIN_HISTORY_MONTHS = 2` guard, mirroring `LARGE_CHARGE_MIN_HISTORY`) — the statistical-meaningfulness floor.
+- **`packages/jobs/recap/anomaly-scan.ts`** (edit) — pass `merchant` + `dedupKey` into the `AnomalyTxn` mapping (the `select` already returns `dedup_key`; add `merchant`). No structural change — the new kinds flow through the existing `detectAnomalies → upsert(anomalies)` path with the existing idempotency.
+- **`supabase/migrations/0018_anomaly_kinds.sql`** (new) — one expand-only migration: **widen the `anomalies.kind` check constraint** from `('large_charge','recurring_due','low_balance')` to also admit `('new_merchant','category_spike')`. `drop constraint if exists` + re-add (verify the exact constraint name — default `anomalies_kind_check` — on an ephemeral Postgres first, per the WLT-25 discipline). **No new table, no new column, no RLS change** — the owner-SELECT, owner-`status`-only-UPDATE, service-role-INSERT policies + the status trigger already cover the new kinds.
+- **`app/lib/anomaly.ts`** (new, or extend `app/lib/recap.ts`) — `readDashboardAnomalies(userId)`: read **open/surfaced** anomalies where `kind in ('new_merchant','category_spike')`, owner-scoped (RLS), and for `new_merchant` rows **join the live transaction on the embedded `dedup_key`** (`removed_at is null and superseded_by is null`) to resolve the **current merchant name + amount for display** (keeping `anomalies.summary` PII-free). Emits `ANOMALY_SURFACED` once per newly-surfaced anomaly (the existing open→surfaced transition). Reuse `dismissAnomaly` (already in `app/lib/recap.ts`) for the dismiss path.
+- **`app/lib/dashboard-spend.ts`** (new) — `readCategorySpendChart(userId)`: an owner-scoped `readAllPaged` transactions read bounded to the rolling 6-month window, run through a new pure `@wealth/core` compute (below); returns the top-10 categories' current-month spend + the per-category rolling-average baseline + a `monthsOfHistory` count (drives the "N-month avg (N months)" label) + the ≥2-month gate flag.
+- **`packages/core/dashboard-spend.ts`** (new, pure) — `buildCategorySpendChart(txns, asOf) → { bars: { category, label, current, average }[]; monthsOfHistory }`: reuse `computeMonthlySeries` / `median` / `trailingMonths`; pick top-10 by current-month spend; average = mean (or median — see Open questions) of the prior complete months in the window; drop non-spending categories via `countsAsSpending` (WLT-22-5 discipline). Honest cold-start: average line suppressed entirely below 2 months; labeled "N-month avg" between 2–5 months.
+- **`app/(app)/dashboard/AnomalyPanel.tsx`** + **`CategorySpendChart.tsx`** (new) — `AnomalyPanel`: list open anomalies, each with a one-tap **Dismiss** (→ `PATCH /api/anomaly/[id]` `{status:'dismissed'}`) and an **Investigate** click-through; informational empty state below the 2-month gate ("We'll surface anomalies as you build history."). `CategorySpendChart`: the YearSpread SVG idiom — 10 bars + a dashed average reference line per the `cap`-line precedent + the `aria-hidden` SVG / `sr-only` table a11y pair; each bar is a link to `/transactions?category=<resolved>&month=<YYYY-MM>`.
+- **`app/(app)/dashboard/page.tsx`** (edit) — add a `DashboardIntelligence` section (two `Suspense` boundaries, like the existing `RecapSection` / `WorkflowSection`), behind a `DASHBOARD_INTELLIGENCE_ENABLED` flag (mirrors `RECAP_ENABLED`); `force-dynamic` + AAL2 already in place.
+- **`app/(app)/transactions/page.tsx`** (edit) — read `searchParams.category` + `searchParams.month` and pass to `readTransactionsPage`; emit the existing `TRANSACTIONS_VIEWED`.
+- **`app/lib/transactions.ts`** (edit) — add a `month?: string` (YYYY-MM) opt that bounds `occurred_on` to that calendar month, composing with the existing `category` filter's bounded keyset scan.
+- **`packages/core/funnel.ts`** (edit) — add `ANOMALY_INVESTIGATED: "anomaly_investigated"` and `CATEGORY_BAR_CLICKED: "category_bar_clicked"` (reuse the existing `ANOMALY_SURFACED` / `ANOMALY_DISMISSED`).
+- **`app/lib/copy.ts`** (edit) — the dashboard-intelligence copy block (panel titles, anomaly phrasings per kind, empty states, chart caption + a11y strings).
+- **Unchanged:** the `anomalies` RLS/trigger/RPC, the recap surface (it filters to its existing 3 kinds — see orthogonality below), `transaction_flags` (untouched — the brief's "not `transaction_flags`" holds, and goes further: no new flag table either), the category/budget model.
+
+### Data model changes
+
+One expand-only migration, `0018_anomaly_kinds.sql` (OPS-2 auto-applies):
+
+```sql
+-- widen the kind domain to admit the two WLT-26 dashboard anomaly kinds.
+alter table anomalies drop constraint if exists anomalies_kind_check;  -- verify name on ephemeral PG first
+alter table anomalies add constraint anomalies_kind_check
+  check (kind in ('large_charge','recurring_due','low_balance','new_merchant','category_spike'));
+```
+
+- **No new table, no new column, no RLS/trigger change, no FK change.** The existing `unique(user_id, dedup_key)`, the owner-SELECT + owner-`status`-only-UPDATE policies, the `anomalies_status_only` trigger, and the service-role-only INSERT all apply unchanged to the new kinds.
+- **Suppression semantics (the load-bearing call, brief OQ#2):** `category_spike` → **monthly** (`dedup_key` carries `:<YYYY-MM>`; dismissing suppresses this month only; next month a fresh `dedup_key` re-evaluates on new data) — identical to the shipped `low_balance`. `new_merchant` → **permanent** (`dedup_key` carries the debut transaction's stable `dedup_key`; a merchant is new exactly once; dismiss = `status='dismissed'`, never re-surfaces) — identical to the shipped `large_charge` per-transaction keying. This directly satisfies the brief Risk "dismissal semantics mismatch": the UI labels each accordingly ("Dismiss for this month" vs "Got it").
+- **PII invariant preserved:** `anomalies.summary` continues to carry amounts/enums/date only. A `new_merchant`'s merchant name is **never** written to `anomalies` (not in `summary`, not in `dedup_key`); it is resolved at read by joining the live transaction on the CDC-stable `dedup_key`.
+
+### API / contract changes
+
+- **Dismiss — reuse, no change:** `PATCH /api/anomaly/[id]` `{status:'dismissed'}` already exists (AAL2, owner-scoped, idempotent). The Anomaly panel calls it directly.
+- **Investigate — no new endpoint:** the Investigate action is a **client navigation** to the ledger filter + an `ANOMALY_INVESTIGATED` funnel emit. It does **not** flip anomaly status and does **not** create a `workflow_run` (it deliberately does **not** reuse the `acted`/`complete_anomaly_review` path, which is the recap's WAWU-run flow). The anomaly stays open until dismissed.
+- **Anomaly panel read:** served inside the dashboard RSC (`readDashboardAnomalies`), no public endpoint — same shape as the recap read.
+- **Category chart read:** served inside the dashboard RSC (`readCategorySpendChart`), no public endpoint.
+- **Ledger filter — additive:** `app/(app)/transactions/page.tsx` gains `?category=` (already supported by the read) + `?month=YYYY-MM` (new opt on `readTransactionsPage`). Additive, backwards-compatible — no param = the shipped all-categories page-1 behaviour.
+
+### Dependencies
+
+**None new.** Reuses `@wealth/core` (`anomaly`, `budget` compute, `normalizeMerchant`, `funnel`), `@wealth/db` (`readAllPaged`, `readCategoryAssignments`, `readCategorySpendingFlags`, `emit`), Supabase (Postgres + RLS + AAL2), Inngest (the existing daily scan), and the shipped React/Tailwind/SVG frontend (`YearSpread` idiom, the WLT-23 ledger). **Recharts is explicitly not added** (see Decision + Alternatives).
+
+## Enterprise/Solution Architect input
+
+### Cross-system implications
+
+- **No new service, third-party, or boundary.** Detection rides the existing Inngest anomaly scan (off the request path — the foundation's Inngest rationale, architecture.md L32 "scheduled anomaly scans … must NOT run in a request path"). The dashboard reads are cheap indexed owner-scoped reads (`anomalies (user_id, status)` index already exists; the category aggregation is a bounded `readAllPaged` over a 6-month window).
+- **Orthogonality / surface separation (invariant).** The `anomalies` table now carries 5 kinds across **two surfaces**: the **recap card** reads its existing 3 kinds (`large_charge`/`recurring_due`/`low_balance`); the **dashboard intelligence panel** reads the 2 new kinds (`new_merchant`/`category_spike`). Both readers MUST filter by `kind` so neither surface leaks the other's anomalies. This is the load-bearing guard (a guard test asserts the recap read excludes the new kinds and vice-versa).
+- **Detection freshness is ≤ 1 day (deliberate).** Because detection runs in the daily scan (not at page load), a brand-new merchant or an emerging spike surfaces on the next scan cycle, not instantly. Acceptable: this is "is this month normal?" intelligence, not real-time fraud alerting; push/notifications are explicitly out of scope (brief). The recap already operates on this cadence.
+
+### Standards compliance
+
+Conforms fully to the foundation: the `Anomaly` entity + its service-role-INSERT / owner-status-only posture (architecture.md Foundational Data Model), default-deny RLS, AAL2-guarded routes, PII-free anomaly `summary`, the `readAllPaged` discipline, the hand-rolled-SVG + `sr-only` a11y chart pattern, and Inngest for scheduled detection. **No drift flagged.** The single deviation pressure (Recharts) was evaluated and **declined** to stay in-stack.
+
+### Cost / capacity / vendor lock-in
+
+- **Zero new variable cost.** No aggregation calls (detection is over already-ingested transactions); no new vendor; no new managed service. The detection adds two pure rules to an Inngest job that already runs daily — negligible compute.
+- **No new lock-in.** No charting-vendor coupling (declined), no new table to migrate. The performance guardrail (p95 < 200ms, architecture.md fitness function) is protected by keeping detection off the request path and bounding the category aggregation (rolling window + top-10), validated by **EXPLAIN ANALYZE** on the category read + the `(user_id, occurred_on, category)` index before launch.
+
+## Alternatives considered
+
+| Option | Pros | Cons | Why not chosen |
+|--------|------|------|----------------|
+| **Chosen — extend the `anomalies` table (2 new kinds) + reuse the SVG chart** | Reuses the whole shipped anomaly substrate (status-dismiss, dedup monthly-suppression, status-only trigger, `metrics_anomaly_weekly` dismiss-rate guardrail); detection off the request path → p95 trivially met; no new table; no charting dep; one expand-only migration | ≤ 1-day detection latency; both surfaces must filter by `kind` | — |
+| **Alt A — new `anomaly_dismissals` table + detect at dashboard-load (the brief's literal proposal)** | Instant detection; matches the brief verbatim | A **second, parallel** anomaly system redundant with the shipped `anomalies` substrate (two dismiss mechanisms, two metrics paths, two mental models — the exact fragmentation the WLT-24/25 substrate-reuse discipline exists to prevent); a per-load detection query on the hot dashboard path pressing the p95 FF | Rejected — strictly more surface for less reuse; the brief deferred this call to the Architect and was written without the `anomalies` substrate in view |
+| **Alt B — dismissals on `transaction_flags`** | One overlay substrate | Anomaly dismissal is a status on a detected row, not a per-transaction user overlay; couples unrelated concepts (the brief already rejected this) | Rejected (agrees with the brief) |
+| **Alt C — Recharts `ComposedChart`** | Less SVG to hand-write; declarative bar+line | A **new charting framework** = a foundational-stack deviation (requires an ADR amendment) for a chart the shipped `YearSpread` SVG idiom already expresses (bars + dashed reference line + the a11y pair) | Rejected — unnecessary deviation; declined at the deviation gate |
+| **Alt D — SQL `GROUP BY` aggregation RPC for the category chart** | Returns only buckets; smallest payload | A new SQL-function primitive diverging from the shipped budget read+pure-compute pattern; premature unless EXPLAIN ANALYZE proves the bounded row-read insufficient | Deferred — the documented escalation if the bounded `readAllPaged`+compute read misses p95 |
+
+## Consequences
+
+**Positive:**
+- Maximum reuse: the dismiss mechanism, monthly-suppression idiom, status-only trigger, RLS, dismiss-rate metric, and chart idiom are all already shipped + reviewed → low blast radius.
+- Detection stays off the request path (foundation-aligned) → the dashboard p95 fitness function is protected by construction (cheap indexed reads).
+- The brief's "<50% dismiss-rate" guardrail is **already instrumented** (`metrics_anomaly_weekly`) — no new measurement to build.
+- No new table, no new dependency, one tiny expand-only migration → trivially reversible, no foundational amendment.
+- The dismissal corpus (the moat increment, research row 3) accumulates in the existing `anomalies` table with structured `kind` + `dedup_key` + `status` + timestamps — the day-one structure the brief's Issue required.
+
+**Negative:**
+- ≤ 1-day detection latency (mitigated: acceptable for monthly-context intelligence; notifications are out of scope).
+- The `anomalies` table now multiplexes two surfaces → both readers must filter by `kind` (mitigated: a guard test pins the separation; `kind` is indexed via the composite intent of `(user_id, status)` + an added `kind` predicate).
+- New-merchant display requires a read-time join to the live transaction (mitigated: owner-scoped, bounded to the panel's handful of rows; preserves the PII-free `summary` invariant).
+- Spike detection on a 2–4-month window can mislead (mitigated: conservative 1.75× multiple, ≥2-month gate, one-tap dismiss as self-calibration, the dismiss-rate guardrail makes noisiness falsifiable fast).
+
+**Reversibility:** **easy** — the migration is an additive constraint-widening; the new kinds, readers, and surface are additive; nothing in the recap/category/budget/subscription/follow-up paths changes; declining Recharts means there is no dependency to unwind. If instant detection is later required, Alt A is an additive evolution (the read-time detector can write the same `anomalies` rows).
+
+## Test strategy
+
+- **Pure (`@wealth/core`, Engineer):** `newMerchants` — debut detection (first in-window occurrence, no prior history, normalized-merchant grouping; dedup_key references the debut `dedup_key`; summary carries no merchant); `categorySpikes` — projection vs rolling average, the 1.75× boundary, the ≥2-month gate, transfers/payments dropped; `buildCategorySpendChart` — top-10 selection, average = prior complete months, "N-month avg" labeling, line suppressed < 2 months, real zeros never fabricated.
+- **Integration / API (Engineer):** the scan inserts the new kinds idempotently (`on conflict do nothing`); `readDashboardAnomalies` resolves the `new_merchant` merchant via the live-transaction join + filters to the 2 kinds; the **recap read still excludes the new kinds** (the orthogonality guard); `PATCH /api/anomaly/[id]` `{dismissed}` suppresses a panel row; the ledger `?category=&month=` filter composes (bounded scan).
+- **Component (frontend, Engineer):** the Anomaly panel renders per-kind phrasing + one-tap dismiss + the ≥2-month empty state; `CategorySpendChart` renders 10 bars + the dashed average line + the `sr-only` data table (a11y parity with `YearSpread`); a bar click navigates to the ledger filter + emits `category_bar_clicked`.
+- **Codex (separate handoff):** the RLS coverage extension for the new kinds on `anomalies` (owner SELECT, owner status-only UPDATE/dismiss, service-role-only INSERT, cross-tenant deny — likely an extension of the existing `anomalies` suite, which already covers the table generically) + a **gated real-path E2E**: a new merchant / a spiking category surfaces on the dashboard → dismiss removes it → `category_spike` re-evaluates next month while `new_merchant` stays dismissed → a bar click lands on the filtered ledger → second-user isolation → survives a Plaid CDC revision (the `dedup_key` join holds).
+- **Performance:** **EXPLAIN ANALYZE** the category aggregation read + confirm the `(user_id, occurred_on, category)` index keeps the dashboard p95 < 200ms before launch (brief guardrail).
+
+## Rollout
+
+- **Feature flag?** **Yes** — `DASHBOARD_INTELLIGENCE_ENABLED` (default off), mirroring the shipped `RECAP_ENABLED` gate. Lets the operator dogfood + calibrate the spike multiple before the surface goes live, and protects against an unproven detector shipping noisy on day one. The surface is **additionally** gated on ≥2 months of data per user (the empty state).
+- **Migration?** Yes — `0018_anomaly_kinds.sql`, expand-only (constraint widen), OPS-2 auto-applies on deploy; verified on an ephemeral Postgres first (constraint-name discipline).
+- **Backwards compatibility?** Required + held — additive kinds, additive ledger params, additive surface; the recap and all existing anomaly consumers are untouched (they filter to their own kinds).
+- **Staged rollout?** Yes — (1) migration + scan extension + the new pure rules (dark, behind the flag); (2) the category chart (lower-risk, validates the read + index); (3) the anomaly panel + dismiss; flip `DASHBOARD_INTELLIGENCE_ENABLED` after operator calibration. Recommendation (research §171): land `new_merchant` before `category_spike` to validate the dismiss loop on the simpler boolean detector first.
+
+## Open questions for Engineer
+
+- **Average = mean or median?** The brief says "6-month rolling average"; the shipped budget recommendation uses **median** (robust to a one-off spike inflating its own baseline). Lean: **median** for the reference line, for consistency with the budget baseline + spike-robustness. Escalate if product wants a literal mean.
+- **Spike multiple constant** (`SPIKE_MULTIPLE`, start 1.75) and **`MIN_HISTORY_MONTHS`** (2) — tune in the pure compute; unit-test the boundaries. Do not make user-configurable (brief: out of scope).
+- **`new_merchant` debut window** — the recent-window that makes a first-occurrence "new" (lean: reuse the scan's existing recent-day horizon so a merchant first seen in the last week flags). Escalate the exact band rather than guessing silently.
+- **Category identity passed to the ledger filter** — the chart must pass the **resolved category name** the ledger's `category` opt consumes (not a raw Plaid key, unless they coincide). Confirm the exact param value against `readTransactionsPage`'s contract so the filter resolves.
+- Do **not** route Investigate through the `acted`/`complete_anomaly_review` RPC (that creates a recap WAWU run) — Investigate is navigation + a funnel emit only.
+
+## DRI Log
+
+### Decisions
+
+- [2026-06-25] [Architect] **Reuse the shipped `anomalies` table for the two new kinds; no `anomaly_dismissals` table, no `transaction_flags` extension** — rationale: the WLT-15/18 substrate already provides status-based dismiss, dedup-key monthly suppression, the owner-status-only trigger, RLS, and the `metrics_anomaly_weekly` dismiss-rate guardrail the brief asked for; a new table would be a second parallel anomaly system (the fragmentation the substrate-reuse discipline prevents) — area: data — alternatives: a new `anomaly_dismissals` table + dashboard-load detection (the brief's literal proposal — rejected as redundant, presses the p95 FF), dismissals on `transaction_flags` (rejected, agrees with the brief) — reversibility: easy (additive; Alt A remains an additive evolution). **Note:** the brief explicitly deferred this call to the Architect (OQ#2 + DRI Issue); this is the diverge-from-brief point, documented for HITL.
+- [2026-06-25] [Architect] **Detection runs in the existing daily Inngest scan (off the request path), not at dashboard load** — rationale: the foundation mandates scheduled anomaly scans off the request path (architecture.md L32); makes the dashboard read a cheap indexed status read → p95 < 200ms by construction — area: architecture/performance — alternatives: detect-at-read (rejected — presses the hot-path p95 FF) — reversibility: easy
+- [2026-06-25] [Architect] **Suppression: `category_spike` monthly (dedup_key month), `new_merchant` permanent (dedup_key on debut `dedup_key`)** — rationale: matches the shipped `low_balance` (monthly) and `large_charge` (per-transaction) idioms exactly; resolves brief OQ#2 — area: data/product — alternatives: all-permanent (rejected — a spike should re-evaluate on fresh monthly data) — reversibility: easy (dedup_key encoding)
+- [2026-06-25] [Architect/Enterprise Architect] **Decline Recharts; reuse the `YearSpread` custom-SVG idiom (bars + dashed reference line + `sr-only` a11y)** — rationale: the shipped chart pattern already expresses bar + reference line; a new charting framework is an unnecessary foundational-stack deviation; resolves brief OQ#5 — area: frontend/standards — alternatives: Recharts `ComposedChart` (rejected — deviation for no new capability), a SQL-aggregation RPC for the data (deferred — escalation only if the bounded read misses p95) — reversibility: easy (no dependency added)
+- [2026-06-25] [Architect] **Preserve the PII-free `anomalies.summary` invariant; resolve `new_merchant` merchant at read via the CDC-stable `dedup_key` join** — rationale: the merchant name (PII-adjacent per the 0009 posture) must not enter the anomalies table; the live-transaction join renders it for display, owner-scoped — area: security/data — alternatives: store merchant in `summary` (rejected — breaks the shipped PII posture) — reversibility: easy
+- [2026-06-25] [Architect] **No foundational-stack deviation; no `/setup-foundation-architecture` amendment** — rationale: Postgres + RLS + Route Handlers + the existing Inngest scan + the existing SVG frontend only; the one deviation pressure (Recharts) is declined — area: architecture/standards — reversibility: n/a
+
+### Risks
+
+- [2026-06-25] [Architect] **Surface cross-leak — a reader forgets to filter `kind`, so recap shows dashboard anomalies (or vice-versa)** — likelihood: low — impact: medium — mitigation: both readers filter by `kind`; an orthogonality guard test pins recap-excludes-new-kinds and panel-excludes-old-kinds — area: correctness
+- [2026-06-25] [Architect] **Spike false-positive on a thin 2–4-month window inverts trust (brief's primary risk)** — likelihood: medium — impact: high — mitigation: conservative 1.75× multiple, ≥2-month gate, one-tap dismiss as self-calibration, the existing `metrics_anomaly_weekly` dismiss-rate guardrail (<50%) makes noisiness falsifiable; the feature flag lets the operator calibrate before launch — area: product quality
+- [2026-06-25] [Architect] **Category aggregation read regresses dashboard p95** — likelihood: low (top-10 + 6-month window bound it) — impact: high (fitness-function violation) — mitigation: EXPLAIN ANALYZE + the `(user_id, occurred_on, category)` index before launch; the SQL-aggregation-RPC (Alt D) is the documented escalation — area: performance
+- [2026-06-25] [Architect] **New-merchant read-time join misses on CDC supersession** — likelihood: low — impact: low (the row just renders without the merchant) — mitigation: join on the CDC-stable `dedup_key` (`removed_at is null and superseded_by is null`); the dedup_key is the invariant identity by design — area: data
+
+### Issues
+
+- [2026-06-25] [Engineer] **Verify the `anomalies.kind` check-constraint name before the migration** — severity: low — owner: Engineer — status: open — area: data — the inline unnamed check defaults to `anomalies_kind_check`; confirm on an ephemeral PG and use `drop constraint if exists` + re-add (the WLT-25 migration-verification discipline).
+- [2026-06-25] [Architect] **`AnomalyTxn` gains a `merchant` field — confirm the scan's `select` adds `merchant`** — severity: low — owner: Engineer — status: open — area: data — the scan already selects `dedup_key`; add `merchant` to the `transactions` select + the `AnomalyTxn` map.
+- [2026-06-25] [Architect] **Divergence from the brief's `anomaly_dismissals` proposal is intentional and HITL-visible** — severity: medium — owner: operator (HITL) — status: open — area: data/process — the brief proposed a new table; this design reuses the shipped `anomalies` substrate instead (the brief deferred the call to the Architect). If the operator specifically wants instant (read-time) detection, Alt A is the documented path; otherwise approve this reuse.
+
+---
+
+_Status: proposed. Flip `status: proposed → status: approved` here and set the brief frontmatter `architecture_status: approved` when ready. Do not self-approve — this halts at the HITL gate._
