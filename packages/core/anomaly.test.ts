@@ -7,8 +7,8 @@ import { type AnomalyAccount, type AnomalyTxn, detectAnomalies } from "./anomaly
 
 const ASOF = "2026-06-15";
 
-function tx(id: string, occurredOn: string, amount: number, category = "GROCERIES", direction = "debit"): AnomalyTxn {
-  return { id, accountId: "acc1", occurredOn, amount, category, direction };
+function tx(id: string, occurredOn: string, amount: number, category = "GROCERIES", direction = "debit", merchant?: string): AnomalyTxn {
+  return { id, accountId: "acc1", dedupKey: id, occurredOn, amount, category, direction, merchant };
 }
 
 // A normal baseline: ~$50 groceries, several times, older than the recent window.
@@ -173,5 +173,226 @@ describe("detectAnomalies — low_balance", () => {
       asOf: ASOF,
     });
     expect(found).toHaveLength(0);
+  });
+});
+
+// ── WLT-26-2: new_merchant detector ──────────────────────────────────────────
+
+// Two months of grocery history — satisfies MIN_HISTORY_MONTHS = 2.
+function twoMonthHistory(): AnomalyTxn[] {
+  return [
+    tx("h1", "2026-04-10", 50, "GROCERIES", "debit", "WholeFoods"),
+    tx("h2", "2026-04-20", 55, "GROCERIES", "debit", "WholeFoods"),
+    tx("h3", "2026-05-10", 48, "GROCERIES", "debit", "WholeFoods"),
+    tx("h4", "2026-05-20", 52, "GROCERIES", "debit", "WholeFoods"),
+  ];
+}
+
+describe("detectAnomalies — new_merchant", () => {
+  it("fires on a debut merchant within the recent window", () => {
+    const newTxn = tx("new1", "2026-06-13", 30, "DINING", "debit", "Nobu Restaurant");
+    const found = detectAnomalies({
+      transactions: [...twoMonthHistory(), newTxn],
+      accounts: [],
+      asOf: ASOF,
+    });
+    const nm = found.filter((a) => a.kind === "new_merchant");
+    expect(nm).toHaveLength(1);
+    expect(nm[0].transactionId).toBe("new1");
+    expect(nm[0].dedupKey).toBe("new_merchant:new1"); // prefix + debut tx dedupKey
+    expect(nm[0].severity).toBe("info");
+    expect(nm[0].summary).toEqual({ amount: 30, date: "2026-06-13" });
+    expect(nm[0].summary).not.toHaveProperty("merchant"); // PII invariant
+  });
+
+  it("does NOT fire for a merchant with prior occurrences in the window", () => {
+    // WholeFoods appeared in April + May → not a debut when it appears in June.
+    const returning = tx("ret1", "2026-06-13", 60, "GROCERIES", "debit", "WholeFoods");
+    const found = detectAnomalies({
+      transactions: [...twoMonthHistory(), returning],
+      accounts: [],
+      asOf: ASOF,
+    });
+    expect(found.filter((a) => a.kind === "new_merchant")).toHaveLength(0);
+  });
+
+  it("does NOT fire when monthsOfHistory < 2", () => {
+    // Only one month of history → gate blocks detection.
+    const found = detectAnomalies({
+      transactions: [
+        tx("h1", "2026-06-01", 50, "GROCERIES", "debit", "WholeFoods"),
+        tx("new1", "2026-06-13", 30, "DINING", "debit", "Nobu Restaurant"),
+      ],
+      accounts: [],
+      asOf: ASOF,
+    });
+    expect(found.filter((a) => a.kind === "new_merchant")).toHaveLength(0);
+  });
+
+  it("does NOT fire for a merchant appearing only outside the recent window", () => {
+    // Debut in May (> 7 days before ASOF 2026-06-15) → not flagged.
+    const found = detectAnomalies({
+      transactions: [
+        ...twoMonthHistory(),
+        tx("old", "2026-05-30", 30, "DINING", "debit", "Nobu Restaurant"),
+      ],
+      accounts: [],
+      asOf: ASOF,
+    });
+    expect(found.filter((a) => a.kind === "new_merchant")).toHaveLength(0);
+  });
+
+  it("does NOT fire for transactions with no identifiable merchant", () => {
+    const noMerchant = tx("nm1", "2026-06-13", 30, "DINING", "debit", undefined);
+    const found = detectAnomalies({
+      transactions: [...twoMonthHistory(), noMerchant],
+      accounts: [],
+      asOf: ASOF,
+    });
+    expect(found.filter((a) => a.kind === "new_merchant")).toHaveLength(0);
+  });
+
+  it("uses dedupKey = 'new_merchant:' + debut transaction's dedupKey", () => {
+    const debutTx = tx("debut-dedup-key", "2026-06-14", 25, "DINING", "debit", "NewPlace");
+    const found = detectAnomalies({
+      transactions: [...twoMonthHistory(), debutTx],
+      accounts: [],
+      asOf: ASOF,
+    });
+    const nm = found.filter((a) => a.kind === "new_merchant");
+    expect(nm[0].dedupKey).toBe("new_merchant:debut-dedup-key");
+  });
+
+  it("normalizes merchant names — store-number variants of the same merchant count as one", () => {
+    // "WholeFoods" in history normalizes to "wholefoods".
+    // "Whole Foods #1234" → strip "#1234" (all-digit token) → "wholefoods" — same key, not a debut.
+    const variant = tx("var1", "2026-06-13", 60, "GROCERIES", "debit", "Whole Foods #1234");
+    const found = detectAnomalies({
+      transactions: [...twoMonthHistory(), variant],
+      accounts: [],
+      asOf: ASOF,
+    });
+    expect(found.filter((a) => a.kind === "new_merchant")).toHaveLength(0);
+  });
+});
+
+// ── WLT-26-2: category_spike detector ────────────────────────────────────────
+
+// asOf = 2026-06-15 → 15 days into June (31 days total → projection × (30/15) = 2×).
+describe("detectAnomalies — category_spike", () => {
+  // Prior April + May grocery totals = 100 each → median = 100.
+  function twoMonthCategoryHistory(): AnomalyTxn[] {
+    return [
+      tx("g1", "2026-04-10", 60, "GROCERIES"),
+      tx("g2", "2026-04-20", 40, "GROCERIES"), // April total = 100
+      tx("g3", "2026-05-10", 55, "GROCERIES"),
+      tx("g4", "2026-05-20", 45, "GROCERIES"), // May total = 100
+    ];
+  }
+
+  it("fires when current-month projection >= 1.75× the median of prior months", () => {
+    // June so far: 90 (day 15 of 30) → projection = 90 × (30/15) = 180 = 1.8× median 100.
+    const found = detectAnomalies({
+      transactions: [
+        ...twoMonthCategoryHistory(),
+        tx("cur1", "2026-06-10", 50, "GROCERIES"),
+        tx("cur2", "2026-06-14", 40, "GROCERIES"), // current total = 90
+      ],
+      accounts: [],
+      asOf: ASOF, // 2026-06-15
+    });
+    const cs = found.filter((a) => a.kind === "category_spike");
+    expect(cs).toHaveLength(1);
+    expect(cs[0].severity).toBe("attention");
+    expect(cs[0].transactionId).toBeNull();
+    expect(cs[0].accountId).toBeNull();
+    expect(cs[0].dedupKey).toBe("category_spike:GROCERIES:2026-06");
+    const s = cs[0].summary as { category: string; amount: number; baseline: number; multiple: number };
+    expect(s.category).toBe("Groceries");
+    expect(s.baseline).toBe(100);
+    expect(s.amount).toBeGreaterThan(175); // 180 projected
+    expect(s.multiple).toBeGreaterThanOrEqual(1.75);
+  });
+
+  it("does NOT fire when projection < 1.75× the median", () => {
+    // June total 70 / 15 days × 30 = 140 = 1.4× median 100 → below threshold.
+    const found = detectAnomalies({
+      transactions: [
+        ...twoMonthCategoryHistory(),
+        tx("cur1", "2026-06-14", 70, "GROCERIES"), // projected = 140
+      ],
+      accounts: [],
+      asOf: ASOF,
+    });
+    expect(found.filter((a) => a.kind === "category_spike")).toHaveLength(0);
+  });
+
+  it("does NOT fire when fewer than 2 prior complete months for that category", () => {
+    // Only one prior month (May) → not enough history.
+    const found = detectAnomalies({
+      transactions: [
+        tx("g3", "2026-05-10", 55, "GROCERIES"),
+        tx("g4", "2026-05-20", 45, "GROCERIES"), // only May
+        tx("cur1", "2026-06-14", 90, "GROCERIES"),
+      ],
+      accounts: [],
+      asOf: ASOF,
+    });
+    expect(found.filter((a) => a.kind === "category_spike")).toHaveLength(0);
+  });
+
+  it("does NOT fire when the category baseline is zero or negative", () => {
+    // Prior months with $0 total (no debits counted) — no baseline to compare against.
+    // In practice this means priorTotals = [] (no entries), already guarded by MIN_HISTORY.
+    // Separately, a median of 0 is explicitly guarded.
+    const found = detectAnomalies({
+      transactions: [
+        tx("g1", "2026-04-10", 0, "GROCERIES"),
+        tx("g2", "2026-05-10", 0, "GROCERIES"),
+        tx("cur1", "2026-06-14", 90, "GROCERIES"),
+      ],
+      accounts: [],
+      asOf: ASOF,
+    });
+    // Zero-amount prior transactions → median = 0 → no spike (guard holds).
+    expect(found.filter((a) => a.kind === "category_spike")).toHaveLength(0);
+  });
+
+  it("encodes the current YYYY-MM month in the dedupKey (monthly suppression)", () => {
+    const found = detectAnomalies({
+      transactions: [
+        ...twoMonthCategoryHistory(),
+        tx("cur1", "2026-06-14", 90, "GROCERIES"),
+      ],
+      accounts: [],
+      asOf: ASOF,
+    });
+    const cs = found.filter((a) => a.kind === "category_spike");
+    expect(cs[0].dedupKey).toMatch(/^category_spike:GROCERIES:2026-06$/);
+  });
+
+  it("projection formula is correct: currentTotal × (daysInMonth / dayOfMonth)", () => {
+    // asOf = 2026-06-15 (day 15; June = 30 days). Current = 87.5 → projected 175 = exactly 1.75×.
+    const found = detectAnomalies({
+      transactions: [
+        ...twoMonthCategoryHistory(),
+        tx("cur1", "2026-06-14", 87.5, "GROCERIES"),
+      ],
+      accounts: [],
+      asOf: "2026-06-15",
+    });
+    const cs = found.filter((a) => a.kind === "category_spike");
+    // 87.5 × (30/15) = 175 = exactly 1.75 × 100 → fires at boundary.
+    expect(cs).toHaveLength(1);
+    expect((cs[0].summary as { amount: number }).amount).toBe(175);
+  });
+
+  it("does NOT fire when the current month has no transactions in that category", () => {
+    const found = detectAnomalies({
+      transactions: twoMonthCategoryHistory(), // no June transactions
+      accounts: [],
+      asOf: ASOF,
+    });
+    expect(found.filter((a) => a.kind === "category_spike")).toHaveLength(0);
   });
 });
