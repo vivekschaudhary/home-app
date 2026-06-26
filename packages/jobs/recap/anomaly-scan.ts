@@ -41,7 +41,7 @@ export const anomalyScanDaily = inngest.createFunction(
         const [{ data: txRows }, { data: acctRows }, assignments, spendingFlags] = await Promise.all([
           svc
             .from("transactions")
-            .select("id, account_id, dedup_key, direction, category, amount, occurred_on")
+            .select("id, account_id, dedup_key, direction, category, amount, occurred_on, merchant")
             .eq("user_id", userId)
             .is("removed_at", null)
             .is("superseded_by", null)
@@ -59,10 +59,12 @@ export const anomalyScanDaily = inngest.createFunction(
 
         const transactions: AnomalyTxn[] = (txRows ?? [])
           .map((r) => {
-            const row = r as { id: string; account_id: string; dedup_key: string; direction: string; category: string | null; amount: number | string; occurred_on: string };
+            const row = r as { id: string; account_id: string; dedup_key: string; direction: string; category: string | null; amount: number | string; occurred_on: string; merchant: string | null };
             return {
               id: row.id,
               accountId: row.account_id,
+              dedupKey: row.dedup_key, // WLT-26-2 — needed by newMerchants rule
+              merchant: row.merchant ?? null, // WLT-26-2 — resolved at display; never stored in summary
               direction: row.direction,
               category: effectiveCategory(row.category, assignments.get(row.dedup_key)),
               amount: Number(row.amount),

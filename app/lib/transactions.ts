@@ -102,9 +102,12 @@ type TxnRow = {
 };
 const SELECT_COLS = "id, occurred_on, merchant, description, amount, direction, category, dedup_key, pending, account_id";
 
+// WLT-26-1 — YYYY-MM month value: exactly 7 chars, digits + hyphen.
+const MONTH_RE = /^\d{4}-\d{2}$/;
+
 export async function readTransactionsPage(
   userId: string,
-  opts: { cursor?: string | null; search?: string | null; accountId?: string | null; category?: string | null; followup?: "open" | "done" | null; limit?: number } = {},
+  opts: { cursor?: string | null; search?: string | null; accountId?: string | null; category?: string | null; month?: string | null; followup?: "open" | "done" | null; limit?: number } = {},
 ): Promise<TransactionsPageResult> {
   const supabase = await createServerSupabase();
   const limit = clampLimit(opts.limit);
@@ -115,6 +118,9 @@ export async function readTransactionsPage(
   // Category filter (RESOLVED name): present (incl. "" = the Other bucket) = a
   // filter; null/undefined = all categories.
   const category = opts.category ?? null;
+  // WLT-26-1 — Month filter: 'YYYY-MM' bounds occurred_on to that calendar month.
+  // Invalid/malformed values are ignored (treated as absent).
+  const month = opts.month && MONTH_RE.test(opts.month) ? opts.month : null;
   // WLT-25-1/2 — the "Follow-ups" filter: 'open' | 'done' keeps only rows in that
   // follow-up state; null = off. Composes with account/category/search via the
   // same bounded scan.
@@ -156,6 +162,19 @@ export async function readTransactionsPage(
     followupStatus: followupStatuses.get(r.dedup_key) ?? null, // WLT-25-1/2 — open | done | null
   });
 
+  // WLT-26-1 — month filter bounds: first and last calendar day of the YYYY-MM.
+  // Computed once; used in fetchChunk and the direct path below.
+  let monthStart: string | null = null;
+  let monthEnd: string | null = null;
+  if (month) {
+    monthStart = `${month}-01`;
+    // Last day: first day of next month minus 1 day, computed via Date arithmetic.
+    const [y, m] = month.split("-").map(Number);
+    const nextMonth = new Date(Date.UTC(y, m, 1)); // m is 1-based; Date.UTC(y, m, 1) = first of next month
+    nextMonth.setUTCDate(nextMonth.getUTCDate() - 1);
+    monthEnd = nextMonth.toISOString().slice(0, 10);
+  }
+
   // One keyset chunk starting strictly after `from` — account + search applied in
   // SQL (keyset-safe; `from` is a validated date+uuid).
   const fetchChunk = (from: { occurredOn: string; id: string } | null, take: number) => {
@@ -167,13 +186,16 @@ export async function readTransactionsPage(
       .order("id", { ascending: false })
       .limit(take);
     if (accountId) q = q.eq("account_id", accountId);
+    if (monthStart && monthEnd) {
+      q = q.gte("occurred_on", monthStart).lte("occurred_on", monthEnd);
+    }
     if (from) q = q.or(`occurred_on.lt.${from.occurredOn},and(occurred_on.eq.${from.occurredOn},id.lt.${from.id})`);
     if (search) q = q.or(`merchant.ilike.%${search}%,description.ilike.%${search}%`);
     return q;
   };
 
   // No resolved-category / follow-up filter → the simple keyset path (the common case;
-  // the WLT-23-1 shape). Both in-memory filters share the bounded scan below.
+  // the WLT-23-1 shape; month filter applied in fetchChunk via SQL bounds).
   if (category === null && followup === null) {
     const { data, error } = await fetchChunk(decodeCursor(opts.cursor), limit + 1);
     if (error) return { ok: false };

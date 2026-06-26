@@ -687,4 +687,25 @@ export const COPY = {
     colCategory: "Category",
     colAccount: "Account",
   },
+  // WLT-26-1 — Category spend chart + WLT-26-2 — Anomaly panel (dashboard intelligence).
+  dashboardIntelligence: {
+    // WLT-26-1 category chart
+    categoryChartTitle: "Spending this month",
+    categoryChartEmptyNoHistory: "We'll show your spending trends as you build history.",
+    categoryChartEmptyNoSpend: "No spending this month.",
+    categoryBarClickedSrLabel: "View {category} transactions for {month}",
+    categoryChartTableCaption: "Category spending this month vs. recent average",
+    // WLT-26-2 anomaly panel
+    anomalyPanelTitle: "Flagged for review",
+    anomalyKindNewMerchant: "New merchant: {merchantName}",
+    anomalyKindNewMerchantUnknown: "New merchant — we couldn't identify it",
+    anomalyKindCategorySpike: "{categoryLabel} is on pace to run {multipleLabel}× your typical spend this month.",
+    anomalyDismissNewMerchant: "Got it",
+    anomalyDismissNewMerchantSrLabel: "Got it — don't flag {merchantName} again",
+    anomalyDismissMonthly: "Dismiss for this month",
+    anomalyDismissMonthlySrLabel: "Dismiss {category} spike for {month}",
+    anomalyInvestigate: "See transactions",
+    anomalyEmptyNoHistory: "We'll surface anomalies as you build history.",
+    anomalyEmptyNoAnomalies: "Nothing unusual to flag right now.",
+  },
 } as const;

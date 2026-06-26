@@ -72,6 +72,10 @@ export const FUNNEL_EVENTS = {
   // WLT-25-2 — a user re-opened a resolved follow-up (Done → Open). Distinct from
   // _flagged so the "changed my mind" signal is separable from a fresh flag.
   TRANSACTION_FOLLOWUP_REOPENED: "transaction_followup_reopened",
+  // WLT-26-1 — a user clicked a category bar on the dashboard spend chart → ledger.
+  CATEGORY_BAR_CLICKED: "category_bar_clicked",
+  // WLT-26-2 — a user clicked "See transactions" on a dashboard anomaly panel row.
+  ANOMALY_INVESTIGATED: "anomaly_investigated",
 } as const;
 
 export type FunnelEvent = (typeof FUNNEL_EVENTS)[keyof typeof FUNNEL_EVENTS];

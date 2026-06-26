@@ -10,11 +10,19 @@ import { TransactionsClient } from "./TransactionsClient";
 // requireAal2() here is the per-page belt-and-suspenders + supplies the userId.
 // Read page 1 server-side on every load (force-dynamic → reconcile-on-load, the
 // real session→RLS→render seam, #36); search + Load-more go through the route.
+//
+// WLT-26-1: searchParams.category + searchParams.month (YYYY-MM) are passed to the
+// initial read so a bar-chart click lands on the pre-filtered ledger page.
 export const dynamic = "force-dynamic";
 
-export default async function TransactionsPage() {
+export default async function TransactionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ category?: string; month?: string }>;
+}) {
   const userId = await requireAal2();
-  const result = await readTransactionsPage(userId);
+  const { category, month } = await searchParams;
+  const result = await readTransactionsPage(userId, { category: category ?? null, month: month ?? null });
   await emitFunnel(FUNNEL_EVENTS.TRANSACTIONS_VIEWED, userId, {});
 
   const C = COPY.transactions;

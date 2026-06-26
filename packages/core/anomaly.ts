@@ -12,6 +12,7 @@
 //     keeps it high-precision — the opposite of a naive recurring detector.
 
 import { humanizeCategory } from "./recap";
+import { normalizeMerchant } from "./categories";
 
 /** A transaction the scan considers (amounts/enums/date only — no PII in/out). */
 export interface AnomalyTxn {
@@ -21,6 +22,9 @@ export interface AnomalyTxn {
   category: string | null;
   amount: number;
   occurredOn: string; // 'YYYY-MM-DD'
+  // WLT-26-2 additions — populated by the scan for the new detector rules.
+  dedupKey: string; // CDC-stable transaction identity (used for new_merchant key)
+  merchant?: string | null; // merchant name (resolved at display, never stored in summary)
 }
 
 /** An account balance the scan considers. */
@@ -30,7 +34,7 @@ export interface AnomalyAccount {
   balanceCurrent: number | null;
 }
 
-export type AnomalyKind = "large_charge" | "recurring_due" | "low_balance";
+export type AnomalyKind = "large_charge" | "recurring_due" | "low_balance" | "new_merchant" | "category_spike";
 
 /** A detected anomaly — what the scan INSERTs. `summary` is amounts/enums/date only. */
 export interface AnomalyCandidate {
@@ -38,8 +42,16 @@ export interface AnomalyCandidate {
   severity: "info" | "attention";
   accountId: string | null;
   transactionId: string | null;
-  /** Display fields ONLY — amount + humanized category + date. NEVER merchant/description. */
-  summary: { amount: number; category?: string; date?: string };
+  /** Display fields ONLY — amounts + humanized category + date + projection fields.
+   * NEVER merchant name or raw transaction description (PII invariant). */
+  summary: {
+    amount: number;
+    category?: string;
+    date?: string;
+    // WLT-26-2 category_spike — projection metadata (no PII)
+    baseline?: number;
+    multiple?: number;
+  };
   dedupKey: string;
   detectedOn: string; // 'YYYY-MM-DD'
 }
@@ -63,6 +75,9 @@ const RECUR_GAP_MAX = 35;
 const RECUR_AMOUNT_TOLERANCE = 0.1; // amounts within ±10%
 const RECUR_DUE_WINDOW = 7; // predicted next charge due within the next week
 const RECUR_MIN_AMOUNT = 20; // ignore trivial recurring charges
+// WLT-26-2 — new dashboard detector constants (same escalation discipline).
+const SPIKE_MULTIPLE = 1.75; // category on pace to exceed 1.75× its own median
+const MIN_HISTORY_MONTHS = 2; // need ≥ 2 months to call any baseline meaningful
 
 const DAY_MS = 86_400_000;
 
@@ -90,6 +105,8 @@ export function detectAnomalies(input: DetectInput): AnomalyCandidate[] {
   out.push(...largeCharges(input));
   out.push(...recurringDue(input));
   out.push(...lowBalances(input));
+  out.push(...newMerchants(input)); // WLT-26-2
+  out.push(...categorySpikes(input)); // WLT-26-2
   return out;
 }
 
@@ -224,4 +241,139 @@ function lowBalances({ accounts, asOf }: DetectInput): AnomalyCandidate[] {
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+// ── WLT-26-2 dashboard detector rules ────────────────────────────────────────
+
+/**
+ * Detect debut merchants — transactions at merchants with NO prior appearance
+ * before the scan window. Conservative: only flags merchants first seen within
+ * the last LARGE_CHARGE_RECENT_DAYS (7 days), so a merchant seen last week for
+ * the first time is flagged; one seen two weeks ago but not before is not
+ * (timely signal only). History gate: ≥ MIN_HISTORY_MONTHS distinct months of
+ * debits required (too little history → meaningless "everything is new").
+ *
+ * PII invariant: `summary` carries amount + date ONLY — no merchant name.
+ * The merchant is resolved at display-read time via the dedup_key join.
+ */
+function newMerchants({ transactions, asOf }: DetectInput): AnomalyCandidate[] {
+  const debits = transactions.filter((t) => t.direction === "debit");
+  const curMonth = asOf.slice(0, 7);
+
+  // History gate: need ≥ MIN_HISTORY_MONTHS distinct PRIOR calendar months
+  // (months before the current month). This ensures the "new" flag is meaningful —
+  // a debut merchant during the user's very first month is not worth flagging.
+  const priorDebitsMonths = new Set(debits.filter((t) => t.occurredOn.slice(0, 7) < curMonth).map((t) => t.occurredOn.slice(0, 7)));
+  if (priorDebitsMonths.size < MIN_HISTORY_MONTHS) return [];
+
+  // Group by normalized merchant. For each, find earliest occurrence in the window.
+  const byMerchant = new Map<string, AnomalyTxn[]>();
+  for (const t of debits) {
+    const key = normalizeMerchant(t.merchant);
+    if (!key) continue; // skip blank/unidentifiable merchants
+    const list = byMerchant.get(key);
+    if (list) list.push(t);
+    else byMerchant.set(key, [t]);
+  }
+
+  const results: AnomalyCandidate[] = [];
+  for (const [, txs] of byMerchant) {
+    // Sort by date ascending to find the debut.
+    const sorted = [...txs].sort((a, b) => (a.occurredOn < b.occurredOn ? -1 : 1));
+    const debut = sorted[0]!;
+    const age = daysBetween(asOf, debut.occurredOn);
+
+    // "New" = first appearance is within the recent window (last 7 days).
+    if (age < 0 || age > LARGE_CHARGE_RECENT_DAYS) continue;
+
+    // Emit one candidate per debut merchant. The dedup_key encodes the debut
+    // transaction's stable identity so a merchant is flagged exactly once.
+    results.push({
+      kind: "new_merchant",
+      severity: "info",
+      accountId: debut.accountId,
+      transactionId: debut.id,
+      // summary: amounts/date ONLY — no merchant name (PII invariant, 0009 posture).
+      summary: { amount: round2(debut.amount), date: debut.occurredOn },
+      dedupKey: `new_merchant:${debut.dedupKey}`,
+      detectedOn: asOf,
+    });
+  }
+  return results;
+}
+
+/**
+ * Detect categories where the current month is on pace to overspend the user's
+ * rolling-median baseline by SPIKE_MULTIPLE (1.75×). Monthly dedup: the
+ * dedup_key encodes the YYYY-MM, so each category re-evaluates fresh each month
+ * (unlike large_charge/new_merchant which are per-transaction).
+ *
+ * History gate: each category needs ≥ MIN_HISTORY_MONTHS prior complete months
+ * to establish a meaningful baseline. Global gate also applies (same as
+ * newMerchants) via the overall months-of-history check.
+ */
+function categorySpikes({ transactions, asOf }: DetectInput): AnomalyCandidate[] {
+  const debits = transactions.filter((t) => t.direction === "debit");
+
+  // Global history gate.
+  const globalMonths = new Set(debits.map((t) => t.occurredOn.slice(0, 7)));
+  if (globalMonths.size < MIN_HISTORY_MONTHS) return [];
+
+  const curMonth = asOf.slice(0, 7);
+  // Prior complete months: all months before curMonth that appear in the txns.
+  const priorMonths = [...globalMonths].filter((m) => m < curMonth);
+
+  // Per-category, per-month totals (current + prior).
+  const byCatMonth = new Map<string, Map<string, number>>();
+  for (const t of debits) {
+    const cat = t.category ?? "";
+    const month = t.occurredOn.slice(0, 7);
+    let mm = byCatMonth.get(cat);
+    if (!mm) {
+      mm = new Map();
+      byCatMonth.set(cat, mm);
+    }
+    mm.set(month, round2((mm.get(month) ?? 0) + t.amount));
+  }
+
+  // Day-of-month for projection arithmetic (at least 1 to avoid divide-by-zero).
+  const dayOfMonth = Math.max(Number(asOf.slice(8, 10)), 1);
+  const year = Number(asOf.slice(0, 4));
+  const month0 = Number(asOf.slice(5, 7)) - 1; // 0-based for Date
+  const daysInMonth = new Date(Date.UTC(year, month0 + 1, 0)).getUTCDate(); // last day of curMonth
+
+  const results: AnomalyCandidate[] = [];
+  for (const [cat, mm] of byCatMonth) {
+    const curTotal = mm.get(curMonth) ?? 0;
+    if (curTotal <= 0) continue; // nothing spent this month in this category
+
+    // Per-category prior-month totals (non-zero only — same robustness as the chart).
+    const priorTotals = priorMonths.map((m) => mm.get(m) ?? 0).filter((v) => v > 0);
+    if (priorTotals.length < MIN_HISTORY_MONTHS) continue; // need ≥2 non-zero prior months per category
+
+    const baseline = median(priorTotals);
+    if (baseline <= 0) continue; // can't spike against a zero baseline
+
+    // On-pace projection: extrapolate the partial month to a full month.
+    const projection = round2(curTotal * (daysInMonth / dayOfMonth));
+
+    if (projection >= baseline * SPIKE_MULTIPLE) {
+      results.push({
+        kind: "category_spike",
+        severity: "attention",
+        accountId: null,
+        transactionId: null,
+        summary: {
+          category: humanizeCategory(cat || null),
+          amount: projection,
+          baseline: round2(baseline),
+          multiple: round2(projection / baseline),
+        },
+        // Monthly dedup: re-evaluates each month on fresh data (low_balance idiom).
+        dedupKey: `category_spike:${cat}:${curMonth}`,
+        detectedOn: asOf,
+      });
+    }
+  }
+  return results;
 }
