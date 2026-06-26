@@ -6,6 +6,7 @@
 // reference line at the per-category average mirrors the YearSpread cap-line pattern.
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { COPY } from "@/app/lib/copy";
 import type { CategorySpendChart as CategorySpendChartData } from "@wealth/core/dashboard-spend";
 
@@ -60,7 +61,10 @@ function emitBarClick(category: string, month: string): void {
 }
 
 export function CategorySpendChart({ data, currentMonth }: { data: CategorySpendChartData; currentMonth: string }) {
-  const { bars, monthsOfHistory } = data;
+  const router = useRouter();
+  const { bars: allBars, monthsOfHistory } = data;
+  // Defensive cap: geometry constants assume ≤ N bars (STEP = W/N).
+  const bars = allBars.slice(0, N);
 
   if (monthsOfHistory < 2) {
     return <p className="mt-2 text-sm text-gray-500">{C.categoryChartEmptyNoHistory}</p>;
@@ -75,7 +79,9 @@ export function CategorySpendChart({ data, currentMonth }: { data: CategorySpend
 
   return (
     <div className="mt-2">
-      {/* Decorative SVG — screen readers use the table below. */}
+      {/* Decorative SVG — screen readers use the table below. Each <g> is clickable
+          for sighted users; aria-hidden hides the SVG so only the sr-only table is
+          announced. */}
       <svg
         viewBox={`0 0 ${W} ${CH + 2}`}
         className="mt-1 h-24 w-full"
@@ -85,11 +91,20 @@ export function CategorySpendChart({ data, currentMonth }: { data: CategorySpend
           const barH = Math.max((bar.currentMonth / max) * CH, bar.currentMonth > 0 ? 1 : 0);
           const x = i * STEP + (STEP - BAR_W) / 2;
           const y = CH - barH;
-
           const avgY = bar.average !== null ? CH - (bar.average / max) * CH : null;
+          const href = `/transactions?category=${encodeURIComponent(bar.category)}&month=${currentMonth}`;
 
           return (
-            <g key={bar.category}>
+            <g
+              key={bar.category}
+              className="cursor-pointer"
+              onClick={() => {
+                router.push(href);
+                emitBarClick(bar.category, currentMonth);
+              }}
+            >
+              {/* Transparent full-slot hit area — larger click target than the bar alone. */}
+              <rect x={i * STEP} y={0} width={STEP} height={CH} className="fill-transparent" />
               <rect
                 x={x}
                 y={Math.min(y, CH - 1)}
@@ -117,7 +132,7 @@ export function CategorySpendChart({ data, currentMonth }: { data: CategorySpend
         })}
       </svg>
 
-      {/* X-axis labels + bar links — one visible tick label per bar + the sr-only link. */}
+      {/* X-axis labels — one visible tick label per bar. */}
       <div className="flex" aria-hidden="true">
         {bars.map((bar) => (
           <span

@@ -109,14 +109,25 @@ export async function readDashboardAnomalies(userId: string): Promise<DashboardA
     }
   }
 
-  const anomalies: DashboardAnomaly[] = [];
-  for (const row of anomalyRows) {
-    // Transition open → surfaced + emit ANOMALY_SURFACED once per anomaly.
-    if (row.status === "open") {
-      await supabase.from("anomalies").update({ status: "surfaced" }).eq("id", row.id).eq("status", "open");
+  // Batch the open→surfaced transition: single UPDATE for all open rows.
+  const openRows = anomalyRows.filter((r) => r.status === "open");
+  if (openRows.length > 0) {
+    await supabase
+      .from("anomalies")
+      .update({ status: "surfaced" })
+      .in(
+        "id",
+        openRows.map((r) => r.id),
+      )
+      .eq("status", "open");
+    // Emit ANOMALY_SURFACED for each newly-surfaced row.
+    for (const row of openRows) {
       await emitFunnel(FUNNEL_EVENTS.ANOMALY_SURFACED, userId, { anomaly_kind: row.kind });
     }
+  }
 
+  const anomalies: DashboardAnomaly[] = [];
+  for (const row of anomalyRows) {
     let merchantName: string | null | undefined;
     let rawCategory: string | null = null;
     let debutMonth: string | null = null;
