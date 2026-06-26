@@ -124,7 +124,7 @@ export function CategorySpendChart({ data }: { data: CategorySpendChartData }) {
                   y1={avgY}
                   x2={i * STEP + STEP}
                   y2={avgY}
-                  stroke="#9ca3af"
+                  className="stroke-green-500"
                   strokeWidth={1}
                   strokeDasharray="3 3"
                 />
@@ -149,7 +149,7 @@ export function CategorySpendChart({ data }: { data: CategorySpendChartData }) {
       {/* avg legend */}
       {showAvgLine && (
         <p className="text-[11px] text-gray-500">
-          <span className="mr-1 inline-block w-4 border-t border-dashed border-gray-400 align-middle" />
+          <span className="mr-1 inline-block w-4 border-t border-dashed border-green-500 align-middle" />
           {avgLegendLabel(monthsOfHistory)}
         </p>
       )}
