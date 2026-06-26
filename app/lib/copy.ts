@@ -634,7 +634,7 @@ export const COPY = {
     reopenA11y: "Re-open {merchant} follow-up",
     doneIndicatorA11y: "Follow-up resolved",
   },
-  // WLT-26-1 — Dashboard Intelligence: category spend bar chart.
+  // WLT-26-1 + WLT-26-2 — Dashboard Intelligence: category spend chart + anomaly panel.
   dashboardIntelligence: {
     sectionTitle: "Spending this month",
     categoryChartTitle: "By category",
@@ -644,6 +644,18 @@ export const COPY = {
     categoryChartTableCaption: "Category spending this month vs. recent average",
     avgLegendFull: "6-month avg",
     avgLegendPartial: "{n}-month avg ({n} months)",
+    // WLT-26-2 — Anomaly panel copy tokens.
+    anomalyPanelTitle: "Flagged for review",
+    anomalyKindNewMerchant: "New merchant: {merchantName}",
+    anomalyKindNewMerchantUnknown: "New merchant — we couldn't identify it",
+    anomalyKindCategorySpike: "{category} is on pace to run {multiple}× your usual amount",
+    anomalyDismissNewMerchant: "Got it",
+    anomalyDismissMonthly: "Dismiss for this month",
+    anomalyDismissNewMerchantSrLabel: "Got it — don't flag this merchant again",
+    anomalyDismissMonthlySrLabel: "Dismiss {category} overspend alert for {month}",
+    anomalyInvestigate: "See transactions",
+    anomalyEmptyNoHistory: "We'll surface anomalies as you build history.",
+    anomalyEmptyNoAnomalies: "Nothing unusual this month.",
   },
   // WLT-23-1 — the Transactions ledger. docs/bets/WLT-23/stories/WLT-23-1/copy.md verbatim.
   transactions: {

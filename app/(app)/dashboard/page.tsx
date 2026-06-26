@@ -8,6 +8,7 @@ import { DashboardNudge } from "./DashboardNudge";
 import { RecapCard } from "./RecapCard";
 import { WorkflowCard } from "./WorkflowCard";
 import { CategorySpendChart } from "./CategorySpendChart";
+import { AnomalyPanel } from "./AnomalyPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -34,15 +35,31 @@ async function RecapSection({ userId }: { userId: string }) {
   return <RecapCard view={recap} />;
 }
 
-// WLT-26-1: server component that reads the category spend chart and renders it.
+// WLT-26-1 + WLT-26-2: the full dashboard intelligence section — anomaly panel
+// (above, higher-urgency) + category spend chart (below, contextual).
 async function DashboardIntelligenceSection({ userId }: { userId: string }) {
   const chart = await readCategorySpendChart(userId);
   const C = COPY.dashboardIntelligence;
   return (
     <section className="mt-6 rounded-lg border border-gray-200 bg-white p-6">
       <h2 className="text-base font-semibold text-gray-900">{C.sectionTitle}</h2>
+      {/* WLT-26-2: anomaly panel — independent Suspense so it streams in after the
+          chart without blocking the outer section skeleton. Renders above the chart
+          (higher urgency: "something looks off" before "here's the context"). */}
+      <Suspense fallback={<AnomalyPanelSkeleton />}>
+        <AnomalyPanel userId={userId} />
+      </Suspense>
       <CategorySpendChart data={chart} />
     </section>
+  );
+}
+
+function AnomalyPanelSkeleton() {
+  return (
+    <div aria-busy="true" className="mb-4">
+      <div aria-hidden="true" className="h-4 w-32 animate-pulse rounded bg-gray-100 motion-reduce:animate-none" />
+      <div aria-hidden="true" className="mt-2 h-10 w-full animate-pulse rounded bg-gray-100 motion-reduce:animate-none" />
+    </div>
   );
 }
 
