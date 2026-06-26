@@ -130,11 +130,16 @@ type Supa = Awaited<ReturnType<typeof createServerSupabase>>;
  * 'surfaced' + emits anomaly_surfaced once (owner-scoped; the status-only trigger
  * permits it). Returns amount/category/date only — never merchant/description.
  */
+// WLT-26-2 orthogonality: readTopAnomaly reads ONLY the original 3 recap kinds.
+// new_merchant + category_spike are dashboard-only and must NEVER surface here.
+const RECAP_ANOMALY_KINDS = ["large_charge", "recurring_due", "low_balance"] as const;
+
 async function readTopAnomaly(userId: string, supabase: Supa): Promise<RecapAnomaly | null> {
   const { data } = await supabase
     .from("anomalies")
     .select("id, kind, severity, status, summary")
     .eq("user_id", userId)
+    .in("kind", RECAP_ANOMALY_KINDS)
     .in("status", ["open", "surfaced"])
     .order("severity", { ascending: true }) // 'attention' < 'info' alphabetically → attention first
     .order("created_at", { ascending: false })
