@@ -65,9 +65,15 @@ type Mode = "idle" | "loadingPage" | "loadingMore";
 export function TransactionsClient({
   initial,
   initialError,
+  initialCategory,
+  initialMonth,
 }: {
   initial: TransactionsPageDTO | null;
   initialError: boolean;
+  /** WLT-26-1 — pre-applied category from ?category= (e.g. from a chart bar click). */
+  initialCategory?: string | null;
+  /** WLT-26-1 — pre-applied month from ?month=YYYY-MM (e.g. from a chart bar click). */
+  initialMonth?: string | null;
 }) {
   const [rows, setRows] = useState<TransactionRowDTO[]>(initial?.rows ?? []);
   const [nextCursor, setNextCursor] = useState<string | null>(initial?.nextCursor ?? null);
@@ -78,8 +84,11 @@ export function TransactionsClient({
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [accountId, setAccountId] = useState<string | null>(null);
-  const [categoryFilter, setCategoryFilter] = useState<string | null>(null); // null = all, "" = Other
+  // WLT-26-1: initialCategory sets the filter when arriving from a chart bar click.
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(initialCategory ?? null); // null = all, "" = Other
   const [followupFilter, setFollowupFilter] = useState<"open" | "done" | null>(null); // WLT-25-1/2 — Follow-ups filter (Open/Done)
+  // WLT-26-1: monthFilter preserves the month from ?month= for Load-more continuity.
+  const [monthFilter, setMonthFilter] = useState<string | null>(initialMonth ?? null);
   const [mode, setMode] = useState<Mode>("idle");
   const [pageError, setPageError] = useState<boolean>(initialError);
   const [moreError, setMoreError] = useState(false);
@@ -127,13 +136,13 @@ export function TransactionsClient({
   // Auto-continues through empty filtered pages (bounded) so a sparse category
   // filter never strands matches behind the scan cap's continuation cursor.
   const loadPage = useCallback(
-    async (f: { accountId: string | null; category: string | null; q: string; followup: "open" | "done" | null }) => {
+    async (f: { accountId: string | null; category: string | null; q: string; followup: "open" | "done" | null; month?: string | null }) => {
       setMode("loadingPage");
       setPageError(false);
       setMoreError(false);
       let cursor: string | null = null;
       for (let i = 0; i < AUTO_SCAN_LIMIT; i++) {
-        const res = await fetchTransactions({ cursor, accountId: f.accountId, category: f.category, q: f.q, followup: f.followup });
+        const res = await fetchTransactions({ cursor, accountId: f.accountId, category: f.category, q: f.q, followup: f.followup, month: f.month });
         if (!res.ok) {
           setMode("idle");
           setPageError(true);
@@ -163,7 +172,7 @@ export function TransactionsClient({
     setMoreError(false);
     let cursor: string | null = nextCursor;
     for (let i = 0; i < AUTO_SCAN_LIMIT; i++) {
-      const res = await fetchTransactions({ cursor, accountId, category: categoryFilter, q: debouncedQuery, followup: followupFilter });
+      const res = await fetchTransactions({ cursor, accountId, category: categoryFilter, q: debouncedQuery, followup: followupFilter, month: monthFilter });
       if (!res.ok) {
         setMode("idle");
         setMoreError(true);
@@ -180,7 +189,7 @@ export function TransactionsClient({
       }
       cursor = res.page.nextCursor;
     }
-  }, [nextCursor, accountId, categoryFilter, debouncedQuery, followupFilter]);
+  }, [nextCursor, accountId, categoryFilter, debouncedQuery, followupFilter, monthFilter]);
 
   // Debounce the search box → a settled value the load effect watches.
   useEffect(() => {
@@ -196,8 +205,8 @@ export function TransactionsClient({
       didMount.current = true;
       return;
     }
-    void loadPage({ accountId, category: categoryFilter, q: debouncedQuery, followup: followupFilter });
-  }, [accountId, categoryFilter, debouncedQuery, followupFilter, loadPage]);
+    void loadPage({ accountId, category: categoryFilter, q: debouncedQuery, followup: followupFilter, month: monthFilter });
+  }, [accountId, categoryFilter, debouncedQuery, followupFilter, monthFilter, loadPage]);
 
   // The category-filter options (the user's categories) — fetched once on mount.
   // Also the option set the in-row recategorize picker (WLT-23-3) chooses from.
@@ -218,7 +227,7 @@ export function TransactionsClient({
       const res = await recategorizeTransaction({ dedupKey: row.dedupKey, categoryId, applyToMerchant });
       if (!res.ok) return res;
       if (applyToMerchant) {
-        await loadPage({ accountId, category: categoryFilter, q: debouncedQuery, followup: followupFilter });
+        await loadPage({ accountId, category: categoryFilter, q: debouncedQuery, followup: followupFilter, month: monthFilter });
       } else {
         const newName = categories.find((c) => c.id === categoryId)?.name ?? "";
         setToast(fill(C.recatSaved, { category: humanizeCategory(newName || null) }));
@@ -233,7 +242,7 @@ export function TransactionsClient({
       }
       return res;
     },
-    [categories, accountId, categoryFilter, debouncedQuery, followupFilter, loadPage],
+    [categories, accountId, categoryFilter, debouncedQuery, followupFilter, monthFilter, loadPage],
   );
 
   const createCat = useCallback(async (name: string, kind: "essential" | "discretionary"): Promise<CreateResult> => {
@@ -263,11 +272,12 @@ export function TransactionsClient({
     setAccountId(null);
     setCategoryFilter(null);
     setFollowupFilter(null);
+    setMonthFilter(null); // WLT-26-1 — also clear month filter
     setQuery("");
     setDebouncedQuery("");
   }
 
-  const filtersActive = accountId !== null || categoryFilter !== null || followupFilter !== null;
+  const filtersActive = accountId !== null || categoryFilter !== null || followupFilter !== null || monthFilter !== null;
   const searchActive = debouncedQuery.trim().length > 0;
   const anyActive = filtersActive || searchActive;
   const showList = rows.length > 0;
@@ -366,7 +376,7 @@ export function TransactionsClient({
       ) : pageError ? (
         <p role="alert" className="py-8 text-center text-sm text-red-600">
           {C.error}{" "}
-          <button type="button" onClick={() => void loadPage({ accountId, category: categoryFilter, q: debouncedQuery, followup: followupFilter })} className="underline">
+          <button type="button" onClick={() => void loadPage({ accountId, category: categoryFilter, q: debouncedQuery, followup: followupFilter, month: monthFilter })} className="underline">
             {C.retry}
           </button>
         </p>

@@ -634,6 +634,17 @@ export const COPY = {
     reopenA11y: "Re-open {merchant} follow-up",
     doneIndicatorA11y: "Follow-up resolved",
   },
+  // WLT-26-1 — Dashboard Intelligence: category spend bar chart.
+  dashboardIntelligence: {
+    sectionTitle: "Spending this month",
+    categoryChartTitle: "By category",
+    categoryChartEmptyNoHistory: "We'll show your spending trends as you build history.",
+    categoryChartEmptyNoSpend: "No spending this month.",
+    categoryBarClickedSrLabel: "View {category} transactions for {month}",
+    categoryChartTableCaption: "Category spending this month vs. recent average",
+    avgLegendFull: "6-month avg",
+    avgLegendPartial: "{n}-month avg ({n} months)",
+  },
   // WLT-23-1 — the Transactions ledger. docs/bets/WLT-23/stories/WLT-23-1/copy.md verbatim.
   transactions: {
     title: "Transactions",
