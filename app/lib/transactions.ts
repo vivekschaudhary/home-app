@@ -102,9 +102,28 @@ type TxnRow = {
 };
 const SELECT_COLS = "id, occurred_on, merchant, description, amount, direction, category, dedup_key, pending, account_id";
 
+// WLT-26-1 — month filter: 'YYYY-MM' with month strictly 01–12; anything else
+// is ignored. The broader /\d{2}/ pattern would pass 00/13/99, which are invalid
+// PostgreSQL dates and would cause a 500 in the gte/lt date filter.
+const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+/** Validate a month string ('YYYY-MM'); returns it unchanged or null if malformed. */
+export function parseMonth(raw: string | null | undefined): string | null {
+  if (!raw || !MONTH_RE.test(raw)) return null;
+  return raw;
+}
+
+/** First day of the next calendar month after `month` ('YYYY-MM') — exclusive upper bound. */
+export function nextMonthStart(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  const ny = m === 12 ? y + 1 : y;
+  const nm = m === 12 ? 1 : m + 1;
+  return `${ny}-${String(nm).padStart(2, "0")}-01`;
+}
+
 export async function readTransactionsPage(
   userId: string,
-  opts: { cursor?: string | null; search?: string | null; accountId?: string | null; category?: string | null; followup?: "open" | "done" | null; limit?: number } = {},
+  opts: { cursor?: string | null; search?: string | null; accountId?: string | null; category?: string | null; followup?: "open" | "done" | null; month?: string | null; limit?: number } = {},
 ): Promise<TransactionsPageResult> {
   const supabase = await createServerSupabase();
   const limit = clampLimit(opts.limit);
@@ -119,6 +138,10 @@ export async function readTransactionsPage(
   // follow-up state; null = off. Composes with account/category/search via the
   // same bounded scan.
   const followup: "open" | "done" | null = opts.followup === "open" || opts.followup === "done" ? opts.followup : null;
+  // WLT-26-1 — the month filter: bounds occurred_on to the calendar month.
+  // Validated and composed in SQL (not in-memory) — a date range is safe in the
+  // filter grammar and doesn't need the in-memory resolution the category filter does.
+  const month = parseMonth(opts.month);
 
   // Shared owner-scoped reads: the saved-category map + the account names (also the
   // account-filter options + `hasAccount` for the empty state) + a bounded probe for
@@ -156,8 +179,8 @@ export async function readTransactionsPage(
     followupStatus: followupStatuses.get(r.dedup_key) ?? null, // WLT-25-1/2 — open | done | null
   });
 
-  // One keyset chunk starting strictly after `from` — account + search applied in
-  // SQL (keyset-safe; `from` is a validated date+uuid).
+  // One keyset chunk starting strictly after `from` — account + search + month
+  // applied in SQL (keyset-safe; `from` is a validated date+uuid).
   const fetchChunk = (from: { occurredOn: string; id: string } | null, take: number) => {
     let q = supabase
       .from("transactions")
@@ -167,6 +190,10 @@ export async function readTransactionsPage(
       .order("id", { ascending: false })
       .limit(take);
     if (accountId) q = q.eq("account_id", accountId);
+    if (month) {
+      // WLT-26-1: bound to the calendar month (occurred_on is a DATE column).
+      q = q.gte("occurred_on", `${month}-01`).lt("occurred_on", nextMonthStart(month));
+    }
     if (from) q = q.or(`occurred_on.lt.${from.occurredOn},and(occurred_on.eq.${from.occurredOn},id.lt.${from.id})`);
     if (search) q = q.or(`merchant.ilike.%${search}%,description.ilike.%${search}%`);
     return q;

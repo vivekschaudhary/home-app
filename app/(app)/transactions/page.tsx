@@ -1,7 +1,7 @@
 import { requireAal2 } from "@vc1023/passkey-2fa";
 import { FUNNEL_EVENTS } from "@wealth/core";
 import { emitFunnel } from "@wealth/db/emit";
-import { readTransactionsPage } from "@/app/lib/transactions";
+import { parseMonth, readTransactionsPage } from "@/app/lib/transactions";
 import { COPY } from "@/app/lib/copy";
 import { TransactionsClient } from "./TransactionsClient";
 
@@ -10,11 +10,21 @@ import { TransactionsClient } from "./TransactionsClient";
 // requireAal2() here is the per-page belt-and-suspenders + supplies the userId.
 // Read page 1 server-side on every load (force-dynamic → reconcile-on-load, the
 // real session→RLS→render seam, #36); search + Load-more go through the route.
+// WLT-26-1: reads ?category= and ?month= for chart bar click deep-links.
 export const dynamic = "force-dynamic";
 
-export default async function TransactionsPage() {
+export default async function TransactionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ category?: string; month?: string }>;
+}) {
   const userId = await requireAal2();
-  const result = await readTransactionsPage(userId);
+  const sp = await searchParams;
+  // category: present (even "") = filter; absent = all. month: 'YYYY-MM' only.
+  const category = sp.category !== undefined ? sp.category : null;
+  const month = parseMonth(sp.month);
+
+  const result = await readTransactionsPage(userId, { category, month });
   await emitFunnel(FUNNEL_EVENTS.TRANSACTIONS_VIEWED, userId, {});
 
   const C = COPY.transactions;
@@ -25,6 +35,8 @@ export default async function TransactionsPage() {
       <TransactionsClient
         initial={result.ok ? result.page : null}
         initialError={!result.ok}
+        initialCategory={category}
+        initialMonth={month}
       />
     </div>
   );

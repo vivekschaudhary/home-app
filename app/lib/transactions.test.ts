@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PAGE_SIZE, clampLimit, decodeCursor, encodeCursor, sanitizeSearch } from "./transactions";
+import { PAGE_SIZE, clampLimit, decodeCursor, encodeCursor, nextMonthStart, parseMonth, sanitizeSearch } from "./transactions";
 
 const UUID = "11111111-1111-4111-8111-111111111111";
 
@@ -61,5 +61,42 @@ describe("clampLimit", () => {
   it("caps at PAGE_SIZE and floors", () => {
     expect(clampLimit(10_000)).toBe(PAGE_SIZE);
     expect(clampLimit(10.9)).toBe(10);
+  });
+});
+
+describe("parseMonth", () => {
+  it("accepts valid months", () => {
+    expect(parseMonth("2026-01")).toBe("2026-01");
+    expect(parseMonth("2026-06")).toBe("2026-06");
+    expect(parseMonth("2026-12")).toBe("2026-12");
+    expect(parseMonth("1999-09")).toBe("1999-09");
+  });
+
+  it("rejects month 00 and 13–99 (would produce invalid PostgreSQL dates → 500)", () => {
+    expect(parseMonth("2026-00")).toBeNull();
+    expect(parseMonth("2026-13")).toBeNull();
+    expect(parseMonth("2026-99")).toBeNull();
+  });
+
+  it("rejects bad format", () => {
+    expect(parseMonth(null)).toBeNull();
+    expect(parseMonth(undefined)).toBeNull();
+    expect(parseMonth("")).toBeNull();
+    expect(parseMonth("2026-6")).toBeNull(); // must be zero-padded
+    expect(parseMonth("2026/06")).toBeNull();
+    expect(parseMonth("June 2026")).toBeNull();
+    expect(parseMonth("2026-06-01")).toBeNull(); // full date, not month
+  });
+});
+
+describe("nextMonthStart", () => {
+  it("advances month within a year", () => {
+    expect(nextMonthStart("2026-01")).toBe("2026-02-01");
+    expect(nextMonthStart("2026-06")).toBe("2026-07-01");
+    expect(nextMonthStart("2026-11")).toBe("2026-12-01");
+  });
+
+  it("wraps December into January of the next year", () => {
+    expect(nextMonthStart("2026-12")).toBe("2027-01-01");
   });
 });

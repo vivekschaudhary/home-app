@@ -24,6 +24,7 @@ export async function GET(req: Request) {
     // null (absent) = all categories; "" (present) = the null-category "Other" bucket.
     category: params.get("category"),
     followup, // WLT-25-1 — the Follow-ups filter
+    month: params.get("month"), // WLT-26-1 — 'YYYY-MM' month filter (validated in readTransactionsPage)
   });
   if (!result.ok) return Response.json({ error: "server" }, { status: 502 });
   return Response.json(result.page);

@@ -38,7 +38,8 @@ export interface TransactionsPageDTO {
  * One page of the ledger. `cursor` is the opaque value from a prior page's
  * `nextCursor` (omit for the first page); `q` is the free-text search;
  * `accountId` + `category` are the WLT-23-2 filters (`category` is the RESOLVED
- * category name, `""` = the null-category "Other" bucket; omit/`null` = all).
+ * category name, `""` = the null-category "Other" bucket; omit/`null` = all);
+ * `month` is the WLT-26-1 month filter ('YYYY-MM'; absent = all dates).
  * Keyset pagination — never an unbounded fetch (the 24-month-history guardrail).
  */
 export async function fetchTransactions(params: {
@@ -47,6 +48,7 @@ export async function fetchTransactions(params: {
   accountId?: string | null;
   category?: string | null;
   followup?: "open" | "done" | null; // WLT-25-1/2 — charges with an open / done follow-up
+  month?: string | null; // WLT-26-1 — 'YYYY-MM' bounds occurred_on to a calendar month
 }): Promise<{ ok: true; page: TransactionsPageDTO } | { ok: false }> {
   try {
     const qs = new URLSearchParams();
@@ -56,6 +58,7 @@ export async function fetchTransactions(params: {
     // category present (even "") = a filter; absent/null = all categories.
     if (params.category !== null && params.category !== undefined) qs.set("category", params.category);
     if (params.followup) qs.set("followup", params.followup); // WLT-25-1/2 — "open" | "done"
+    if (params.month) qs.set("month", params.month); // WLT-26-1 — 'YYYY-MM' month filter
     const suffix = qs.toString() ? `?${qs.toString()}` : "";
     const res = await fetch(`/api/transactions${suffix}`, { headers: { accept: "application/json" } });
     if (!res.ok) return { ok: false };
