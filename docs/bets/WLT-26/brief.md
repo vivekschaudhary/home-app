@@ -8,7 +8,7 @@ portfolio_stub: false
 depends_on: [WLT-22, WLT-23, WLT-24, WLT-25]
 parallel_with: []
 architecture_required: true
-architecture_status: pending
+architecture_status: approved
 created: 2026-06-25
 author: PM
 sources:
