@@ -102,8 +102,10 @@ type TxnRow = {
 };
 const SELECT_COLS = "id, occurred_on, merchant, description, amount, direction, category, dedup_key, pending, account_id";
 
-// WLT-26-1 — month filter: 'YYYY-MM' only; anything else is ignored.
-const MONTH_RE = /^\d{4}-\d{2}$/;
+// WLT-26-1 — month filter: 'YYYY-MM' with month strictly 01–12; anything else
+// is ignored. The broader /\d{2}/ pattern would pass 00/13/99, which are invalid
+// PostgreSQL dates and would cause a 500 in the gte/lt date filter.
+const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 /** Validate a month string ('YYYY-MM'); returns it unchanged or null if malformed. */
 export function parseMonth(raw: string | null | undefined): string | null {
