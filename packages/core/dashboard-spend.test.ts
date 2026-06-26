@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCategorySpendChart, type CategorySpendChart } from "./dashboard-spend";
+import { buildCategorySpendChart } from "./dashboard-spend";
 import type { SpendingTxn } from "./recap";
 
 const ASOF = "2026-06-15"; // curMonth = 2026-06; 5 prior months = 2026-01..2026-05
