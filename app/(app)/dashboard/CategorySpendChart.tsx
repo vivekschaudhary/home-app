@@ -124,7 +124,7 @@ export function CategorySpendChart({ data }: { data: CategorySpendChartData }) {
                   y1={avgY}
                   x2={i * STEP + STEP}
                   y2={avgY}
-                  stroke="#22c55e"
+                  className="stroke-green-500"
                   strokeWidth={1}
                   strokeDasharray="3 3"
                 />
