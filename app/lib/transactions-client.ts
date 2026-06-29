@@ -49,6 +49,7 @@ export async function fetchTransactions(params: {
   category?: string | null;
   followup?: "open" | "done" | null; // WLT-25-1/2 — charges with an open / done follow-up
   month?: string | null; // WLT-26-1 — 'YYYY-MM' bounds occurred_on to a calendar month
+  currency?: string | null; // WLT-27-5 — ISO 4217 currency scope (absent = no filter)
 }): Promise<{ ok: true; page: TransactionsPageDTO } | { ok: false }> {
   try {
     const qs = new URLSearchParams();
@@ -59,6 +60,7 @@ export async function fetchTransactions(params: {
     if (params.category !== null && params.category !== undefined) qs.set("category", params.category);
     if (params.followup) qs.set("followup", params.followup); // WLT-25-1/2 — "open" | "done"
     if (params.month) qs.set("month", params.month); // WLT-26-1 — 'YYYY-MM' month filter
+    if (params.currency) qs.set("currency", params.currency); // WLT-27-5 — currency scope
     const suffix = qs.toString() ? `?${qs.toString()}` : "";
     const res = await fetch(`/api/transactions${suffix}`, { headers: { accept: "application/json" } });
     if (!res.ok) return { ok: false };

@@ -67,6 +67,7 @@ export function TransactionsClient({
   initialError,
   initialCategory,
   initialMonth,
+  initialCurrency,
 }: {
   initial: TransactionsPageDTO | null;
   initialError: boolean;
@@ -74,6 +75,8 @@ export function TransactionsClient({
   initialCategory?: string | null;
   /** WLT-26-1 — pre-applied month from ?month=YYYY-MM (e.g. from a chart bar click). */
   initialMonth?: string | null;
+  /** WLT-27-5 — ISO 4217 currency scope from ?currency= (the RegionSwitcher context). */
+  initialCurrency?: string | null;
 }) {
   const [rows, setRows] = useState<TransactionRowDTO[]>(initial?.rows ?? []);
   const [nextCursor, setNextCursor] = useState<string | null>(initial?.nextCursor ?? null);
@@ -89,6 +92,10 @@ export function TransactionsClient({
   const [followupFilter, setFollowupFilter] = useState<"open" | "done" | null>(null); // WLT-25-1/2 — Follow-ups filter (Open/Done)
   // WLT-26-1: monthFilter preserves the month from ?month= for Load-more continuity.
   const [monthFilter, setMonthFilter] = useState<string | null>(initialMonth ?? null);
+  // WLT-27-5: currency scope from ?currency= (RegionSwitcher context). Fixed for
+  // the component's lifetime — currency changes cause an RSC re-render (router.push),
+  // not an in-place client update, so no state needed; derive from the initial prop.
+  const currencyFilter = initialCurrency ?? null;
   const [mode, setMode] = useState<Mode>("idle");
   const [pageError, setPageError] = useState<boolean>(initialError);
   const [moreError, setMoreError] = useState(false);
@@ -142,7 +149,9 @@ export function TransactionsClient({
       setMoreError(false);
       let cursor: string | null = null;
       for (let i = 0; i < AUTO_SCAN_LIMIT; i++) {
-        const res = await fetchTransactions({ cursor, accountId: f.accountId, category: f.category, q: f.q, followup: f.followup, month: f.month });
+        // WLT-27-5: thread currencyFilter into every loadPage fetch so Load-more and
+        // filter changes stay scoped to the active currency context.
+        const res = await fetchTransactions({ cursor, accountId: f.accountId, category: f.category, q: f.q, followup: f.followup, month: f.month, currency: currencyFilter });
         if (!res.ok) {
           setMode("idle");
           setPageError(true);
@@ -172,7 +181,7 @@ export function TransactionsClient({
     setMoreError(false);
     let cursor: string | null = nextCursor;
     for (let i = 0; i < AUTO_SCAN_LIMIT; i++) {
-      const res = await fetchTransactions({ cursor, accountId, category: categoryFilter, q: debouncedQuery, followup: followupFilter, month: monthFilter });
+      const res = await fetchTransactions({ cursor, accountId, category: categoryFilter, q: debouncedQuery, followup: followupFilter, month: monthFilter, currency: currencyFilter });
       if (!res.ok) {
         setMode("idle");
         setMoreError(true);

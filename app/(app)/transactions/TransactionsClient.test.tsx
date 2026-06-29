@@ -149,7 +149,7 @@ describe("TransactionsClient — pagination (AC4)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Load more transactions" }));
 
     await waitFor(() => expect(screen.getByText("Costco")).toBeTruthy());
-    expect(fetchTransactionsMock).toHaveBeenCalledWith({ cursor: "CUR1", accountId: null, category: null, q: "", followup: null, month: null });
+    expect(fetchTransactionsMock).toHaveBeenCalledWith({ cursor: "CUR1", accountId: null, category: null, q: "", followup: null, month: null, currency: null });
     // nextCursor now null → the end marker replaces the button
     expect(screen.getByText("You're all caught up — that's everything.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Load more transactions" })).toBeNull();
@@ -182,7 +182,7 @@ describe("TransactionsClient — search (AC5)", () => {
       target: { value: "amazon" },
     });
 
-    await waitFor(() => expect(fetchTransactionsMock).toHaveBeenCalledWith({ cursor: null, accountId: null, category: null, q: "amazon", followup: null, month: null }));
+    await waitFor(() => expect(fetchTransactionsMock).toHaveBeenCalledWith({ cursor: null, accountId: null, category: null, q: "amazon", followup: null, month: null, currency: null }));
     await waitFor(() => expect(screen.getByText("Amazon")).toBeTruthy());
     expect(screen.queryByText("Blue Bottle")).toBeNull();
   });
@@ -220,7 +220,7 @@ describe("TransactionsClient — empty + error states (AC6)", () => {
 
     expect(screen.getByRole("alert")).toBeTruthy();
     fireEvent.click(screen.getByText("Try again"));
-    await waitFor(() => expect(fetchTransactionsMock).toHaveBeenCalledWith({ cursor: null, accountId: null, category: null, q: "", followup: null, month: null }));
+    await waitFor(() => expect(fetchTransactionsMock).toHaveBeenCalledWith({ cursor: null, accountId: null, category: null, q: "", followup: null, month: null, currency: null }));
     await waitFor(() => expect(screen.getByText("Blue Bottle")).toBeTruthy());
   });
 });
@@ -238,7 +238,7 @@ describe("TransactionsClient — filters (AC1/AC3/AC5/AC7)", () => {
       target: { value: "22222222-2222-4222-8222-222222222222" },
     });
     await waitFor(() =>
-      expect(fetchTransactionsMock).toHaveBeenCalledWith({ cursor: null, accountId: "22222222-2222-4222-8222-222222222222", category: null, q: "", followup: null, month: null }),
+      expect(fetchTransactionsMock).toHaveBeenCalledWith({ cursor: null, accountId: "22222222-2222-4222-8222-222222222222", category: null, q: "", followup: null, month: null, currency: null }),
     );
     expect(recordTransactionsFilteredMock).toHaveBeenCalledTimes(1);
 
@@ -250,7 +250,7 @@ describe("TransactionsClient — filters (AC1/AC3/AC5/AC7)", () => {
     await screen.findByRole("option", { name: "Food And Drink" }); // wait for the async category options (flaky in CI otherwise)
     fireEvent.change(screen.getByLabelText("Filter by category"), { target: { value: "FOOD_AND_DRINK" } });
     await waitFor(() =>
-      expect(fetchTransactionsMock).toHaveBeenCalledWith({ cursor: null, accountId: "22222222-2222-4222-8222-222222222222", category: "FOOD_AND_DRINK", q: "", followup: null, month: null }),
+      expect(fetchTransactionsMock).toHaveBeenCalledWith({ cursor: null, accountId: "22222222-2222-4222-8222-222222222222", category: "FOOD_AND_DRINK", q: "", followup: null, month: null, currency: null }),
     );
     expect(recordTransactionsFilteredMock).toHaveBeenCalledTimes(2);
   });
@@ -277,7 +277,7 @@ describe("TransactionsClient — filters (AC1/AC3/AC5/AC7)", () => {
     await waitFor(() => expect(screen.getByText("Deep Match")).toBeTruthy());
     expect(screen.queryByText("No transactions match these filters.")).toBeNull();
     // the second fetch used the continuation cursor C2
-    expect(fetchTransactionsMock).toHaveBeenCalledWith({ cursor: "C2", accountId: null, category: "FOOD_AND_DRINK", q: "", followup: null, month: null });
+    expect(fetchTransactionsMock).toHaveBeenCalledWith({ cursor: "C2", accountId: null, category: "FOOD_AND_DRINK", q: "", followup: null, month: null, currency: null });
   });
 
   it("renders the 'Other' category option only when the user has a null-category bucket (hasOther)", () => {
@@ -299,7 +299,7 @@ describe("TransactionsClient — filters (AC1/AC3/AC5/AC7)", () => {
     // clear → unfiltered refetch
     fetchTransactionsMock.mockResolvedValueOnce({ ok: true, page: page({ nextCursor: null }) });
     fireEvent.click(screen.getByText("Clear filters"));
-    await waitFor(() => expect(fetchTransactionsMock).toHaveBeenLastCalledWith({ cursor: null, accountId: null, category: null, q: "", followup: null, month: null }));
+    await waitFor(() => expect(fetchTransactionsMock).toHaveBeenLastCalledWith({ cursor: null, accountId: null, category: null, q: "", followup: null, month: null, currency: null }));
   });
 });
 

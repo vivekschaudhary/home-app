@@ -17,6 +17,11 @@ export async function GET(req: Request) {
   const followup = followupParam === "open" || followupParam === "done" ? followupParam : null;
   // WLT-25-1/2 — once per Follow-ups view (the first page, not each Load-more).
   if (followup && !params.get("cursor")) await emitFunnel(FUNNEL_EVENTS.FOLLOWUPS_VIEWED, userId, {});
+  // WLT-27-5: currency scope — validate ISO 4217 format ([A-Z]{3}) before passing
+  // to the lib (the lib trusts validated inputs; raw param must not reach the filter).
+  const rawCurrency = params.get("currency");
+  const currencyParam = rawCurrency && /^[A-Z]{3}$/.test(rawCurrency) ? rawCurrency : null;
+
   const result = await readTransactionsPage(userId, {
     cursor: params.get("cursor"),
     search: params.get("q"),
@@ -25,6 +30,7 @@ export async function GET(req: Request) {
     category: params.get("category"),
     followup, // WLT-25-1 — the Follow-ups filter
     month: params.get("month"), // WLT-26-1 — 'YYYY-MM' month filter (validated in readTransactionsPage)
+    currency: currencyParam, // WLT-27-5 — currency scope (validated above)
   });
   if (!result.ok) return Response.json({ error: "server" }, { status: 502 });
   return Response.json(result.page);
