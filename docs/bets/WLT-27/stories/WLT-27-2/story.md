@@ -2,7 +2,7 @@
 id: WLT-27-2
 bet: WLT-27
 type: story
-status: ready
+status: in_review
 priority: P1
 created: 2026-06-28
 author: PM
@@ -20,21 +20,21 @@ Users who rely on Apple Card, Cash App, Venmo, PayPal, or Plaid-unsupported cred
 
 ## Acceptance Criteria
 
-- [ ] AC-1: Migration `supabase/migrations/0020_financial_accounts_kind.sql` widens the `kind` check constraint from `('depository','credit')` to `('depository','credit','investment','other')`. Constraint name verified on ephemeral PG before `DROP CONSTRAINT IF EXISTS` is executed (expected name: `financial_accounts_kind_check`).
-- [ ] AC-2: `POST /api/accounts` route handler (`app/api/accounts/route.ts`) is AAL2-gated via `getAal2UserId()`. Returns `401` for an AAL1 session or unauthenticated request.
-- [ ] AC-3: Route handler reads `MANUAL_ACCOUNTS_ENABLED` from env. If the flag is absent or false, the endpoint returns `403` with `{ error: 'MANUAL_ACCOUNTS_DISABLED' }`.
-- [ ] AC-4: Route handler rejects `currency !== 'USD'` with `400` when `MULTI_CURRENCY_ACCOUNTS_ENABLED` is off. When the flag is on, any valid ISO 4217 currency code (from the defined allowlist) is accepted.
-- [ ] AC-5: Route handler maps user-facing `kind` to DB `kind`: `checking → depository`, `savings → depository`, `credit → credit`, `investment → investment`, `other → other`. Returns `400` on an unrecognized kind.
-- [ ] AC-6: Route handler writes a `financial_accounts` row with `connection_id = null`, `provider_account_id = null`, and the mapped `kind`, `currency`, `name`, and optional `institution_name`. Returns `{ account: { id, name, kind, currency } }` on success.
-- [ ] AC-7: Integration test confirms PostgreSQL `unique(connection_id, provider_account_id)` allows two `(null, null)` rows for the same user (NULLs are treated as distinct in a unique index). Test fails loudly if the constraint rejects a second manual account, blocking the PR until resolved.
-- [ ] AC-8: `ManualAccountForm` (`app/(app)/accounts/ManualAccountForm.tsx`) renders only when `MANUAL_ACCOUNTS_ENABLED` is true. The form is not present in the DOM (not just hidden) when the flag is off.
-- [ ] AC-9: Form fields: account name (required, text), institution name (optional, text), kind picker (radio or select: checking / savings / credit / investment / other), currency picker (ISO 4217 single-select; USD pre-selected; picker disabled and locked to USD when `MULTI_CURRENCY_ACCOUNTS_ENABLED` is off).
-- [ ] AC-10: Form shows a loading state (button disabled, spinner or text change) while the `fetch('/api/accounts', { method: 'POST' })` request is in-flight.
-- [ ] AC-11: On success, the form shows a success message (e.g., "Account created") and triggers accounts-list revalidation so the new account appears without a full page reload.
-- [ ] AC-12: On API error, the form shows a discriminated error message: `MANUAL_ACCOUNTS_DISABLED` → "Manual accounts are not available yet", `currency` rejection → "Multi-currency accounts are not available yet", validation error → field-level inline error, network error → "Something went wrong — please try again". Error is associated with the relevant field or displayed as a form-level banner.
-- [ ] AC-13: All form controls are keyboard-navigable (Tab order: name → institution name → kind → currency → submit). The kind picker and currency picker are operable via keyboard. Submit button receives focus on mount-equivalent (first field focused on modal/panel open).
-- [ ] AC-14: RLS smoke test: a `financial_accounts` row created by user A (with `connection_id = null`) is visible to user A and invisible to user B via the `financial_accounts_select_own` policy.
-- [ ] AC-15: E2E test creates a manual USD checking account, verifies the row in `financial_accounts` with `connection_id = null` and `kind = 'depository'`, then **hard-deletes the created row** so no residual test records remain.
+- [x] AC-1: Migration `supabase/migrations/0020_financial_accounts_kind.sql` widens the `kind` check constraint from `('depository','credit')` to `('depository','credit','investment','other')`. Constraint name verified on ephemeral PG before `DROP CONSTRAINT IF EXISTS` is executed (expected name: `financial_accounts_kind_check`).
+- [x] AC-2: `POST /api/accounts` route handler (`app/api/accounts/route.ts`) is AAL2-gated via `getAal2UserId()`. Returns `401` for an AAL1 session or unauthenticated request.
+- [x] AC-3: Route handler reads `MANUAL_ACCOUNTS_ENABLED` from env. If the flag is absent or false, the endpoint returns `403` with `{ error: 'MANUAL_ACCOUNTS_DISABLED' }`.
+- [x] AC-4: Route handler rejects `currency !== 'USD'` with `400` when `MULTI_CURRENCY_ACCOUNTS_ENABLED` is off. When the flag is on, any valid ISO 4217 currency code (from the defined allowlist) is accepted.
+- [x] AC-5: Route handler maps user-facing `kind` to DB `kind`: `checking → depository`, `savings → depository`, `credit → credit`, `investment → investment`, `other → other`. Returns `400` on an unrecognized kind.
+- [x] AC-6: Route handler writes a `financial_accounts` row with `connection_id = null`, `provider_account_id = null`, and the mapped `kind`, `currency`, `name`, and optional `institution_name`. Returns `{ account: { id, name, kind, currency } }` on success.
+- [x] AC-7: Integration test confirms PostgreSQL `unique(connection_id, provider_account_id)` allows two `(null, null)` rows for the same user (NULLs are treated as distinct in a unique index). Test fails loudly if the constraint rejects a second manual account, blocking the PR until resolved.
+- [x] AC-8: `ManualAccountForm` (`app/(app)/accounts/ManualAccountForm.tsx`) renders only when `MANUAL_ACCOUNTS_ENABLED` is true. The form is not present in the DOM (not just hidden) when the flag is off.
+- [x] AC-9: Form fields: account name (required, text), institution name (optional, text), kind picker (radio or select: checking / savings / credit / investment / other), currency picker (ISO 4217 single-select; USD pre-selected; picker disabled and locked to USD when `MULTI_CURRENCY_ACCOUNTS_ENABLED` is off).
+- [x] AC-10: Form shows a loading state (button disabled, spinner or text change) while the `fetch('/api/accounts', { method: 'POST' })` request is in-flight.
+- [x] AC-11: On success, the form shows a success message (e.g., "Account created") and triggers accounts-list revalidation so the new account appears without a full page reload.
+- [x] AC-12: On API error, the form shows a discriminated error message: `MANUAL_ACCOUNTS_DISABLED` → "Manual accounts are not available yet", `currency` rejection → "Multi-currency accounts are not available yet", validation error → field-level inline error, network error → "Something went wrong — please try again". Error is associated with the relevant field or displayed as a form-level banner.
+- [x] AC-13: All form controls are keyboard-navigable (Tab order: name → institution name → kind → currency → submit). The kind picker and currency picker are operable via keyboard. Submit button receives focus on mount-equivalent (first field focused on modal/panel open).
+- [x] AC-14: RLS smoke test: a `financial_accounts` row created by user A (with `connection_id = null`) is visible to user A and invisible to user B via the `financial_accounts_select_own` policy.
+- [x] AC-15: E2E test creates a manual USD checking account, verifies the row in `financial_accounts` with `connection_id = null` and `kind = 'depository'`, then **hard-deletes the created row** so no residual test records remain.
 
 ## Standard Experience Checklist
 
@@ -62,7 +62,7 @@ Dependency note: WLT-27-1 must be merged before WLT-27-2 is deployed. For USD-on
 
 ## PRs
 
-_Auto-populated as PRs open._
+- https://github.com/vivekschaudhary/home-app/pull/125 — feat(WLT-27-2): manual account entry API + UI
 
 ## Tests
 
