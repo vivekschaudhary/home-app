@@ -89,6 +89,13 @@ _None yet._
 
 - **[2026-06-28] [PM]** `dedupKey` null-providerAccountId must be verified (inherited from brief DRI Issue) — severity: medium — owner: Engineer — status: open (resolved by AC-2 in this story). Closes the brief issue.
 
+### Arbitration
+
+- **[2026-06-29] [PM — arbitrate-dispute]** **BLOCKER resolved — clear to merge at `745e4fd`.**
+  - **Reviewer position:** `resolveDirection` produced `{ amount: "0", error: true }` rows for split debit/credit CSVs when both columns were blank, `"0.00"`, or non-numeric (e.g., opening-balance summary rows). These rows were not filtered before the POST, and `isValidCsvRow` accepted `"0"` via `/^\d+(\.\d+)?$/`. Result: zero-amount transactions would be written to the DB. Finding was correct and load-bearing.
+  - **Engineer position:** Fix applied at `745e4fd`. Two layers of defense: (1) `handleImport` filters `directionError` rows before POST; (2) `isValidCsvRow` adds `parseFloat(amount) > 0`. `resolveDirection` + `ColumnMapping` extracted to `packages/aggregation/csv/normalize.ts` for testability. 10 regression unit tests added covering all blank/zero/non-numeric combinations in both split and single-column modes — all pass.
+  - **Decision:** Engineer's fix is correct, complete, and structurally sound. Defense-in-depth is appropriate here: client filter provides good UX, server guard makes the data layer self-protecting. No new issues introduced. BLOCKER closed. PR #124 clears at current HEAD.
+
 ---
 
 _Story closed: pending. Brief: docs/bets/WLT-27/brief.md_
