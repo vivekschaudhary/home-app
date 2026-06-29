@@ -64,6 +64,9 @@ export interface SpendingTxn {
   amount: number;
   /** 'YYYY-MM-DD' (provider posted date). */
   occurredOn: string;
+  /** ISO 4217 currency code. Filtering by currency happens at the app-layer read
+   * before txns reach the pure compute functions. */
+  currency: string;
 }
 
 /** A humanized category + its summed spend this week. */

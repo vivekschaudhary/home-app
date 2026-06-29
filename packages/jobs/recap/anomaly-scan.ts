@@ -24,12 +24,24 @@ export const anomalyScanDaily = inngest.createFunction(
 
     const userIds = await step.run("list-active-users", async () => {
       const svc = createServiceSupabase();
-      const { data } = await svc
-        .from("account_connections")
-        .select("user_id")
-        .eq("health_status", "active")
-        .is("deleted_at", null);
-      return [...new Set((data ?? []).map((r) => (r as { user_id: string }).user_id))];
+      // Users with an active Plaid connection OR at least one manual account
+      // (connection_id IS NULL). Without the second clause, manual-account-only
+      // users are silently excluded from anomaly detection.
+      const [{ data: connData }, { data: manualData }] = await Promise.all([
+        svc
+          .from("account_connections")
+          .select("user_id")
+          .eq("health_status", "active")
+          .is("deleted_at", null),
+        svc
+          .from("financial_accounts")
+          .select("user_id")
+          .is("connection_id", null)
+          .is("deleted_at", null),
+      ]);
+      const connIds = (connData ?? []).map((r) => (r as { user_id: string }).user_id);
+      const manualIds = (manualData ?? []).map((r) => (r as { user_id: string }).user_id);
+      return [...new Set([...connIds, ...manualIds])];
     });
     if (userIds.length === 0) return { asOf, scanned: 0, inserted: 0 };
 
@@ -41,8 +53,9 @@ export const anomalyScanDaily = inngest.createFunction(
         const [{ data: txRows }, { data: acctRows }, assignments, spendingFlags] = await Promise.all([
           svc
             .from("transactions")
-            .select("id, account_id, dedup_key, direction, category, merchant, amount, occurred_on")
+            .select("id, account_id, dedup_key, direction, category, merchant, amount, occurred_on, currency")
             .eq("user_id", userId)
+            .eq("currency", "USD")
             .is("removed_at", null)
             .is("superseded_by", null)
             .gte("occurred_on", since),

@@ -45,7 +45,7 @@ export default defineConfig({
         // Turn it on for the e2e server so the recap's real-path spec can exercise
         // its owner-scoped reads (net_worth_snapshots + transactions) through a
         // real session → createServerSupabase → RLS → rendered rows.
-        env: { ...process.env, RECAP_ENABLED: "true" },
+        env: { ...process.env, RECAP_ENABLED: "true", DASHBOARD_INTELLIGENCE_ENABLED: "true" },
       },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
 });
