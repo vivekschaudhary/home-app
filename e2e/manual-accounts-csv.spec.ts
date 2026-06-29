@@ -346,6 +346,59 @@ test.describe("WLT-27-2 AC-15: manual USD checking account creation E2E", () => 
   });
 });
 
+// ── WLT-27-2 AC-7: two null,null rows for the same user are distinct ─────────
+// PostgreSQL treats NULL as distinct in a unique index, so two rows with
+// connection_id=null and provider_account_id=null must NOT conflict.
+test.describe("WLT-27-2 AC-7: multiple manual accounts per user (NULL uniqueness)", () => {
+  test.skip(!RUN || !DB_URL || !MANUAL_ACCOUNTS_ENABLED, "Set E2E_PASSKEY=1 + SUPABASE_DB_URL + MANUAL_ACCOUNTS_ENABLED=true to run.");
+
+  let db: Client;
+  let userId: string;
+
+  test.beforeAll(async () => {
+    db = new Client({ connectionString: DB_URL });
+    await db.connect();
+  });
+
+  test.afterAll(async () => {
+    if (userId) await cleanupUser(db, userId);
+    await db.end();
+  });
+
+  test("two manual accounts can be created for the same user — second (null,null) row is not rejected by the unique index", async ({ page, context }) => {
+    const email = `e2e-wlt27-ac7+${Date.now()}@example.com`;
+    await signUpWithPasskey(page, context, email);
+    const res = await db.query("select id from auth.users where email = $1", [email]);
+    userId = res.rows[0].id;
+
+    // First manual account.
+    const acct1Res = await page.request.post("/api/accounts", {
+      data: { name: "My Checking Account", kind: "checking", currency: "USD" },
+    });
+    expect(acct1Res.ok()).toBe(true);
+    const acct1 = await acct1Res.json() as { account: { id: string } };
+
+    // Second manual account — same user, both connection_id=null.
+    const acct2Res = await page.request.post("/api/accounts", {
+      data: { name: "My Savings Account", kind: "savings", currency: "USD" },
+    });
+    expect(acct2Res.ok()).toBe(true);
+    const acct2 = await acct2Res.json() as { account: { id: string } };
+
+    // Both accounts exist with distinct IDs.
+    expect(acct1.account.id).not.toBe(acct2.account.id);
+
+    // DB confirms both rows have connection_id = null.
+    const dbRows = await db.query(
+      "select id, connection_id from financial_accounts where user_id = $1 and connection_id is null order by created_at",
+      [userId],
+    );
+    expect(dbRows.rows.length).toBe(2);
+    expect(dbRows.rows.every((r: { connection_id: unknown }) => r.connection_id === null)).toBe(true);
+    // cleanupUser in afterAll hard-deletes both financial_accounts rows.
+  });
+});
+
 // ── WLT-27-3 AC-6: ACCOUNT_NOT_MANUAL guard ────────────────────────────────────
 test.describe("WLT-27-3 AC-6: ACCOUNT_NOT_MANUAL guard", () => {
   test.skip(!RUN || !DB_URL, "Set E2E_PASSKEY=1 + SUPABASE_DB_URL to run.");

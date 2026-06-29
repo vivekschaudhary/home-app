@@ -70,6 +70,34 @@ describe("AccountsClient — reconcile on mount (#36 regression)", () => {
   });
 });
 
+// ── AC-8: ManualAccountForm absent from DOM when manualAccountsEnabled=false ────
+describe("AccountsClient — manual account button gate (AC-8)", () => {
+  it("'Add account manually' button is absent when manualAccountsEnabled=false", async () => {
+    fetchConnections.mockResolvedValue([]);
+    triggerRefreshMock.mockResolvedValue(false);
+    render(<AccountsClient initialConnections={[]} manualAccountsEnabled={false} />);
+    await waitFor(() => expect(triggerRefreshMock).toHaveBeenCalled());
+    expect(screen.queryByRole("button", { name: /add account manually/i })).toBeNull();
+  });
+
+  it("'Add account manually' button is present when manualAccountsEnabled=true", async () => {
+    fetchConnections.mockResolvedValue([]);
+    triggerRefreshMock.mockResolvedValue(false);
+    render(<AccountsClient initialConnections={[]} manualAccountsEnabled={true} />);
+    await waitFor(() => expect(triggerRefreshMock).toHaveBeenCalled());
+    expect(screen.getByRole("button", { name: /add account manually/i })).toBeTruthy();
+  });
+
+  it("ManualAccountForm is not in the DOM when manualAccountsEnabled=false (not just hidden)", async () => {
+    fetchConnections.mockResolvedValue([]);
+    triggerRefreshMock.mockResolvedValue(false);
+    render(<AccountsClient initialConnections={[]} manualAccountsEnabled={false} />);
+    await waitFor(() => expect(triggerRefreshMock).toHaveBeenCalled());
+    // The form title appears only when the form is rendered.
+    expect(screen.queryByRole("dialog", { name: /add account manually/i })).toBeNull();
+  });
+});
+
 describe("AccountsClient — mount-trigger and sync indicator", () => {
   it("calls fetchConnections then triggerRefresh on mount", async () => {
     fetchConnections.mockResolvedValue([CONNECTION]);

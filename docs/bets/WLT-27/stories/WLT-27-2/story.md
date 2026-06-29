@@ -89,6 +89,13 @@ _None yet._
 
 - **[2026-06-28] [PM]** Plaid link-failure instrumentation not yet in place (inherited from brief DRI) — add instrumentation as a parallel track to this story or as a prerequisite; without it, the coverage-gap cohort size remains unmeasured. Severity: medium. Owner: Engineer. Status: open.
 
+### Arbitration
+
+- **[2026-06-29] [PM]** **BLOCKER cleared — Reviewer vs Engineer: `searchParams` Promise typing.**
+  - **Reviewer's position (valid):** `accounts/page.tsx` did not accept `searchParams` at all, which is a hard runtime error in Next.js 15 App Router where Server Components must type `searchParams` as `Promise<...>` and await it before access. Accessing it synchronously or omitting it entirely prevents the RegionSwitcher from reading `?currency=`.
+  - **Engineer's response (correct):** Commit `90a78cf` types `searchParams` as `Promise<{ currency?: string }>`, awaits it into `sp`, guards `sp.currency` with an ISO 4217 regex (`/^[A-Z]{3}$/`) before use, parallelises `readDistinctCurrencies` alongside `connectionsList` under `Promise.all`, and passes `currencies` + `initialCurrency` to `AccountsClient`. This matches the pattern used by other pages in the repo.
+  - **Decision:** Engineer executed correctly. The fix is technically sound — no over-engineering, no gap, no open technical concerns. BLOCKER is resolved. PR #125 may proceed to approval.
+
 ---
 
 _Story closed: pending. Brief: docs/bets/WLT-27/brief.md_
