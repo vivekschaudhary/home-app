@@ -15,6 +15,7 @@ import {
 import { COPY } from "@/app/lib/copy";
 import { isImporting, statusFor } from "./import-state";
 import { ManualAccountForm } from "./ManualAccountForm";
+import { RegionSwitcher } from "./RegionSwitcher";
 
 function errorCopy(e: AggError): string {
   switch (e) {
@@ -43,10 +44,14 @@ export function AccountsClient({
   initialConnections,
   manualAccountsEnabled = false,
   multiCurrencyEnabled = false,
+  currencies = ["USD"],
+  initialCurrency = "USD",
 }: {
   initialConnections: ConnectionView[];
   manualAccountsEnabled?: boolean;
   multiCurrencyEnabled?: boolean;
+  currencies?: string[];
+  initialCurrency?: string;
 }) {
   const [connections, setConnections] = useState<ConnectionView[]>(initialConnections);
   const [consentOpen, setConsentOpen] = useState(false);
@@ -203,9 +208,14 @@ export function AccountsClient({
   return (
     <div>
       {/* WLT-20: rendered inside the app shell — the shell provides nav/chrome. */}
-      <h1 ref={headingRef} tabIndex={-1} className="text-xl font-semibold text-gray-900 outline-none">
-        {COPY.accounts.title}
-      </h1>
+      <div className="flex items-center justify-between">
+        <h1 ref={headingRef} tabIndex={-1} className="text-xl font-semibold text-gray-900 outline-none">
+          {COPY.accounts.title}
+        </h1>
+        {multiCurrencyEnabled ? (
+          <RegionSwitcher currencies={currencies} currentCurrency={initialCurrency} />
+        ) : null}
+      </div>
 
       <section className="mt-6 space-y-4">
         {error ? <Banner variant="error">{error}</Banner> : null}
