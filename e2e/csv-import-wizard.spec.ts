@@ -3,7 +3,8 @@
 // Per-surface vertical: real passkey AAL2 auth → requireAal2() gate in (app)
 // layout → RSC renders CsvImportWizardHarness (prod render path) → client
 // hydrates CsvImportWizard. The POST to /api/accounts/:id/import is intercepted
-// via page.route() because the route handler ships in WLT-27-5 — flagged below.
+// via page.route() because the harness uses a synthetic account ID that doesn't
+// exist in the DB; the real route handler shipped in WLT-27-3 (PR #128).
 //
 // Gate: E2E_PASSKEY=1 + SUPABASE_DB_URL (real Supabase project required).
 // Cleanup: each test creates a fresh auth.users row, hard-deleted in afterEach.
@@ -261,8 +262,9 @@ test.describe("CSV Import Wizard — WLT-27-4", () => {
   // ── Step 4: Confirm ─────────────────────────────────────────────────────────
 
   // NOTE: /api/accounts/e2e-test-account/import is intercepted via page.route()
-  // because the server handler ships in WLT-27-5. The real auth→AAL2→RSC vertical
-  // is exercised in beforeEach; this test verifies the client-side confirm flow.
+  // because the harness uses a synthetic account ID absent from the DB. The real
+  // route handler (WLT-27-3, PR #128) enforces auth + manual-only ownership;
+  // the real auth→AAL2→RSC vertical is exercised in beforeEach.
 
   test("step 4: Import button shows row count label (AC-7)", async ({ page }) => {
     await page.getByLabel("Select a CSV file").setInputFiles({

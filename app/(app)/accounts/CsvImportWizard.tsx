@@ -84,7 +84,7 @@ function parseDate(raw: string): string {
 function parseSigned(raw: string): { amount: string; direction: "debit" | "credit" } | null {
   const n = parseFloat(raw.replace(/[$, ]/g, ""));
   if (isNaN(n)) return null;
-  // Apple Card: negative = debit (purchase), positive = credit (refund). Zero treated as credit.
+  // Negative = debit (expense), non-negative = credit (income/refund).
   return { amount: Math.abs(n).toFixed(2), direction: n < 0 ? "debit" : "credit" };
 }
 
@@ -573,7 +573,7 @@ export function CsvImportWizard({ accountId, accountCurrency, onDone, onCancel }
           </div>
           {totalRows > 10 && (
             <p className="text-sm text-gray-500">
-              Showing first 10 of {totalRows} rows.
+              {COPY.csvWizard.previewMore.replace("{count}", String(totalRows))}
             </p>
           )}
 
@@ -615,7 +615,9 @@ export function CsvImportWizard({ accountId, accountCurrency, onDone, onCancel }
             <div className="space-y-3">
               {!importError && (
                 <p className="text-sm text-gray-600">
-                  Ready to import {totalRows} {accountCurrency} rows.
+                  {COPY.csvWizard.readyToImport
+                    .replace("{count}", String(totalRows))
+                    .replace("{currency}", accountCurrency)}
                 </p>
               )}
               <div className="flex gap-3">
