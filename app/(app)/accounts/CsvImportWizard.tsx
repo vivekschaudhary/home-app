@@ -501,7 +501,7 @@ export function CsvImportWizard({ accountId, accountCurrency, onDone, onCancel }
 
             <ColumnSelect
               id="map-category"
-              label={COPY.csvWizard.mapCategoryOptional}
+              label={COPY.csvWizard.mapCategory}
               value={mapping.category}
               onChange={setField("category")}
               headers={parsed.headers}
