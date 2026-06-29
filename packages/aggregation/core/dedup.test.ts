@@ -4,7 +4,7 @@ import type { NormalizedTransaction } from "./types";
 
 const base: NormalizedTransaction = {
   providerTransactionId: "txn_1",
-  providerAccountId: "acc_1",
+  providerAccountId: "acc_1" as string | null,
   amount: "12.34",
   direction: "debit",
   currency: "USD",
@@ -33,6 +33,22 @@ describe("dedupKey", () => {
     expect(k.startsWith("csv:acc_1:")).toBe(true);
     expect(dedupKey({ ...csv })).toBe(k); // deterministic
     expect(dedupKey({ ...csv, amount: "0.01" })).not.toBe(k); // amount is part of identity for CSV
+  });
+
+  // WLT-27-3 regression: null providerAccountId → 'manual' segment, never 'null'.
+  it("uses 'manual' as the account segment when providerAccountId is null (CSV/manual source)", () => {
+    const csv = { ...base, providerTransactionId: null, providerAccountId: null, source: "csv" };
+    const k = dedupKey(csv);
+    expect(k.startsWith("csv:manual:")).toBe(true);
+    expect(k).not.toContain(":null:");
+    expect(dedupKey({ ...csv })).toBe(k); // deterministic across re-imports
+  });
+
+  // WLT-27-3 AC-13: Plaid rows with non-null providerAccountId are unchanged (fix is a no-op).
+  it("WLT-27-3 Plaid regression: non-null providerAccountId still produces the original key (AC-13)", () => {
+    // regression: true — before the fix, key was source:providerAccountId:providerTransactionId.
+    // After the fix, ?? 'manual' never fires when providerAccountId is non-null.
+    expect(dedupKey(base)).toBe("plaid:acc_1:txn_1");
   });
 });
 

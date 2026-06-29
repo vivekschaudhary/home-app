@@ -91,4 +91,48 @@ describe("ingestTransactions", () => {
     });
     expect(res.inserted).toBe(0);
   });
+
+  // WLT-27-3 AC-3: null providerAccountId (CSV rows) → looks up 'manual' in the map.
+  it("routes CSV rows (providerAccountId=null) via the 'manual' map key (AC-3)", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const svc = makeFakeSvc() as any;
+    const csvTxn: NormalizedTransaction = {
+      providerTransactionId: null,
+      providerAccountId: null,
+      amount: "15.00",
+      direction: "debit",
+      currency: "USD",
+      description: "Coffee Shop",
+      merchant: null,
+      category: "Food",
+      kind: "spend",
+      occurredOn: "2026-06-01",
+      pending: false,
+      source: "csv",
+    };
+
+    const res = await ingestTransactions({
+      userId: "u1",
+      page: page([csvTxn]),
+      accountIdByProviderAccountId: new Map([["manual", "fa_csv_1"]]),
+      svc,
+    });
+    expect(res.inserted).toBe(1);
+  });
+
+  // WLT-27-3 AC-13 regression: Plaid rows with non-null providerAccountId still
+  // resolve correctly after the ?? 'manual' change (fix is a no-op for Plaid).
+  // regression: true
+  it("WLT-27-3 Plaid regression: non-null providerAccountId still resolves via the existing map key (AC-13)", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const svc = makeFakeSvc() as any;
+    const accMap = new Map([["acc_1", "fa_1"]]);
+    const res = await ingestTransactions({
+      userId: "u1",
+      page: page([txn("t1")]),
+      accountIdByProviderAccountId: accMap,
+      svc,
+    });
+    expect(res.inserted).toBe(1);
+  });
 });

@@ -11,11 +11,14 @@ export function sha256(input: string): string {
 
 /** Stable logical identity of a transaction across content revisions. */
 export function dedupKey(t: Pick<NormalizedTransaction, "source" | "providerAccountId" | "providerTransactionId" | "occurredOn" | "amount" | "description">): string {
+  // WLT-27-3: normalize null providerAccountId to 'manual' so CSV rows produce a
+  // stable key segment. Plaid always provides a non-null value so ?? never fires.
+  const accountSegment = t.providerAccountId ?? "manual";
   if (t.providerTransactionId) {
-    return `${t.source}:${t.providerAccountId}:${t.providerTransactionId}`;
+    return `${t.source}:${accountSegment}:${t.providerTransactionId}`;
   }
   // No provider id (CSV/manual) — synthesize from stable content.
-  return `${t.source}:${t.providerAccountId}:${sha256(`${t.occurredOn}|${t.amount}|${t.description}`)}`;
+  return `${t.source}:${accountSegment}:${sha256(`${t.occurredOn}|${t.amount}|${t.description}`)}`;
 }
 
 /** Hash of the MUTABLE fields — distinguishes a real `modified` revision from a replay. */
