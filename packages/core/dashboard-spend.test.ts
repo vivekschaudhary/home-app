@@ -5,7 +5,7 @@ import type { SpendingTxn } from "./recap";
 const ASOF = "2026-06-15"; // curMonth = 2026-06; 5 prior months = 2026-01..2026-05
 
 function tx(occurredOn: string, amount: number, category: string | null = "FOOD_AND_DRINK", direction = "debit"): SpendingTxn {
-  return { occurredOn, amount, category, direction };
+  return { occurredOn, amount, category, direction, currency: "USD" };
 }
 
 describe("buildCategorySpendChart", () => {

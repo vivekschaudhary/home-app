@@ -15,7 +15,7 @@ import type { SpendingTxn } from "./recap";
 const ASOF = "2026-06-15"; // current month 2026-06; trailing window 2025-12..2026-05
 
 function tx(occurredOn: string, amount: number, category: string | null = "FOOD_AND_DRINK", direction = "debit"): SpendingTxn {
-  return { occurredOn, amount, category, direction };
+  return { occurredOn, amount, category, direction, currency: "USD" };
 }
 
 describe("computeMonthlySpending — this month so far", () => {

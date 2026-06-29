@@ -122,7 +122,7 @@ describe("computeSpendingComparison", () => {
   const ASOF = "2026-06-15";
   // windows: this-week (2026-06-08, 06-15]; prior-week (2026-06-01, 06-08]
   function tx(occurredOn: string, amount: number, direction = "debit", category: string | null = "GROCERIES"): SpendingTxn {
-    return { occurredOn, amount, direction, category };
+    return { occurredOn, amount, direction, category, currency: "USD" };
   }
 
   it("returns null when nothing was spent this week (omit the section, AC3)", () => {
