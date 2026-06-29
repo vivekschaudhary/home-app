@@ -91,7 +91,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const csvRows = body.rows as NormalizedCsvRow[];
   const normalized: NormalizedTransaction[] = csvRows.map((row) => ({
     providerTransactionId: null,
-    providerAccountId: null,
+    // WLT-27-3 BLOCKER fix: use the actual account UUID so dedup keys are scoped
+    // per account (csv:<accountId>:<hash>). null → 'manual' collapses ALL manual
+    // accounts onto the same key segment, causing cross-account dedup collisions.
+    providerAccountId: accountId,
     source: "csv",
     amount: row.amount,
     direction: row.direction,
@@ -109,7 +112,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const result = await ingestTransactions({
       userId,
       page: { added: normalized, modified: [], removed: [], nextCursor: null, hasMore: false },
-      accountIdByProviderAccountId: new Map([["manual", accountId]]),
+      accountIdByProviderAccountId: new Map([[accountId, accountId]]),
       svc,
     });
     return Response.json(result);

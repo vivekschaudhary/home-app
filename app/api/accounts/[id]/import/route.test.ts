@@ -194,33 +194,74 @@ describe("AC-8 / AC-10: successful import", () => {
     expect(body.removed).toBe(0);
   });
 
-  it("calls ingestTransactions with source='csv', providerTransactionId=null, providerAccountId=null, currency from account (AC-8)", async () => {
+  it("calls ingestTransactions with source='csv', providerTransactionId=null, providerAccountId=accountId, currency from account (AC-8)", async () => {
     mockIngestTransactions.mockResolvedValue({ inserted: 1, superseded: 0, removed: 0 });
     await POST(...makeReq({ rows: [row({ category: "Food" })] }));
 
     expect(mockIngestTransactions).toHaveBeenCalledOnce();
     const call = mockIngestTransactions.mock.calls[0][0] as {
       userId: string;
-      page: { added: Array<{ source: string; providerTransactionId: null; providerAccountId: null; currency: string; kind: string }> };
+      page: { added: Array<{ source: string; providerTransactionId: null; providerAccountId: string; currency: string; kind: string }> };
       accountIdByProviderAccountId: Map<string, string>;
     };
     const added = call.page.added;
     expect(added).toHaveLength(1);
     expect(added[0].source).toBe("csv");
     expect(added[0].providerTransactionId).toBeNull();
-    expect(added[0].providerAccountId).toBeNull();
+    // BLOCKER fix: providerAccountId is the account UUID (not null) so dedup keys are
+    // scoped per account — csv:<accountId>:<hash> prevents cross-account collisions.
+    expect(added[0].providerAccountId).toBe(VALID_UUID);
     expect(added[0].currency).toBe("USD");
     expect(added[0].kind).toBe("spend");
   });
 
-  it("calls ingestTransactions with accountIdByProviderAccountId: Map([['manual', accountId]]) (AC-9)", async () => {
+  it("calls ingestTransactions with accountIdByProviderAccountId keyed by account UUID (AC-9)", async () => {
     mockIngestTransactions.mockResolvedValue({ inserted: 1, superseded: 0, removed: 0 });
     await POST(...makeReq({ rows: [row()] }));
 
     const call = mockIngestTransactions.mock.calls[0][0] as {
       accountIdByProviderAccountId: Map<string, string>;
     };
-    expect(call.accountIdByProviderAccountId.get("manual")).toBe(VALID_UUID);
+    // BLOCKER fix: key is the account UUID (matching providerAccountId), not 'manual'.
+    expect(call.accountIdByProviderAccountId.get(VALID_UUID)).toBe(VALID_UUID);
+    expect(call.accountIdByProviderAccountId.has("manual")).toBe(false);
+  });
+
+  // BLOCKER regression: cross-account dedup isolation.
+  // Two manual accounts importing identical row content must produce DISTINCT
+  // providerAccountId values so dedupKey generates csv:<acctA>:<hash> vs
+  // csv:<acctB>:<hash> — no collision on (user_id, dedup_key, content_hash).
+  // regression: true
+  it("BLOCKER fix: two manual accounts with identical row content receive distinct providerAccountId, preventing cross-account dedup collision", async () => {
+    const VALID_UUID_2 = "00000000-0000-0000-0000-000000000002";
+
+    // First call — account 1 (VALID_UUID)
+    mockIngestTransactions.mockResolvedValue({ inserted: 1, superseded: 0, removed: 0 });
+    await POST(...makeReq({ rows: [row()] }, VALID_UUID));
+    const call1 = mockIngestTransactions.mock.calls[0][0] as {
+      page: { added: Array<{ providerAccountId: string }> };
+      accountIdByProviderAccountId: Map<string, string>;
+    };
+
+    vi.clearAllMocks();
+    mockGetAal2UserId.mockResolvedValue("user-1");
+    mockMaybeSingle.mockResolvedValue({ data: { ...MANUAL_ACCOUNT, id: VALID_UUID_2 }, error: null });
+    mockIngestTransactions.mockResolvedValue({ inserted: 1, superseded: 0, removed: 0 });
+
+    // Second call — account 2 (VALID_UUID_2) with the SAME row content
+    await POST(...makeReq({ rows: [row()] }, VALID_UUID_2));
+    const call2 = mockIngestTransactions.mock.calls[0][0] as {
+      page: { added: Array<{ providerAccountId: string }> };
+      accountIdByProviderAccountId: Map<string, string>;
+    };
+
+    expect(call1.page.added[0].providerAccountId).toBe(VALID_UUID);
+    expect(call2.page.added[0].providerAccountId).toBe(VALID_UUID_2);
+    // Different providerAccountIds → different dedup keys → no collision
+    expect(call1.page.added[0].providerAccountId).not.toBe(call2.page.added[0].providerAccountId);
+    // And the map keys must match the providerAccountId (not 'manual')
+    expect(call1.accountIdByProviderAccountId.has(VALID_UUID)).toBe(true);
+    expect(call2.accountIdByProviderAccountId.has(VALID_UUID_2)).toBe(true);
   });
 
   it("propagates non-USD currency from the account to each mapped row", async () => {
