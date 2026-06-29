@@ -7,6 +7,7 @@
   "types": "./index.ts",
   "exports": {
     ".": "./index.ts",
+    "./csv/apple-card": "./csv/apple-card.ts",
     "./plaid": "./plaid/index.ts",
     "./plaid/webhook": "./plaid/webhook.ts",
     "./vault": "./vault/supabase-vault.ts"
