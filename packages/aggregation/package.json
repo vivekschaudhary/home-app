@@ -10,7 +10,8 @@
     "./plaid": "./plaid/index.ts",
     "./plaid/webhook": "./plaid/webhook.ts",
     "./vault": "./vault/supabase-vault.ts",
-    "./csv/apple-card": "./csv/apple-card.ts"
+    "./csv/apple-card": "./csv/apple-card.ts",
+    "./csv/normalize": "./csv/normalize.ts"
   },
   "dependencies": {
     "@vc1023/passkey-2fa": "workspace:*",

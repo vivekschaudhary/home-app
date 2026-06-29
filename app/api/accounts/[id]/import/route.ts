@@ -30,6 +30,7 @@ function isValidCsvRow(r: unknown): r is NormalizedCsvRow {
     row.description.length > 0 &&
     typeof row.amount === "string" &&
     /^\d+(\.\d+)?$/.test(row.amount) &&
+    parseFloat(row.amount) > 0 &&
     (row.direction === "debit" || row.direction === "credit")
   );
 }

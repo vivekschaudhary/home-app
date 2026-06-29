@@ -13,9 +13,9 @@ import { useEffect, useRef, useState } from "react";
 import Papa from "papaparse";
 import { COPY } from "@/app/lib/copy";
 import { type CsvPreset, detectPreset, getPreset } from "@wealth/aggregation/csv/apple-card";
+import { type ColumnMapping, resolveDirection } from "@wealth/aggregation/csv/normalize";
 
 const C = COPY.csvWizard;
-const MAX_ROWS = 10_000;
 
 interface ParsedRow {
   occurredOn: string;
@@ -24,43 +24,6 @@ interface ParsedRow {
   direction: "debit" | "credit";
   directionError?: boolean;
   category?: string | null;
-}
-
-interface ColumnMapping {
-  date: string;
-  description: string;
-  amount: string;
-  category: string;
-  splitDebitCredit: boolean;
-  debitColumn: string;
-  creditColumn: string;
-}
-
-function resolveDirection(
-  rawRow: Record<string, string>,
-  mapping: ColumnMapping,
-  preset: CsvPreset | null,
-): { amount: string; direction: "debit" | "credit"; error: boolean } {
-  if (mapping.splitDebitCredit) {
-    const debitVal = parseFloat(rawRow[mapping.debitColumn] ?? "");
-    const creditVal = parseFloat(rawRow[mapping.creditColumn] ?? "");
-    if (!isNaN(debitVal) && debitVal > 0) return { amount: String(debitVal), direction: "debit", error: false };
-    if (!isNaN(creditVal) && creditVal > 0) return { amount: String(creditVal), direction: "credit", error: false };
-    return { amount: "0", direction: "debit", error: true };
-  }
-  const rawAmt = rawRow[mapping.amount] ?? "";
-  const parsed = parseFloat(rawAmt.replace(/[$,]/g, ""));
-  if (isNaN(parsed)) return { amount: "0", direction: "debit", error: true };
-  // Apple Card preset: negative = debit, positive = credit
-  if (preset?.columnMap.directionFromSign) {
-    return {
-      amount: String(Math.abs(parsed)),
-      direction: parsed < 0 ? "debit" : "credit",
-      error: false,
-    };
-  }
-  // Default: positive amounts are debits (most bank CSVs)
-  return { amount: String(Math.abs(parsed)), direction: parsed >= 0 ? "debit" : "credit", error: false };
 }
 
 function mapRows(rawData: Record<string, string>[], mapping: ColumnMapping, preset: CsvPreset | null): ParsedRow[] {
@@ -187,7 +150,7 @@ export function CsvImportWizard({
 
   async function handleImport() {
     const preset = detectedPresetId ? getPreset(detectedPresetId) : null;
-    const allRows = mapRows(rawData, mapping, preset);
+    const allRows = mapRows(rawData, mapping, preset).filter((r) => !r.directionError);
 
     setImporting(true);
     setImportError(null);
