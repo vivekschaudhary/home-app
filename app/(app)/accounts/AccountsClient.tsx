@@ -6,14 +6,17 @@ import { AccountCard, Banner, Button, ConfirmDialog, Toast } from "@wealth/ui";
 import {
   type AggError,
   type ConnectionView,
+  type ManualAccountView,
   completeLink,
   disconnectConnection,
   fetchConnections,
+  fetchManualAccounts,
   startLink,
   triggerRefresh,
 } from "@/app/lib/aggregation-client";
 import { COPY } from "@/app/lib/copy";
 import { isImporting, statusFor } from "./import-state";
+import { ManualAccountForm } from "./ManualAccountForm";
 
 function errorCopy(e: AggError): string {
   switch (e) {
@@ -38,9 +41,19 @@ function relativeTime(iso: string): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-export function AccountsClient({ initialConnections }: { initialConnections: ConnectionView[] }) {
+export function AccountsClient({
+  initialConnections,
+  manualAccountsEnabled = false,
+  multiCurrencyEnabled = false,
+}: {
+  initialConnections: ConnectionView[];
+  manualAccountsEnabled?: boolean;
+  multiCurrencyEnabled?: boolean;
+}) {
   const [connections, setConnections] = useState<ConnectionView[]>(initialConnections);
+  const [manualAccounts, setManualAccounts] = useState<ManualAccountView[]>([]);
   const [consentOpen, setConsentOpen] = useState(false);
+  const [manualFormOpen, setManualFormOpen] = useState(false);
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,7 +68,9 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
   const activeIdsRef = useRef<Set<string>>(new Set());
 
   const refresh = useCallback(async () => {
-    setConnections(await fetchConnections());
+    const [conns, manuals] = await Promise.all([fetchConnections(), fetchManualAccounts()]);
+    setConnections(conns);
+    setManualAccounts(manuals);
   }, []);
 
   // On mount: reconcile with live DB state, snapshot the current lastSyncedAt
@@ -64,8 +79,9 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
   // which could lag if Next.js served a prefetched version).
   useEffect(() => {
     void (async () => {
-      const current = await fetchConnections();
+      const [current, manuals] = await Promise.all([fetchConnections(), fetchManualAccounts()]);
       setConnections(current);
+      setManualAccounts(manuals);
       preSyncRef.current = new Map(current.map((c) => [c.connectionId, c.lastSyncedAt]));
       activeIdsRef.current = new Set(
         current.filter((c) => c.healthStatus === "active").map((c) => c.connectionId),
@@ -188,7 +204,7 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
     }
   }
 
-  const hasAccounts = connections.some((c) => c.accounts.length > 0) || connections.length > 0;
+  const hasAccounts = connections.some((c) => c.accounts.length > 0) || connections.length > 0 || manualAccounts.length > 0;
 
   return (
     <div>
@@ -204,10 +220,15 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
           <div className="rounded-md border border-dashed border-gray-300 bg-white px-6 py-10 text-center">
             <h2 className="text-base font-semibold text-gray-900">{COPY.accounts.emptyTitle}</h2>
             <p className="mx-auto mt-1 max-w-sm text-sm text-gray-600">{COPY.accounts.emptyBody}</p>
-            <div className="mx-auto mt-5 max-w-xs">
+            <div className="mx-auto mt-5 max-w-xs space-y-2">
               <Button onClick={() => setConsentOpen(true)} loading={busy} loadingLabel={COPY.connect.preparing}>
                 {COPY.accounts.emptyCta}
               </Button>
+              {manualAccountsEnabled ? (
+                <Button variant="secondary" onClick={() => setManualFormOpen(true)}>
+                  {COPY.manualAccount.addCta}
+                </Button>
+              ) : null}
             </div>
           </div>
         ) : (
@@ -244,6 +265,22 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
                   />
                 ));
               })}
+              {manualAccounts.map((a) => (
+                <AccountCard
+                  key={a.id}
+                  institutionName={a.institutionName}
+                  accountName={a.name}
+                  kind={a.kind}
+                  mask={null}
+                  balance={null}
+                  balanceAvailable={null}
+                  status="connected"
+                  statusLabel={COPY.accounts.connectedStatus}
+                  lastSyncedLabel={null}
+                  ariaLabel={`${a.institutionName ?? a.name} ${a.kind} — manual account`}
+                  action={null}
+                />
+              ))}
             </ul>
             {anyImporting ? (
               <p aria-live="polite" className="text-sm text-gray-500">
@@ -254,7 +291,7 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
                 {COPY.accounts.syncing}
               </p>
             ) : null}
-            <div className="max-w-xs">
+            <div className="flex max-w-xs flex-col gap-2">
               <Button
                 variant="secondary"
                 onClick={() => setConsentOpen(true)}
@@ -263,6 +300,11 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
               >
                 {COPY.accounts.addAnother}
               </Button>
+              {manualAccountsEnabled ? (
+                <Button variant="secondary" onClick={() => setManualFormOpen(true)}>
+                  {COPY.manualAccount.addCta}
+                </Button>
+              ) : null}
             </div>
           </>
         )}
@@ -283,6 +325,18 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
       />
 
       {toast ? <Toast message={toast} /> : null}
+
+      {manualFormOpen ? (
+        <ManualAccountForm
+          multiCurrencyEnabled={multiCurrencyEnabled}
+          onSuccess={async () => {
+            setManualFormOpen(false);
+            setToast(COPY.manualAccount.success);
+            await refresh();
+          }}
+          onCancel={() => setManualFormOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }

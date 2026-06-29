@@ -634,6 +634,24 @@ export const COPY = {
     reopenA11y: "Re-open {merchant} follow-up",
     doneIndicatorA11y: "Follow-up resolved",
   },
+  // WLT-27-2 — Manual Account Entry form. docs/bets/WLT-27/stories/WLT-27-2/copy.md verbatim.
+  manualAccount: {
+    addCta: "Add account manually",
+    formTitle: "Add account manually",
+    nameLabel: "Account name",
+    namePlaceholder: "My Apple Card",
+    institutionLabel: "Institution",
+    kindLegend: "Account type",
+    currencyLabel: "Currency",
+    currencyLockedHint: "USD only for now",
+    submitCta: "Add account",
+    cancelCta: "Cancel",
+    success: "Account added",
+    errorDisabled: "Manual accounts aren't available yet.",
+    errorCurrency: "Only USD accounts are supported right now.",
+    errorNameRequired: "Account name is required.",
+    errorNetwork: "We couldn't add that account just now — try again.",
+  },
   // WLT-26-1 + WLT-26-2 — Dashboard Intelligence: category spend chart + anomaly panel.
   dashboardIntelligence: {
     sectionTitle: "Spending this month",
