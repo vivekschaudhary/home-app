@@ -2,7 +2,7 @@
 id: WLT-27-3
 bet: WLT-27
 type: story
-status: ready
+status: in_review
 priority: P1
 created: 2026-06-28
 author: PM
@@ -20,29 +20,29 @@ Users with manual accounts (created in WLT-27-2) have no way to populate them wi
 
 ## Acceptance Criteria
 
-- [ ] AC-1: `NormalizedTransaction.providerAccountId` in `packages/aggregation/core/types.ts` is widened from `string` to `string | null`. All existing Plaid callers (which always provide a non-null value) compile without changes.
-- [ ] AC-2: `dedupKey` in `packages/aggregation/core/dedup.ts` normalizes `null` `providerAccountId` to `'manual'`: `const accountSegment = t.providerAccountId ?? 'manual'`. Unit test: `dedupKey({ ...row, providerAccountId: null })` produces a key containing `'manual'`, not `'null'`.
-- [ ] AC-3: `ingestTransactions` in `packages/aggregation/core/ingest.ts` changes the account lookup from `accMap.get(t.providerAccountId)` to `accMap.get(t.providerAccountId ?? 'manual')`. The Plaid sync path is unaffected (Plaid always provides a non-null `providerAccountId`, so `?? 'manual'` never fires for Plaid rows).
-- [ ] AC-4: `POST /api/accounts/[id]/import` route handler (`app/api/accounts/[id]/import/route.ts`) is AAL2-gated via `getAal2UserId()`. Returns `401` for AAL1 or unauthenticated requests.
-- [ ] AC-5: Route handler verifies the `[id]` account exists and belongs to the authenticated user. Returns `404` if the account does not exist or belongs to another user.
-- [ ] AC-6: Route handler verifies the `[id]` account has `connection_id = null` (only manual accounts accept CSV import). Returns `400` with `{ error: 'ACCOUNT_NOT_MANUAL' }` for a Plaid-connected account.
-- [ ] AC-7: Route handler accepts a JSON body `{ rows: NormalizedCsvRow[] }` where `NormalizedCsvRow = { occurredOn: string; description: string; amount: string; direction: 'debit'|'credit'; category?: string|null }`. Rejects a body with more than 10,000 rows with `400` and `{ error: 'ROW_LIMIT_EXCEEDED', limit: 10000 }`.
-- [ ] AC-8: Route handler maps each `NormalizedCsvRow` to a `NormalizedTransaction` with `source = 'csv'`, `providerTransactionId = null`, `providerAccountId = null`, `currency` from the account's stored `currency` field, and `kind = 'spend'`.
-- [ ] AC-9: Route handler calls `ingestTransactions({ userId, page: { added: rows, modified: [], removed: [] }, accountIdByProviderAccountId: new Map([['manual', id]]) })` using the service-role client (not the authenticated-role client).
-- [ ] AC-10: Route handler returns `{ inserted: N, superseded: M, removed: 0 }` matching the counts from `ingestTransactions`.
-- [ ] AC-11: Idempotency test: calling the route twice with identical rows returns `{ inserted: 0 }` on the second call (dedup via `dedup_key` + `content_hash` unique constraint — no double-count).
-- [ ] AC-12: `dedupKey` stability test: importing the same CSV file twice produces the same `dedup_key` values both times, regardless of import order. No `"null"` substring appears in any `dedup_key` for CSV-sourced rows.
-- [ ] AC-13: Regression test: existing Plaid `ingestTransactions` call with a non-null `providerAccountId` produces identical `dedup_key` output before and after the `?? 'manual'` change (the fix is a no-op for Plaid rows). Tagged `regression: true`.
-- [ ] AC-14: E2E test imports a 5-row CSV batch into a manual account, verifies all 5 rows appear in `transactions` under the correct `financial_accounts.id`, re-imports the same batch, confirms `inserted = 0` on the second call, then **hard-deletes the 5 transaction rows and the test manual account** so no residual records remain.
+- [x] AC-1: `NormalizedTransaction.providerAccountId` in `packages/aggregation/core/types.ts` is widened from `string` to `string | null`. All existing Plaid callers (which always provide a non-null value) compile without changes.
+- [x] AC-2: `dedupKey` in `packages/aggregation/core/dedup.ts` normalizes `null` `providerAccountId` to `'manual'`: `const accountSegment = t.providerAccountId ?? 'manual'`. Unit test: `dedupKey({ ...row, providerAccountId: null })` produces a key containing `'manual'`, not `'null'`.
+- [x] AC-3: `ingestTransactions` in `packages/aggregation/core/ingest.ts` changes the account lookup from `accMap.get(t.providerAccountId)` to `accMap.get(t.providerAccountId ?? 'manual')`. The Plaid sync path is unaffected (Plaid always provides a non-null `providerAccountId`, so `?? 'manual'` never fires for Plaid rows).
+- [x] AC-4: `POST /api/accounts/[id]/import` route handler (`app/api/accounts/[id]/import/route.ts`) is AAL2-gated via `getAal2UserId()`. Returns `401` for AAL1 or unauthenticated requests.
+- [x] AC-5: Route handler verifies the `[id]` account exists and belongs to the authenticated user. Returns `404` if the account does not exist or belongs to another user.
+- [x] AC-6: Route handler verifies the `[id]` account has `connection_id = null` (only manual accounts accept CSV import). Returns `400` with `{ error: 'ACCOUNT_NOT_MANUAL' }` for a Plaid-connected account.
+- [x] AC-7: Route handler accepts a JSON body `{ rows: NormalizedCsvRow[] }` where `NormalizedCsvRow = { occurredOn: string; description: string; amount: string; direction: 'debit'|'credit'; category?: string|null }`. Rejects a body with more than 10,000 rows with `400` and `{ error: 'ROW_LIMIT_EXCEEDED', limit: 10000 }`.
+- [x] AC-8: Route handler maps each `NormalizedCsvRow` to a `NormalizedTransaction` with `source = 'csv'`, `providerTransactionId = null`, `providerAccountId = null`, `currency` from the account's stored `currency` field, and `kind = 'spend'`.
+- [x] AC-9: Route handler calls `ingestTransactions({ userId, page: { added: rows, modified: [], removed: [] }, accountIdByProviderAccountId: new Map([['manual', id]]) })` using the service-role client (not the authenticated-role client).
+- [x] AC-10: Route handler returns `{ inserted: N, superseded: M, removed: 0 }` matching the counts from `ingestTransactions`.
+- [x] AC-11: Idempotency test: calling the route twice with identical rows returns `{ inserted: 0 }` on the second call (dedup via `dedup_key` + `content_hash` unique constraint — no double-count).
+- [x] AC-12: `dedupKey` stability test: importing the same CSV file twice produces the same `dedup_key` values both times, regardless of import order. No `"null"` substring appears in any `dedup_key` for CSV-sourced rows.
+- [x] AC-13: Regression test: existing Plaid `ingestTransactions` call with a non-null `providerAccountId` produces identical `dedup_key` output before and after the `?? 'manual'` change (the fix is a no-op for Plaid rows). Tagged `regression: true`.
+- [x] AC-14: E2E test imports a 5-row CSV batch into a manual account, verifies all 5 rows appear in `transactions` under the correct `financial_accounts.id`, re-imports the same batch, confirms `inserted = 0` on the second call, then **hard-deletes the 5 transaction rows and the test manual account** so no residual records remain.
 
 ## Standard Experience Checklist
 
-- [ ] **Navigation** — n/a — no UI surface; this story is an API and pipeline layer.
-- [ ] **States** — n/a — no UI states. API error and success states covered by AC-4 through AC-10 (discriminated HTTP status codes and error bodies).
-- [ ] **Feedback** — n/a — no user-facing feedback; the wizard UI (WLT-27-4) owns displaying the `{ inserted, superseded, removed }` result to the user.
-- [ ] **Accessibility** — n/a — no UI surface.
-- [ ] **Edge cases** — covered by AC-7 (row-limit rejection), AC-6 (non-manual account guard), AC-5 (cross-user guard), AC-11 (idempotent re-import), AC-13 (Plaid path unaffected). Malformed row (missing `occurredOn`): route should return `400` with field-level detail; add this to the integration test suite.
-- [ ] **Cross-surface consistency** — n/a — API-only story with no multi-surface concerns.
+- [x] **Navigation** — n/a — no UI surface; this story is an API and pipeline layer.
+- [x] **States** — n/a — no UI states. API error and success states covered by AC-4 through AC-10 (discriminated HTTP status codes and error bodies).
+- [x] **Feedback** — n/a — no user-facing feedback; the wizard UI (WLT-27-4) owns displaying the `{ inserted, superseded, removed }` result to the user.
+- [x] **Accessibility** — n/a — no UI surface.
+- [x] **Edge cases** — covered by AC-7 (row-limit rejection), AC-6 (non-manual account guard), AC-5 (cross-user guard), AC-11 (idempotent re-import), AC-13 (Plaid path unaffected). Malformed row (missing `occurredOn`): route returns `400` with field-level detail — tested in `app/api/accounts/[id]/import/route.test.ts` (row validation suite).
+- [x] **Cross-surface consistency** — n/a — API-only story with no multi-surface concerns.
 
 ## Tech notes
 
@@ -62,7 +62,7 @@ The dedup key for CSV rows (after this fix) will be: `csv:manual:<hash-of-conten
 
 ## PRs
 
-_Auto-populated as PRs open._
+_Auto-populated as PRs open. PR opened at commit 1e81330._
 
 ## Tests
 
@@ -87,7 +87,9 @@ _None yet._
 
 ### Issues
 
-- **[2026-06-28] [PM]** `dedupKey` null-providerAccountId must be verified (inherited from brief DRI Issue) — severity: medium — owner: Engineer — status: open (resolved by AC-2 in this story). Closes the brief issue.
+- **[2026-06-28] [PM]** `dedupKey` null-providerAccountId must be verified (inherited from brief DRI Issue) — severity: medium — owner: Engineer — status: resolved (AC-2 in this story). Closes the brief issue.
+
+- **[2026-06-29] [Engineer]** Contract-shift sweep (`[cross-artifact-sweep-on-contract-shift]`) — `NormalizedTransaction.providerAccountId` widened from `string` to `string | null`. Sweep: `packages/aggregation/plaid/map.ts` (provides `a.account_id`, `t.account_id` — always non-null string), `packages/jobs/aggregation/sync.ts` (reads `a.providerAccountId` — always non-null from Plaid). No consumer broken; widening is additive. Sweep complete, no stale references. Status: resolved.
 
 ### Arbitration
 
