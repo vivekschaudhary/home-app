@@ -25,7 +25,7 @@ export interface NormalizedAccount {
 
 export interface NormalizedTransaction {
   providerTransactionId: string | null; // opaque; null for CSV/manual sources
-  providerAccountId: string;
+  providerAccountId: string | null; // WLT-27-3: null for CSV/manual sources; Plaid always non-null
   amount: string; // decimal-as-string, unsigned
   direction: TransactionDirection;
   currency: string;

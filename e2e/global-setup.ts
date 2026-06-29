@@ -30,6 +30,8 @@ const API = [
   "/api/auth/totp/challenge/verify",
   "/api/auth/totp/unenroll",
   "/api/auth/factors",
+  // WLT-27-3: CSV import — warms the dynamic route handler before the E2E runs.
+  "/api/accounts/00000000-0000-0000-0000-000000000000/import",
 ];
 
 export default async function globalSetup() {

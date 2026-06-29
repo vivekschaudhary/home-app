@@ -1,0 +1,313 @@
+// WLT-27-3 — Integration tests for POST /api/accounts/[id]/import.
+// Covers: AC-4 (401 unauth), AC-5 (404 no account / cross-user), AC-6 (400 ACCOUNT_NOT_MANUAL),
+//         AC-7 (400 ROW_LIMIT_EXCEEDED), AC-8 (row mapping), AC-9 (manual map key),
+//         AC-10 (result shape), AC-11 (idempotency proxy), row validation edge cases.
+// regression: false  e2e: false
+
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { POST } from "./route";
+
+const VALID_UUID = "00000000-0000-0000-0000-000000000001";
+
+const { mockGetAal2UserId, mockMaybeSingle, mockIngestTransactions } = vi.hoisted(() => ({
+  mockGetAal2UserId: vi.fn(),
+  mockMaybeSingle: vi.fn(),
+  mockIngestTransactions: vi.fn(),
+}));
+
+vi.mock("@vc1023/passkey-2fa", () => ({
+  getAal2UserId: mockGetAal2UserId,
+  createServiceSupabase: () => ({
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          is: () => ({
+            maybeSingle: mockMaybeSingle,
+          }),
+        }),
+      }),
+    }),
+  }),
+}));
+
+vi.mock("@wealth/aggregation", () => ({
+  ingestTransactions: mockIngestTransactions,
+}));
+
+function row(
+  overrides: Partial<{
+    occurredOn: string;
+    description: string;
+    amount: string;
+    direction: "debit" | "credit";
+    category: string | null;
+  }> = {},
+) {
+  return { occurredOn: "2026-06-01", description: "Coffee", amount: "4.50", direction: "debit" as const, ...overrides };
+}
+
+function makeReq(body: object, accountId = VALID_UUID): [Request, { params: Promise<{ id: string }> }] {
+  const req = new Request(`http://localhost/api/accounts/${accountId}/import`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return [req, { params: Promise.resolve({ id: accountId }) }];
+}
+
+const MANUAL_ACCOUNT = { id: VALID_UUID, user_id: "user-1", connection_id: null, currency: "USD" };
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mockGetAal2UserId.mockResolvedValue("user-1");
+  mockMaybeSingle.mockResolvedValue({ data: MANUAL_ACCOUNT, error: null });
+  mockIngestTransactions.mockResolvedValue({ inserted: 1, superseded: 0, removed: 0 });
+});
+
+afterEach(() => {
+  vi.clearAllMocks();
+});
+
+// ── AC-4: 401 when unauthenticated ────────────────────────────────────────────
+describe("AC-4: AAL2 gate", () => {
+  it("returns 401 when getAal2UserId returns null", async () => {
+    mockGetAal2UserId.mockResolvedValue(null);
+    const res = await POST(...makeReq({ rows: [row()] }));
+    expect(res.status).toBe(401);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe("unauthorized");
+  });
+});
+
+// ── AC-5: 404 for non-existent or cross-user account ─────────────────────────
+describe("AC-5: account ownership check", () => {
+  it("returns 404 when account is not found in DB", async () => {
+    mockMaybeSingle.mockResolvedValue({ data: null, error: null });
+    const res = await POST(...makeReq({ rows: [row()] }));
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 when account belongs to another user", async () => {
+    mockMaybeSingle.mockResolvedValue({ data: { ...MANUAL_ACCOUNT, user_id: "other-user" }, error: null });
+    const res = await POST(...makeReq({ rows: [row()] }));
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 on DB error", async () => {
+    mockMaybeSingle.mockResolvedValue({ data: null, error: { message: "db error" } });
+    const res = await POST(...makeReq({ rows: [row()] }));
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 for an invalid (non-UUID) accountId", async () => {
+    const res = await POST(...makeReq({ rows: [row()] }, "not-a-uuid"));
+    expect(res.status).toBe(404);
+  });
+});
+
+// ── AC-6: 400 ACCOUNT_NOT_MANUAL ──────────────────────────────────────────────
+describe("AC-6: manual account guard", () => {
+  it("returns 400 ACCOUNT_NOT_MANUAL when account has a non-null connection_id", async () => {
+    mockMaybeSingle.mockResolvedValue({ data: { ...MANUAL_ACCOUNT, connection_id: "conn-uuid-abc" }, error: null });
+    const res = await POST(...makeReq({ rows: [row()] }));
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe("ACCOUNT_NOT_MANUAL");
+  });
+});
+
+// ── AC-7: 400 ROW_LIMIT_EXCEEDED ──────────────────────────────────────────────
+describe("AC-7: row limit", () => {
+  it("returns 400 ROW_LIMIT_EXCEEDED for > 10,000 rows", async () => {
+    const rows = Array.from({ length: 10_001 }, (_, i) => row({ description: `row-${i}` }));
+    const res = await POST(...makeReq({ rows }));
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string; limit: number };
+    expect(body.error).toBe("ROW_LIMIT_EXCEEDED");
+    expect(body.limit).toBe(10_000);
+  });
+
+  it("accepts exactly 10,000 rows (at the limit, not over)", async () => {
+    const rows = Array.from({ length: 10_000 }, (_, i) => row({ description: `row-${i}` }));
+    mockIngestTransactions.mockResolvedValue({ inserted: 10_000, superseded: 0, removed: 0 });
+    const res = await POST(...makeReq({ rows }));
+    expect(res.status).toBe(200);
+  });
+});
+
+// ── Row validation (Standard Experience Checklist edge cases) ─────────────────
+describe("row validation", () => {
+  it("returns 400 when rows is not an array", async () => {
+    const res = await POST(...makeReq({ rows: "not-an-array" }));
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 when a row is missing occurredOn", async () => {
+    const bad = { description: "Coffee", amount: "4.50", direction: "debit" };
+    const res = await POST(...makeReq({ rows: [bad] }));
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string; message: string };
+    expect(body.error).toBe("validation");
+  });
+
+  it("returns 400 when a row has a zero amount (BLOCKER fix: zero-amount rows rejected)", async () => {
+    const bad = row({ amount: "0.00" });
+    const res = await POST(...makeReq({ rows: [bad] }));
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 when a row has a zero amount string '0'", async () => {
+    const bad = row({ amount: "0" });
+    const res = await POST(...makeReq({ rows: [bad] }));
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 when a row has an invalid direction", async () => {
+    const bad = row({ direction: "both" as unknown as "debit" });
+    const res = await POST(...makeReq({ rows: [bad] }));
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 when a row has an invalid date format (not YYYY-MM-DD)", async () => {
+    const bad = row({ occurredOn: "06/01/2026" });
+    const res = await POST(...makeReq({ rows: [bad] }));
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 when a row has an empty description", async () => {
+    const bad = row({ description: "" });
+    const res = await POST(...makeReq({ rows: [bad] }));
+    expect(res.status).toBe(400);
+  });
+});
+
+// ── AC-8 + AC-10: successful import — correct mapping and result shape ────────
+describe("AC-8 / AC-10: successful import", () => {
+  it("returns 200 with { inserted, superseded, removed } from ingestTransactions", async () => {
+    mockIngestTransactions.mockResolvedValue({ inserted: 2, superseded: 0, removed: 0 });
+    const rows = [row(), row({ description: "Grocery", amount: "80.00", occurredOn: "2026-06-02" })];
+    const res = await POST(...makeReq({ rows }));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { inserted: number; superseded: number; removed: number };
+    expect(body.inserted).toBe(2);
+    expect(body.superseded).toBe(0);
+    expect(body.removed).toBe(0);
+  });
+
+  it("calls ingestTransactions with source='csv', providerTransactionId=null, providerAccountId=accountId, currency from account (AC-8)", async () => {
+    mockIngestTransactions.mockResolvedValue({ inserted: 1, superseded: 0, removed: 0 });
+    await POST(...makeReq({ rows: [row({ category: "Food" })] }));
+
+    expect(mockIngestTransactions).toHaveBeenCalledOnce();
+    const call = mockIngestTransactions.mock.calls[0][0] as {
+      userId: string;
+      page: { added: Array<{ source: string; providerTransactionId: null; providerAccountId: string; currency: string; kind: string }> };
+      accountIdByProviderAccountId: Map<string, string>;
+    };
+    const added = call.page.added;
+    expect(added).toHaveLength(1);
+    expect(added[0].source).toBe("csv");
+    expect(added[0].providerTransactionId).toBeNull();
+    // BLOCKER fix: providerAccountId is the account UUID (not null) so dedup keys are
+    // scoped per account — csv:<accountId>:<hash> prevents cross-account collisions.
+    expect(added[0].providerAccountId).toBe(VALID_UUID);
+    expect(added[0].currency).toBe("USD");
+    expect(added[0].kind).toBe("spend");
+  });
+
+  it("calls ingestTransactions with accountIdByProviderAccountId keyed by account UUID (AC-9)", async () => {
+    mockIngestTransactions.mockResolvedValue({ inserted: 1, superseded: 0, removed: 0 });
+    await POST(...makeReq({ rows: [row()] }));
+
+    const call = mockIngestTransactions.mock.calls[0][0] as {
+      accountIdByProviderAccountId: Map<string, string>;
+    };
+    // BLOCKER fix: key is the account UUID (matching providerAccountId), not 'manual'.
+    expect(call.accountIdByProviderAccountId.get(VALID_UUID)).toBe(VALID_UUID);
+    expect(call.accountIdByProviderAccountId.has("manual")).toBe(false);
+  });
+
+  // BLOCKER regression: cross-account dedup isolation.
+  // Two manual accounts importing identical row content must produce DISTINCT
+  // providerAccountId values so dedupKey generates csv:<acctA>:<hash> vs
+  // csv:<acctB>:<hash> — no collision on (user_id, dedup_key, content_hash).
+  // regression: true
+  it("BLOCKER fix: two manual accounts with identical row content receive distinct providerAccountId, preventing cross-account dedup collision", async () => {
+    const VALID_UUID_2 = "00000000-0000-0000-0000-000000000002";
+
+    // First call — account 1 (VALID_UUID)
+    mockIngestTransactions.mockResolvedValue({ inserted: 1, superseded: 0, removed: 0 });
+    await POST(...makeReq({ rows: [row()] }, VALID_UUID));
+    const call1 = mockIngestTransactions.mock.calls[0][0] as {
+      page: { added: Array<{ providerAccountId: string }> };
+      accountIdByProviderAccountId: Map<string, string>;
+    };
+
+    vi.clearAllMocks();
+    mockGetAal2UserId.mockResolvedValue("user-1");
+    mockMaybeSingle.mockResolvedValue({ data: { ...MANUAL_ACCOUNT, id: VALID_UUID_2 }, error: null });
+    mockIngestTransactions.mockResolvedValue({ inserted: 1, superseded: 0, removed: 0 });
+
+    // Second call — account 2 (VALID_UUID_2) with the SAME row content
+    await POST(...makeReq({ rows: [row()] }, VALID_UUID_2));
+    const call2 = mockIngestTransactions.mock.calls[0][0] as {
+      page: { added: Array<{ providerAccountId: string }> };
+      accountIdByProviderAccountId: Map<string, string>;
+    };
+
+    expect(call1.page.added[0].providerAccountId).toBe(VALID_UUID);
+    expect(call2.page.added[0].providerAccountId).toBe(VALID_UUID_2);
+    // Different providerAccountIds → different dedup keys → no collision
+    expect(call1.page.added[0].providerAccountId).not.toBe(call2.page.added[0].providerAccountId);
+    // And the map keys must match the providerAccountId (not 'manual')
+    expect(call1.accountIdByProviderAccountId.has(VALID_UUID)).toBe(true);
+    expect(call2.accountIdByProviderAccountId.has(VALID_UUID_2)).toBe(true);
+  });
+
+  it("propagates non-USD currency from the account to each mapped row", async () => {
+    mockMaybeSingle.mockResolvedValue({ data: { ...MANUAL_ACCOUNT, currency: "EUR" }, error: null });
+    mockIngestTransactions.mockResolvedValue({ inserted: 1, superseded: 0, removed: 0 });
+    await POST(...makeReq({ rows: [row()] }));
+
+    const call = mockIngestTransactions.mock.calls[0][0] as {
+      page: { added: Array<{ currency: string }> };
+    };
+    expect(call.page.added[0].currency).toBe("EUR");
+  });
+
+  it("accepts an optional category field on a row", async () => {
+    mockIngestTransactions.mockResolvedValue({ inserted: 1, superseded: 0, removed: 0 });
+    const res = await POST(...makeReq({ rows: [row({ category: "Dining" })] }));
+    expect(res.status).toBe(200);
+  });
+});
+
+// ── AC-11: idempotency is enforced by the ingest pipeline ────────────────────
+describe("AC-11: idempotency via ingestTransactions (unit-level proxy)", () => {
+  it("returns inserted=0 when ingestTransactions reports no new rows (replay)", async () => {
+    mockIngestTransactions.mockResolvedValue({ inserted: 0, superseded: 0, removed: 0 });
+    const res = await POST(...makeReq({ rows: [row()] }));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { inserted: number };
+    expect(body.inserted).toBe(0);
+  });
+});
+
+// ── Server error path ─────────────────────────────────────────────────────────
+describe("server error handling", () => {
+  it("returns 500 when ingestTransactions throws", async () => {
+    mockIngestTransactions.mockRejectedValue(new Error("DB failure"));
+    const res = await POST(...makeReq({ rows: [row()] }));
+    expect(res.status).toBe(500);
+  });
+
+  it("returns 400 when request body is not valid JSON", async () => {
+    const req = new Request(`http://localhost/api/accounts/${VALID_UUID}/import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "not-json",
+    });
+    const res = await POST(req, { params: Promise.resolve({ id: VALID_UUID }) });
+    expect(res.status).toBe(400);
+  });
+});
