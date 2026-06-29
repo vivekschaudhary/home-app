@@ -14,6 +14,7 @@ import {
 } from "@/app/lib/aggregation-client";
 import { COPY } from "@/app/lib/copy";
 import { isImporting, statusFor } from "./import-state";
+import { ManualAccountForm } from "./ManualAccountForm";
 
 function errorCopy(e: AggError): string {
   switch (e) {
@@ -38,9 +39,18 @@ function relativeTime(iso: string): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-export function AccountsClient({ initialConnections }: { initialConnections: ConnectionView[] }) {
+export function AccountsClient({
+  initialConnections,
+  manualAccountsEnabled = false,
+  multiCurrencyEnabled = false,
+}: {
+  initialConnections: ConnectionView[];
+  manualAccountsEnabled?: boolean;
+  multiCurrencyEnabled?: boolean;
+}) {
   const [connections, setConnections] = useState<ConnectionView[]>(initialConnections);
   const [consentOpen, setConsentOpen] = useState(false);
+  const [manualFormOpen, setManualFormOpen] = useState(false);
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -204,10 +214,15 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
           <div className="rounded-md border border-dashed border-gray-300 bg-white px-6 py-10 text-center">
             <h2 className="text-base font-semibold text-gray-900">{COPY.accounts.emptyTitle}</h2>
             <p className="mx-auto mt-1 max-w-sm text-sm text-gray-600">{COPY.accounts.emptyBody}</p>
-            <div className="mx-auto mt-5 max-w-xs">
+            <div className="mx-auto mt-5 max-w-xs space-y-2">
               <Button onClick={() => setConsentOpen(true)} loading={busy} loadingLabel={COPY.connect.preparing}>
                 {COPY.accounts.emptyCta}
               </Button>
+              {manualAccountsEnabled ? (
+                <Button variant="secondary" onClick={() => setManualFormOpen(true)}>
+                  {COPY.manualAccount.addCta}
+                </Button>
+              ) : null}
             </div>
           </div>
         ) : (
@@ -254,7 +269,7 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
                 {COPY.accounts.syncing}
               </p>
             ) : null}
-            <div className="max-w-xs">
+            <div className="flex max-w-xs flex-col gap-2">
               <Button
                 variant="secondary"
                 onClick={() => setConsentOpen(true)}
@@ -263,6 +278,11 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
               >
                 {COPY.accounts.addAnother}
               </Button>
+              {manualAccountsEnabled ? (
+                <Button variant="secondary" onClick={() => setManualFormOpen(true)}>
+                  {COPY.manualAccount.addCta}
+                </Button>
+              ) : null}
             </div>
           </>
         )}
@@ -283,6 +303,18 @@ export function AccountsClient({ initialConnections }: { initialConnections: Con
       />
 
       {toast ? <Toast message={toast} /> : null}
+
+      {manualFormOpen ? (
+        <ManualAccountForm
+          multiCurrencyEnabled={multiCurrencyEnabled}
+          onSuccess={async () => {
+            setManualFormOpen(false);
+            setToast(COPY.manualAccount.success);
+            await refresh();
+          }}
+          onCancel={() => setManualFormOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }
