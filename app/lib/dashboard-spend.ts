@@ -37,12 +37,13 @@ function monthsAgoStart(curMonth: string, n: number): string {
  * Fetch the category spend chart data for the user's dashboard.
  * Reads the rolling 6-month window of transactions, resolves categories, and
  * returns the structured chart view (top-10 bars + monthsOfHistory).
+ * WLT-27-1: activeCurrency filters to a single currency (default 'USD').
  *
  * EXPLAIN ANALYZE pre-launch discipline (architecture.md): confirm the
  * (user_id, occurred_on, category) composite index from 0018_category_index.sql
  * keeps this under 50ms for a typical corpus.
  */
-export async function readCategorySpendChart(userId: string): Promise<CategorySpendChart> {
+export async function readCategorySpendChart(userId: string, activeCurrency = "USD"): Promise<CategorySpendChart> {
   const supabase = await createServerSupabase();
   const asOf = todayUtc();
   const curMonth = asOf.slice(0, 7);
@@ -55,12 +56,14 @@ export async function readCategorySpendChart(userId: string): Promise<CategorySp
       category: string | null;
       amount: number | string;
       occurred_on: string;
+      currency: string;
     }>(
       (from, to) =>
         supabase
           .from("transactions")
-          .select("dedup_key, direction, category, amount, occurred_on")
+          .select("dedup_key, direction, category, amount, occurred_on, currency")
           .eq("user_id", userId)
+          .eq("currency", activeCurrency)
           .gte("occurred_on", since)
           .lte("occurred_on", asOf)
           .order("dedup_key", { ascending: true })
@@ -76,6 +79,7 @@ export async function readCategorySpendChart(userId: string): Promise<CategorySp
     category: effectiveCategory(r.category, assignments.get(r.dedup_key)),
     amount: Number(r.amount),
     occurredOn: r.occurred_on,
+    currency: r.currency,
   }));
 
   const countsAsSpending = (name: string): boolean => {

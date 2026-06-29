@@ -57,8 +57,9 @@ function nextMonthStart(month: string): string {
  * The user's trailing ~7 months of transactions — owner-SELECT under the user's
  * RLS session (the policy already hides superseded/removed rows). Amounts /
  * category / direction / date only — no merchant or description (no PII).
+ * WLT-27-1: activeCurrency filters to a single currency (default 'USD').
  */
-async function readSpendingForBudgets(userId: string, supabase: Supa): Promise<SpendingTxn[]> {
+async function readSpendingForBudgets(userId: string, supabase: Supa, activeCurrency = "USD"): Promise<SpendingTxn[]> {
   const since = new Date(Date.now() - TRAILING_DAYS * 86_400_000).toISOString().slice(0, 10);
   // WLT-22-2: resolve each txn's category through the ONE shared helper
   // (saved ?? Plaid) so the budget groups by the user's category, not Plaid's raw
@@ -75,12 +76,14 @@ async function readSpendingForBudgets(userId: string, supabase: Supa): Promise<S
       category: string | null;
       amount: number | string;
       occurred_on: string;
+      currency: string;
     }>(
       (from, to) =>
         supabase
           .from("transactions")
-          .select("dedup_key, direction, category, amount, occurred_on")
+          .select("dedup_key, direction, category, amount, occurred_on, currency")
           .eq("user_id", userId)
+          .eq("currency", activeCurrency)
           .gte("occurred_on", since)
           .order("dedup_key", { ascending: true })
           .range(from, to),
@@ -95,12 +98,14 @@ async function readSpendingForBudgets(userId: string, supabase: Supa): Promise<S
       category: string | null;
       amount: number | string;
       occurred_on: string;
+      currency: string;
     };
     return {
       direction: row.direction,
       category: effectiveCategory(row.category, assignments.get(row.dedup_key)),
       amount: Number(row.amount),
       occurredOn: row.occurred_on,
+      currency: row.currency,
     };
   });
 }
@@ -122,10 +127,10 @@ async function readBudgets(userId: string, supabase: Supa): Promise<SavedBudget[
 }
 
 /** Assemble the budget table view (read-only; the page emits budget_viewed). */
-export async function getBudgetView(userId: string): Promise<BudgetView> {
+export async function getBudgetView(userId: string, activeCurrency = "USD"): Promise<BudgetView> {
   const supabase = await createServerSupabase();
   const [txns, budgets, kinds, flags] = await Promise.all([
-    readSpendingForBudgets(userId, supabase),
+    readSpendingForBudgets(userId, supabase, activeCurrency),
     readBudgets(userId, supabase),
     readCategoryKinds(userId, supabase),
     readCategorySpendingFlags(supabase, userId),

@@ -1,0 +1,11 @@
+Transaction Date,Clearing Date,Description,Merchant,Category,Type,Amount (USD)
+06/01/2026,06/03/2026,Sample Coffee Shop,Sample Coffee Shop,Food & Drink,Purchase,-4.50
+06/02/2026,06/04/2026,Test Grocery Store,Test Grocery Store,Groceries,Purchase,-78.32
+06/03/2026,06/05/2026,Test Streaming Service,Test Streaming Service,Entertainment,Purchase,-15.99
+06/04/2026,06/06/2026,Sample Gas Station,Sample Gas Station,Gas,Purchase,-52.10
+06/05/2026,06/07/2026,Test Pharmacy,Test Pharmacy,Healthcare,Purchase,-23.45
+06/06/2026,06/08/2026,Sample Restaurant — Café Naïve,Sample Restaurant — Café Naïve,Food & Drink,Purchase,-34.80
+06/07/2026,06/09/2026,Test Electronics,Test Electronics,Shopping,Purchase,-149.99
+06/08/2026,06/10/2026,Refund from Test Grocery Store,Test Grocery Store,Groceries,Refund,12.50
+06/09/2026,06/11/2026,Sample Bookstore,Sample Bookstore,Books,Purchase,-22.00
+06/10/2026,06/12/2026,Test Gym,Test Gym,Fitness,Purchase,-45.00

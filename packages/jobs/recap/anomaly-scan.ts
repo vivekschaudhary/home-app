@@ -24,12 +24,17 @@ export const anomalyScanDaily = inngest.createFunction(
 
     const userIds = await step.run("list-active-users", async () => {
       const svc = createServiceSupabase();
-      const { data } = await svc
-        .from("account_connections")
-        .select("user_id")
-        .eq("health_status", "active")
-        .is("deleted_at", null);
-      return [...new Set((data ?? []).map((r) => (r as { user_id: string }).user_id))];
+      // WLT-27-1: extend the fan-out to include users who only have manual
+      // accounts (connection_id IS NULL) — they have no account_connections row
+      // but their transactions still need anomaly detection.
+      const [{ data: connData }, { data: manualData }] = await Promise.all([
+        svc.from("account_connections").select("user_id").eq("health_status", "active").is("deleted_at", null),
+        svc.from("financial_accounts").select("user_id").is("connection_id", null).is("deleted_at", null),
+      ]);
+      const ids = new Set<string>();
+      for (const r of connData ?? []) ids.add((r as { user_id: string }).user_id);
+      for (const r of manualData ?? []) ids.add((r as { user_id: string }).user_id);
+      return [...ids];
     });
     if (userIds.length === 0) return { asOf, scanned: 0, inserted: 0 };
 
@@ -41,8 +46,9 @@ export const anomalyScanDaily = inngest.createFunction(
         const [{ data: txRows }, { data: acctRows }, assignments, spendingFlags] = await Promise.all([
           svc
             .from("transactions")
-            .select("id, account_id, dedup_key, direction, category, merchant, amount, occurred_on")
+            .select("id, account_id, dedup_key, direction, category, merchant, amount, occurred_on, currency")
             .eq("user_id", userId)
+            .eq("currency", "USD") // WLT-27-1: default to USD; prevents mixing when non-USD rows exist
             .is("removed_at", null)
             .is("superseded_by", null)
             .gte("occurred_on", since),

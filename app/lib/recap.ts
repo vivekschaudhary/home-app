@@ -105,7 +105,9 @@ export async function getRecap(userId: string): Promise<RecapView> {
 
   // Spending vs. last week (WLT-17) — a display signal, computed from the last
   // 14 days of owner-scoped transactions. null = omit (no spend / no prior data).
-  const spending = computeSpendingComparison(await readRecentSpending(userId), todayUtc());
+  // WLT-27-1: default to USD; WLT-27-5 will thread activeCurrency when the
+  // region switcher is wired.
+  const spending = computeSpendingComparison(await readRecentSpending(userId, "USD"), todayUtc());
 
   // The top unresolved anomaly (WLT-18) — owner-SELECT, highest severity first.
   // Transitions open→surfaced (once) + emits anomaly_surfaced the first time shown.
@@ -171,8 +173,9 @@ function todayUtc(): string {
  * The user's last-14-days transactions for the spending comparison — owner-SELECT
  * under the user's RLS session (the policy already hides superseded/removed rows).
  * Amounts/category/direction/date only — no merchant or description (no PII).
+ * WLT-27-1: activeCurrency filters to a single currency (default 'USD').
  */
-async function readRecentSpending(userId: string): Promise<SpendingTxn[]> {
+async function readRecentSpending(userId: string, activeCurrency = "USD"): Promise<SpendingTxn[]> {
   const supabase = await createServerSupabase();
   const since = new Date(Date.now() - 14 * 86_400_000).toISOString().slice(0, 10);
   // WLT-22-2: resolve through the ONE shared helper (saved ?? Plaid) so "where
@@ -181,8 +184,9 @@ async function readRecentSpending(userId: string): Promise<SpendingTxn[]> {
   const [{ data }, assignments, spendingFlags] = await Promise.all([
     supabase
       .from("transactions")
-      .select("dedup_key, direction, category, amount, occurred_on")
+      .select("dedup_key, direction, category, amount, occurred_on, currency")
       .eq("user_id", userId)
+      .eq("currency", activeCurrency)
       .gte("occurred_on", since),
     readCategoryAssignments(supabase, userId),
     readCategorySpendingFlags(supabase, userId),
@@ -199,12 +203,14 @@ async function readRecentSpending(userId: string): Promise<SpendingTxn[]> {
         category: string | null;
         amount: number | string;
         occurred_on: string;
+        currency: string;
       };
       return {
         direction: row.direction,
         category: effectiveCategory(row.category, assignments.get(row.dedup_key)),
         amount: Number(row.amount), // numeric → string via PostgREST; normalize
         occurredOn: row.occurred_on,
+        currency: row.currency,
       };
     })
     .filter((t) => countsAsSpending(t.category));

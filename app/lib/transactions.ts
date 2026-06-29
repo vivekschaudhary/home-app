@@ -123,7 +123,7 @@ export function nextMonthStart(month: string): string {
 
 export async function readTransactionsPage(
   userId: string,
-  opts: { cursor?: string | null; search?: string | null; accountId?: string | null; category?: string | null; followup?: "open" | "done" | null; month?: string | null; limit?: number } = {},
+  opts: { cursor?: string | null; search?: string | null; accountId?: string | null; category?: string | null; followup?: "open" | "done" | null; month?: string | null; limit?: number; currency?: string | null } = {},
 ): Promise<TransactionsPageResult> {
   const supabase = await createServerSupabase();
   const limit = clampLimit(opts.limit);
@@ -142,6 +142,10 @@ export async function readTransactionsPage(
   // Validated and composed in SQL (not in-memory) — a date range is safe in the
   // filter grammar and doesn't need the in-memory resolution the category filter does.
   const month = parseMonth(opts.month);
+  // WLT-27-5 — the currency filter: when set, limits results to transactions from
+  // accounts in that currency (via the account_id → financial_accounts.currency join
+  // approximated here as a filter on transactions.currency).
+  const currency: string | null = opts.currency && /^[A-Z]{3}$/.test(opts.currency) ? opts.currency : null;
 
   // Shared owner-scoped reads: the saved-category map + the account names (also the
   // account-filter options + `hasAccount` for the empty state) + a bounded probe for
@@ -190,6 +194,7 @@ export async function readTransactionsPage(
       .order("id", { ascending: false })
       .limit(take);
     if (accountId) q = q.eq("account_id", accountId);
+    if (currency) q = q.eq("currency", currency); // WLT-27-5: region filter
     if (month) {
       // WLT-26-1: bound to the calendar month (occurred_on is a DATE column).
       q = q.gte("occurred_on", `${month}-01`).lt("occurred_on", nextMonthStart(month));

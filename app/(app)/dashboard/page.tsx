@@ -3,12 +3,14 @@ import { requireAal2 } from "@vc1023/passkey-2fa";
 import { COPY } from "@/app/lib/copy";
 import { getRecap } from "@/app/lib/recap";
 import { readCategorySpendChart } from "@/app/lib/dashboard-spend";
+import { readDistinctCurrencies } from "@/app/lib/aggregation-read";
 import { getOrCreateWorkflow } from "@/app/lib/workflow";
 import { DashboardNudge } from "./DashboardNudge";
 import { RecapCard } from "./RecapCard";
 import { WorkflowCard } from "./WorkflowCard";
 import { CategorySpendChart } from "./CategorySpendChart";
 import { AnomalyPanel } from "./AnomalyPanel";
+import { RegionSwitcher } from "../accounts/RegionSwitcher";
 
 export const dynamic = "force-dynamic";
 
@@ -37,8 +39,9 @@ async function RecapSection({ userId }: { userId: string }) {
 
 // WLT-26-1 + WLT-26-2: the full dashboard intelligence section — anomaly panel
 // (above, higher-urgency) + category spend chart (below, contextual).
-async function DashboardIntelligenceSection({ userId }: { userId: string }) {
-  const chart = await readCategorySpendChart(userId);
+// WLT-27-5: activeCurrency scopes the chart to the selected currency.
+async function DashboardIntelligenceSection({ userId, activeCurrency }: { userId: string; activeCurrency: string }) {
+  const chart = await readCategorySpendChart(userId, activeCurrency);
   const C = COPY.dashboardIntelligence;
   return (
     <section className="mt-6 rounded-lg border border-gray-200 bg-white p-6">
@@ -84,15 +87,34 @@ function WorkflowAssembling() {
   );
 }
 
+const ISO_4217_RE = /^[A-Z]{3}$/;
+
 // WLT-20: the Dashboard page now renders INSIDE the app shell (the (app) layout
 // provides the nav chrome + the AAL2 gate). requireAal2() here is the per-page
 // belt-and-suspenders (AC3) + supplies the userId.
-export default async function DashboardPage() {
+// WLT-27-5: reads ?currency= to scope the intelligence section.
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ currency?: string }>;
+}) {
   const userId = await requireAal2();
+  const sp = await searchParams;
+  const MULTI_CURRENCY_ENABLED = process.env.MULTI_CURRENCY_ACCOUNTS_ENABLED === "true";
+
+  let activeCurrency = "USD";
+  if (MULTI_CURRENCY_ENABLED && sp.currency && ISO_4217_RE.test(sp.currency)) {
+    activeCurrency = sp.currency;
+  }
+
+  const currencies = MULTI_CURRENCY_ENABLED ? await readDistinctCurrencies(userId) : ["USD"];
 
   return (
     <div>
-      <h1 className="text-xl font-semibold text-gray-900">{COPY.nav.dashboard}</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold text-gray-900">{COPY.nav.dashboard}</h1>
+        {MULTI_CURRENCY_ENABLED ? <RegionSwitcher currencies={currencies} currentCurrency={activeCurrency} /> : null}
+      </div>
       {RECAP_ENABLED ? (
         <Suspense fallback={null}>
           <RecapSection userId={userId} />
@@ -103,7 +125,7 @@ export default async function DashboardPage() {
       </Suspense>
       {DASHBOARD_INTELLIGENCE_ENABLED ? (
         <Suspense fallback={<DashboardIntelligenceSkeleton />}>
-          <DashboardIntelligenceSection userId={userId} />
+          <DashboardIntelligenceSection userId={userId} activeCurrency={activeCurrency} />
         </Suspense>
       ) : null}
       <DashboardNudge />

@@ -64,6 +64,8 @@ export interface SpendingTxn {
   amount: number;
   /** 'YYYY-MM-DD' (provider posted date). */
   occurredOn: string;
+  /** ISO 4217 currency code (e.g. 'USD', 'EUR'). Added WLT-27-1. */
+  currency: string;
 }
 
 /** A humanized category + its summed spend this week. */

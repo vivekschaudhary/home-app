@@ -1,7 +1,7 @@
 // Provider-neutral domain types. Money is decimal-as-string end-to-end (stored
 // `numeric` in Postgres) — never a JS number (float drift on cents).
 
-export type AccountKind = "depository" | "credit"; // Phase 1 only
+export type AccountKind = "depository" | "credit" | "investment" | "other"; // WLT-27-2: investment + other for manual accounts
 export type TransactionDirection = "debit" | "credit"; // debit = money out, credit = money in
 export type ConnectionHealth = "active" | "needs_reauth" | "error";
 
@@ -25,7 +25,7 @@ export interface NormalizedAccount {
 
 export interface NormalizedTransaction {
   providerTransactionId: string | null; // opaque; null for CSV/manual sources
-  providerAccountId: string;
+  providerAccountId: string | null; // WLT-27-3: null for CSV/manual sources; Plaid always non-null
   amount: string; // decimal-as-string, unsigned
   direction: TransactionDirection;
   currency: string;

@@ -52,7 +52,10 @@ export async function ingestTransactions(input: {
   // added + modified → insert the (revision) row; idempotent on the unique key.
   const rows = [...page.added, ...page.modified]
     .map((t) => {
-      const acc = accMap.get(t.providerAccountId);
+      // WLT-27-3: null providerAccountId (CSV/manual) → look up 'manual' in the
+      // caller-supplied map (which passes new Map([['manual', accountId]])). Plaid
+      // always provides a non-null value, so ?? 'manual' never fires for Plaid rows.
+      const acc = accMap.get(t.providerAccountId ?? "manual");
       return acc ? rowFor(userId, acc, t) : null;
     })
     .filter((r): r is NonNullable<typeof r> => r !== null);
