@@ -3,23 +3,27 @@ workflow: create-bet-architecture
 step: 1
 agent: architect
 task: draft-bet-architecture
-generated: 2026-06-28 17:44
+generated: 2026-06-28 22:18
 ---
 
-`docs/bets/WLT-27/architecture.md` is written and on disk at `status: proposed`. The role-activity log has been updated.
+`docs/bets/WLT-27/architecture.md` is on disk at `status: proposed`, 254 lines.
 
 ---
 
-**TL;DR:** `architecture.md` drafted for WLT-27 (Manual Account Entry + CSV Import + Multi-Region Account Isolation) — all 12 required sections populated, `status: proposed`, HITL halt in effect. The central architectural call is that `SpendingTxn.currency` fix is a **hard prerequisite** that must land before any non-USD account is enabled, since the current spending aggregation (budget, recap, anomaly scan, category chart) sums amounts across all currencies as raw numbers.
+**TL;DR**
 
-**Files created/modified:**
-- `docs/bets/WLT-27/architecture.md` — created, `status: proposed`
-- `docs/role-activity/architect.md` — appended WLT-27 cross-cutting-prerequisite pattern
+- `docs/bets/WLT-27/architecture.md` drafted and written (`status: proposed`).
+- `docs/role-activity/architect.md` appended with the `dedupKey` null-source-type pattern.
+- **Foundational-stack deviation gate: PASS** — `papaparse` is a client-side parsing utility; CSV import was already named in ADR-002's Stack row. No amendment needed.
 
-**Next recommended command:** Review `docs/bets/WLT-27/architecture.md`, then flip `status: proposed → status: approved` and set `architecture_status: approved` in the brief frontmatter to proceed to story breakdown.
+**Files created/modified**
+- `docs/bets/WLT-27/architecture.md` — created (proposed)
+- `docs/role-activity/architect.md` — appended (pipeline keying assumption pattern)
 
-**Open questions flagged for HITL review:**
-- `dedupKey` null `providerAccountId` serialization (Engineer must confirm and fix before CSV import ships)
-- Anomaly scan per-currency fan-out and `dedup_key` currency scoping for `category_spike`
-- Whether `ManualAccountForm` should include an optional balance field
-- ISO 4217 currency allowlist breadth
+**Next recommended command**
+Review the architecture, then flip `status: proposed → status: approved` in `docs/bets/WLT-27/architecture.md` **and** set `architecture_status: approved` in `docs/bets/WLT-27/brief.md`. Then run `/build WLT-27`.
+
+**Open questions / risks for your review**
+- **DRI Issue 3** (unique constraint on `(null, null)` in `financial_accounts`) — verify on ephemeral PG before WLT-27-2 ships; PostgreSQL typically allows multiple `(null, null)` rows, but worth confirming.
+- **DRI Issue 2** (Apple Card CSV header) — needs an actual iOS export to validate before the preset is hardcoded.
+- **Anomaly scan user-listing fix** (manual-account-only users) — included in WLT-27-1 scope but not in the original story brief; confirm it stays in WLT-27-1 or moves to WLT-27-2.

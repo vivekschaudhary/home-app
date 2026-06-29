@@ -39,3 +39,21 @@ Append-only. Per `[fractal-retro]` (canon v0.3.17): log recurring patterns, HITL
 **Mirror:** no MCP Jira/Linear connector configured — skip logged as DRI Decision below.
 
 **DRI Decision:** [2026-06-28] [PM] Mirror to Jira/Linear skipped — no MCP connector configured in compass/config.yaml. Stories live in `docs/bets/WLT-27/stories/`. Area: process.
+
+---
+
+## 2026-06-29 — WLT-27-1 arbitrate-dispute (PR #123)
+
+**Bet/Story:** WLT-27 / WLT-27-1 — Currency-Awareness Fix
+**Action:** Arbitrated 4 ISSUEs and 2 NITs raised by Reviewer against PR #123.
+
+**Rulings:**
+- ISSUE 1 (time-dependent budget test): PARTIALLY ADDRESSED — engineer fixed `dashboard-spend-currency.test.ts` and `recap-spending-currency.test.ts` but missed `budget-currency.test.ts`, the originally-flagged file. Still has 2026-06 dates and no `vi.useFakeTimers`. Two days until July 1; this is urgent.
+- ISSUE 2 (no direct filter assertion in budget test): VALID — `budget-currency.test.ts` lacks `expect(queryMock.getCurrencyFilter()).toBe(...)` while the other two test files have it.
+- ISSUE 3 (missing chart + recap tests): RESOLVED — engineer added both files.
+- ISSUE 4 (query plan/perf risk): DISMISSED — `.eq("currency","USD")` is a no-op on an all-USD corpus; EXPLAIN obligation deferred to WLT-27-5 as DRI Risk.
+- NITs 1 & 2: OUT OF SCOPE — both reference the `stroke-green-500` change in merged PR #122.
+
+**PR #123 status:** Not clear to merge. Two mechanical test fixes required in `budget-currency.test.ts`.
+
+**Pattern note (instance 1 — incomplete fix sweep):** Engineer fixed 2 of 3 affected test files. The originally-flagged file was missed. Recurrence signal: when a reviewer cites a specific file by name, confirm that the fix commit touches that exact file, not only sibling files discovered during investigation.

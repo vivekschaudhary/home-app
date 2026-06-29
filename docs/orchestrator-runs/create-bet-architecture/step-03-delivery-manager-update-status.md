@@ -3,18 +3,18 @@ workflow: create-bet-architecture
 step: 3
 agent: delivery-manager
 task: update-status
-generated: 2026-06-28 17:47
+generated: 2026-06-28 22:36
 ---
 
-The file looks correct. All sections are accurate and evidence-backed.
+Done. Here's the TL;DR:
 
 ---
 
-**TL;DR:** `docs/status.md` refreshed. Two items in flight: the `fix/dashboard---spending-month---chart` PR (2 commits ahead of main, `e2e/category-spend-chart.spec.ts` untracked) and WLT-27 awaiting human approval (both brief.md and architecture.md are on disk but were self-approved by agent steps — HITL gates not honored; brief content is still orchestrator step output). The "Awaiting human approval" section and Health/Bottleneck notes reflect this state precisely.
+**TL;DR:**
+- `docs/status.md` refreshed to reflect the `create-bet-architecture` orchestrator run: WLT-27 architecture is now a properly HITL-gated `status: proposed` draft (not self-approved), old self-approved arch removed (`92dfa46`), pre-decomposed stories removed (`b65c243`), no stories on disk.
+- **In-flight:** Dashboard avg-line fix still awaiting PR + merge; WLT-27 architecture draft is untracked (needs commit), both brief + architecture awaiting human sign-off before any build starts.
+- **Pending:** Human review of `docs/bets/WLT-27/brief.md` (frontmatter still agent-set) and `docs/bets/WLT-27/architecture.md` (properly `status: proposed`) before `/build WLT-27-1`.
 
-**Files modified:**
-- `docs/status.md` — updated header preamble, In-flight section (added WLT-27 awaiting-human-approval entry with specific Awaiting condition), Awaiting human approval section (replaced stale brief-only entry with accurate dual-artifact state including the self-approval WARNING), and Health section (all references to WLT-27 updated to reflect current on-disk state)
+**Files modified:** `docs/status.md` — updated `Last updated` header, WLT-27 in-flight entry, Awaiting human approval entry, and Health section.
 
-**Next recommended command:** Review `docs/bets/WLT-27/brief.md` (replace the orchestrator step output with actual brief content) and `docs/bets/WLT-27/architecture.md`, then manually flip both `status:` fields to `approved` to proceed to `/create-story WLT-27`.
-
-**Open issue:** Both WLT-27 artifacts have `status: approved` in frontmatter despite being agent-authored — they were self-approved in violation of the HITL gates. The architecture content is substantive and well-formed; the brief body is not. Both require human judgment before build work begins.
+**Next recommended command:** None until human reviews the brief + architecture. Once approved: `/build WLT-27-1`.

@@ -17,7 +17,7 @@ sources:
 key_metric:
   name: Manual/CSV account activation rate — % of users who create ≥1 manual account or successfully complete ≥1 CSV import batch within 30 days of the feature being available
   baseline: 0% (feature does not exist)
-  target: ≥15% of MAU within 30 days (conservative proxy; YNAB's manual-entry segment estimated at 40%+ of their user base)
+  target: ≥15% of MAU within 90 days (conservative proxy; YNAB's manual-entry segment estimated at 40%+ of their user base)
   source: Post-ship measurement via account creation events tagged source='manual' or source='csv'
 guardrails:
   - name: CSV ingest error rate
@@ -58,7 +58,7 @@ Job-to-be-done: _"I want to see all of my real spending — including the accoun
 
 The platform's foundational hypothesis rests on **real aggregated data** driving durable financial-habit formation (product.md §Hypothesis). If a user's Apple Card or Cash App spending is invisible, the hypothesis is untestable for those users — and anomaly detection, budget recommendations, and recaps are demonstrably wrong. This bet closes the gap that prevents a segment of the primary persona from ever becoming a WAWU user.
 
-Product.md Q2 2026 OKR KR2 explicitly calls out "2 aggregation providers live + **CSV-import fallback**" — WLT-27 directly delivers the CSV-import element of that KR. Manual entry and multi-region isolation are sequenced extensions of the same data-completeness principle.
+Product.md Q2 2026 OKR KR2 explicitly calls out "2 aggregation providers live + **Email account alert parser**" or **CSV-import fallback**" — WLT-27 directly delivers the **Email account alert parser** or CSV-import element of that KR. Manual entry and multi-region isolation are sequenced extensions of the same data-completeness principle.
 
 Strategically, this is a **defensive bet**: it closes a coverage gap that blocks a meaningful user cohort from completing the core value loop. It is not an offensive moat-builder (see Defensibility below), but it is a precondition to WAWU growth beyond the Plaid-connectable segment.
 
@@ -83,11 +83,13 @@ This feature is **primarily defensive**, not offensive. It does not create a new
 ### In scope
 
 **Sub-feature A — Manual Account Entry**
+
 - `POST /api/accounts` Route Handler (service-role write) — create a `financial_accounts` row with `connection_id = null` (the existing nullable column designates a manual account)
 - `ManualAccountForm` UI — name, institution name, account type (checking / savings / credit / investment / other), native currency (ISO 4217, default USD)
 - Feature flag: `MANUAL_ACCOUNTS_ENABLED` (USD-only manual accounts safe to ship before the currency-awareness fix)
 
 **Sub-feature B — CSV Transaction Import**
+
 - `POST /api/accounts/[id]/import` Route Handler — accepts parsed rows, normalizes to `NormalizedTransaction`, runs through `ingestTransactions` (existing service-role upsert path, idempotent dedup via `dedupKey`)
 - `CsvImportWizard` UI — file upload → column-mapping step (map date / description / amount / category columns) → preview → confirm
 - CSV parsing in the browser via `papaparse` (minor npm library; no foundational-stack impact)
@@ -95,6 +97,7 @@ This feature is **primarily defensive**, not offensive. It does not create a new
 - `providerAccountId = null` edge case: normalize dedup key segment to `'manual'` for null provider account IDs (confirmed fix required in `dedupKey` — architecture.md)
 
 **Sub-feature C — Multi-Region Account Isolation**
+
 - Add `currency: string` to `SpendingTxn` interface and propagate `currency` scope parameter through all spending-aggregation paths: budget functions, `buildCategorySpendChart`, anomaly scan, transaction ledger read
 - Feature flag: `MULTI_CURRENCY_ACCOUNTS_ENABLED` — gates all non-USD manual account creation until currency-awareness fix is verified
 - Per-currency spending surfaces: region switcher on budget, category chart, recap, and anomaly surfaces for users with multi-currency accounts
@@ -114,16 +117,17 @@ This feature is **primarily defensive**, not offensive. It does not create a new
 
 Research complete — full citations in `docs/bets/WLT-27/research.md`. Summary by 6 categories:
 
-| Category | Status | Evidence quality | Key finding |
-|----------|--------|-----------------|-------------|
-| 1. User pain | Cited | High | Apple Pay/Plaid gap is structural and permanent (Apple API docs); Cash App 56M MAU + Venmo ~80–90M MAU outside Plaid reach (public filings) |
-| 2. Competitive | Cited | Medium (point-in-time) | No US-native PFM (Monarch, Copilot, Empower) supports multi-currency; YNAB + Toshl own this segment globally |
-| 3. Technical | Cited | High (codebase-confirmed) | Schema already ready (nullable connection_id, ISO 4217 columns, csv dedup path); gaps are API + UI only; currency-awareness bug confirmed in SpendingTxn |
-| 4. Quantitative | Cited | High on MAU; medium on segment overlap | 9M Americans abroad (AARO); 12.8M Wise active customers proves cross-border finance is a real product category |
-| 5. Trends | Cited | Medium | CFPB Rule 1033 (Oct 2024) reduces credit-union gap by 2027–2030; Apple Pay and P2P remain structurally closed regardless |
-| 6. Moat | Evaluated | — | Switching costs (primary) + Brand/trust (secondary); all 9 moat types evaluated; defensive bet |
+| Category        | Status    | Evidence quality                       | Key finding                                                                                                                                              |
+| --------------- | --------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. User pain    | Cited     | High                                   | Apple Pay/Plaid gap is structural and permanent (Apple API docs); Cash App 56M MAU + Venmo ~80–90M MAU outside Plaid reach (public filings)              |
+| 2. Competitive  | Cited     | Medium (point-in-time)                 | No US-native PFM (Monarch, Copilot, Empower) supports multi-currency; YNAB + Toshl own this segment globally                                             |
+| 3. Technical    | Cited     | High (codebase-confirmed)              | Schema already ready (nullable connection_id, ISO 4217 columns, csv dedup path); gaps are API + UI only; currency-awareness bug confirmed in SpendingTxn |
+| 4. Quantitative | Cited     | High on MAU; medium on segment overlap | 9M Americans abroad (AARO); 12.8M Wise active customers proves cross-border finance is a real product category                                           |
+| 5. Trends       | Cited     | Medium                                 | CFPB Rule 1033 (Oct 2024) reduces credit-union gap by 2027–2030; Apple Pay and P2P remain structurally closed regardless                                 |
+| 6. Moat         | Evaluated | —                                      | Switching costs (primary) + Brand/trust (secondary); all 9 moat types evaluated; defensive bet                                                           |
 
 **n/a items (justified):**
+
 - First-party demand signal (how many of this app's users are hitting Plaid gaps): `n/a — no production telemetry yet`
 - Apple Pay per-user volume: `n/a — Apple does not publish per-user statistics`
 - Multi-currency segment overlap with this app's user base: `n/a — no survey data for this intersection`
@@ -144,14 +148,14 @@ Summary: All three sub-features build within the existing foundational stack (Po
 
 Decomposed (6 stories) — each lives under `docs/bets/WLT-27/stories/<story-id>/story.md`:
 
-| Story ID | Title | Status | Depends on |
-|----------|-------|--------|------------|
-| WLT-27-1 | Currency-Awareness Fix (SpendingTxn.currency) | ready | — |
-| WLT-27-2 | Manual Account Entry API + UI | ready | WLT-27-1 (for non-USD) |
-| WLT-27-3 | CSV Import API (ingest pipeline extension) | ready | WLT-27-2 |
-| WLT-27-4 | CSV Import Wizard UI (column mapping + preview) | ready | WLT-27-3 |
-| WLT-27-5 | Region Switcher UI (per-currency spending surfaces) | ready | WLT-27-1 |
-| WLT-27-6 | Apple Card CSV Preset + End-to-End Integration Test | ready | WLT-27-4 |
+| Story ID | Title                                               | Status | Depends on             |
+| -------- | --------------------------------------------------- | ------ | ---------------------- |
+| WLT-27-1 | Currency-Awareness Fix (SpendingTxn.currency)       | ready  | —                      |
+| WLT-27-2 | Manual Account Entry API + UI                       | ready  | WLT-27-1 (for non-USD) |
+| WLT-27-3 | CSV Import API (ingest pipeline extension)          | ready  | WLT-27-2               |
+| WLT-27-4 | CSV Import Wizard UI (column mapping + preview)     | ready  | WLT-27-3               |
+| WLT-27-5 | Region Switcher UI (per-currency spending surfaces) | ready  | WLT-27-1               |
+| WLT-27-6 | Apple Card CSV Preset + End-to-End Integration Test | ready  | WLT-27-4               |
 
 ## Scan summary
 

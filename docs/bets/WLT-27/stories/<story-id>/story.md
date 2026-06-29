@@ -1,9 +1,7 @@
 ---
-workflow: create-story
-step: 3
-agent: ux-writer
-task: write-copy
-generated: 2026-06-28 22:57
+status: approved
+approved: 2026-06-29
+source_run: create-story--WLT-27--20260628T223807
 ---
 
 All 6 files present. Here's the summary:
