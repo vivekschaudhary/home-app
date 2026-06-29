@@ -64,7 +64,12 @@ Key files created/modified:
 ## Tests
 
 - Unit (14 tests, `app/api/accounts/route.test.ts`, `regression: false`, `e2e: false`): AC-2 (401), AC-3 (403), AC-4 (400 non-USD), AC-5 (all 5 kind mappings + bad kind), AC-6 (success shape), currency allowlist, server error.
-- E2E (flagged for Automation, `e2e: true`): AC-15 — creates account, verifies row, hard-deletes.
+- E2E (`e2e/manual-account.spec.ts`, 6 tests, gate: `E2E_PASSKEY=1 + SUPABASE_DB_URL`):
+  - AC-8 (flag-off): CTA absent from DOM when `MANUAL_ACCOUNTS_ENABLED` is off (gate: flag unset).
+  - AC-9/10/11/15 (happy path, gate: `MANUAL_ACCOUNTS_ENABLED=true`): form fields present; loading state (`Adding…`, disabled); success message (`Account added`); DB row verified (`connection_id=null`, `kind=depository`, `currency=USD`); hard-deletes created row.
+  - AC-12 (errors, gate: same): empty-name field error; cancel closes form without creating row.
+  - AC-13 (keyboard, gate: same): Tab order name→institution→kind→currency→submit→cancel; Arrow keys in radio group.
+  - AC-14 (RLS, gate: same): user A's account visible to A, invisible to B via real auth→RLS→RSC path (separate browser context).
 
 ## Fixes (post-merge)
 
@@ -76,7 +81,9 @@ _None yet._
 
 - **[2026-06-28] [PM]** Ship USD-only manual account creation before `MULTI_CURRENCY_ACCOUNTS_ENABLED` is verified — the existing USD-only spending pipeline is unaffected by `connection_id = null`; no currency-mixing risk for users who add USD manual accounts before WLT-27-1's regression suite completes. Two flags enable independent rollout. Area: release strategy. Reversibility: high.
 - **[2026-06-28] [PM]** Expand `financial_accounts.kind` constraint in this story (not deferred) — the constraint blocks `investment` and `other` kinds at the DB level; manual account creation is meaningless without the types that are only valid for non-Plaid accounts. Blocking the PR on this migration is correct. Area: data. Reversibility: easy (additive).
+- **[2026-06-29] [Automation]** E2E suite written in `e2e/manual-account.spec.ts` (6 tests, 5 suites). Per-surface vertical test for AC-15 exercises the full real-auth → AAL2-gated POST /api/accounts → financial_accounts insert (RLS write) → RSC re-read path on a prod-like build. Mocked-auth / service-role substitutes explicitly excluded. RLS test (AC-14) uses a separate Playwright browser context for user B to avoid cookie contamination. AC-8 flag-off suite uses a complementary skip gate (requires flag UNSET) so it runs independently from the flag-on suites. All data-mutating tests hard-delete via `financial_accounts.id` first, then cascade via `auth.users` delete. Area: testing. Reversibility: n/a.
 - **[2026-06-29] [Engineer]** Re-implemented on clean branch `feat/WLT-27-2-work` after prior PR #125 was contaminated by build-branch-stacking bug (#173) which included other WLT-27 stories' changes. This PR (#127) contains only WLT-27-2 scope: migration, route handler, form component, AccountsClient integration, page RSC props, copy block, and 14 unit tests. Area: release strategy. Reversibility: n/a.
+- **[2026-06-29] [Engineer]** Added `GET /api/accounts` to return the user's manual accounts (BLOCKER fix — Reviewer finding). The original POST-only route left no way to read back created accounts; `fetchConnections()` hits `/api/aggregation/connections` which only returns Plaid-linked connections. Fix: GET handler queries `financial_accounts` where `connection_id IS NULL`, returning `{ accounts: [...] }`. Added `ManualAccountView` type + `fetchManualAccounts()` in `aggregation-client.ts`. `AccountsClient` now fetches both on mount and after form success via `Promise.all`, maintains separate `manualAccounts` state, and renders manual accounts as `AccountCard` rows (no balance, no mask, no disconnect action) appended to the Plaid connections list. Swept all consumers: no other callsites reference the old fetch-only pattern. Area: accounts, backend, frontend. Reversibility: additive.
 
 ### Risks
 

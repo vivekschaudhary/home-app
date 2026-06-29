@@ -22,7 +22,26 @@ export interface ConnectionView {
   accounts: AccountView[];
 }
 
+export interface ManualAccountView {
+  id: string;
+  name: string;
+  kind: string;
+  currency: string;
+  institutionName: string | null;
+}
+
 export type AggError = "cancelled" | "institutionUnavailable" | "network" | "server";
+
+export async function fetchManualAccounts(): Promise<ManualAccountView[]> {
+  try {
+    const res = await fetch("/api/accounts");
+    if (!res.ok) return [];
+    const data = (await res.json()) as { accounts?: ManualAccountView[] };
+    return data.accounts ?? [];
+  } catch {
+    return [];
+  }
+}
 
 export async function startLink(): Promise<
   { ok: true; clientToken: string } | { ok: false; error: AggError }

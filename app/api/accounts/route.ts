@@ -24,6 +24,32 @@ function mapKind(kind: UserKind): DbKind {
 
 const VALID_KINDS = new Set<UserKind>(["checking", "savings", "credit", "investment", "other"]);
 
+export async function GET() {
+  const userId = await getAal2UserId();
+  if (!userId) return Response.json({ error: "unauthorized" }, { status: 401 });
+
+  const svc = createServiceSupabase();
+  const { data, error } = await svc
+    .from("financial_accounts")
+    .select("id, name, kind, currency, institution_name")
+    .eq("user_id", userId)
+    .is("connection_id", null)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.error("[GET /api/accounts] query failed:", error.message);
+    return Response.json({ error: "server_error" }, { status: 500 });
+  }
+
+  const accounts = (data ?? []).map((r) => {
+    const row = r as { id: string; name: string; kind: string; currency: string; institution_name: string | null };
+    return { id: row.id, name: row.name, kind: row.kind, currency: row.currency, institutionName: row.institution_name };
+  });
+
+  return Response.json({ accounts });
+}
+
 export async function POST(req: Request) {
   const userId = await getAal2UserId();
   if (!userId) return Response.json({ error: "unauthorized" }, { status: 401 });
