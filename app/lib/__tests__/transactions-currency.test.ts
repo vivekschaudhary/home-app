@@ -74,7 +74,7 @@ function makeBuilder(table: string) {
     range: vi.fn().mockImplementation(async () => resolve()),
     // Thennable — `await builder` resolves here. Used by fetchChunk (transactions),
     // otherProbe (.is().limit()), and accounts query (.eq().eq()).
-    then: (onFulfilled: (v: unknown) => unknown, _onRejected: unknown) =>
+    then: (onFulfilled: (v: unknown) => unknown) =>
       Promise.resolve(resolve()).then(onFulfilled),
   };
   return builder;
