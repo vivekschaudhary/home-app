@@ -65,7 +65,7 @@ const RECAP_KINDS = new Set(["recap_adjust_target", "recap_raise_target"]);
  * from balances; movement from the daily snapshots) → never stale. Emits
  * recap_viewed (a returning visit; the Day-7 return signal) when shown.
  */
-export async function getRecap(userId: string): Promise<RecapView> {
+export async function getRecap(userId: string, activeCurrency = "USD"): Promise<RecapView> {
   const supabase = await createServerSupabase();
 
   // The running net-worth workflow (active + a target in config). Owner-scoped.
@@ -104,9 +104,8 @@ export async function getRecap(userId: string): Promise<RecapView> {
   const action = selectPromptedAction(progress);
 
   // Spending vs. last week (WLT-17) — a display signal, computed from the last
-  // 14 days of owner-scoped transactions. null = omit (no spend / no prior data).
-  // 'USD' default until MULTI_CURRENCY_ACCOUNTS_ENABLED is on (WLT-27-5).
-  const spending = computeSpendingComparison(await readRecentSpending(userId, "USD"), todayUtc());
+  // 14 days of owner-scoped transactions scoped to activeCurrency (WLT-27-5).
+  const spending = computeSpendingComparison(await readRecentSpending(userId, activeCurrency), todayUtc());
 
   // The top unresolved anomaly (WLT-18) — owner-SELECT, highest severity first.
   // Transitions open→surfaced (once) + emits anomaly_surfaced the first time shown.

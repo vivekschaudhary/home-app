@@ -9,6 +9,8 @@ import { readCategoryTransactions } from "@/app/lib/budget";
 // of this data route don't double-count it (AC6).
 export const runtime = "nodejs";
 
+const ISO_4217_RE = /^[A-Z]{3}$/;
+
 export async function GET(req: Request) {
   const userId = await getAal2UserId();
   if (!userId) return Response.json({ error: "unauthorized" }, { status: 401 });
@@ -20,7 +22,12 @@ export async function GET(req: Request) {
     return Response.json({ error: "invalid" }, { status: 400 });
   }
 
-  const result = await readCategoryTransactions(userId, category, month);
+  // WLT-27-5: scope to the active region so the drill total reconciles to the
+  // budget row (getBudgetView uses the same default).
+  const currencyParam = url.searchParams.get("currency");
+  const currency = currencyParam && ISO_4217_RE.test(currencyParam) ? currencyParam : "USD";
+
+  const result = await readCategoryTransactions(userId, category, month, currency);
   if (!result.ok) return Response.json({ error: "server" }, { status: 500 }); // → client renders the inline error (AC3)
   return Response.json({ items: result.items, total: result.total });
 }

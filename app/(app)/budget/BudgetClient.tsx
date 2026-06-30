@@ -42,7 +42,7 @@ function fill(template: string, vars: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
 }
 
-export function BudgetClient({ initial, userId }: { initial: BudgetViewDTO; userId: string }) {
+export function BudgetClient({ initial, userId, currency = "USD" }: { initial: BudgetViewDTO; userId: string; currency?: string }) {
   const [view, setView] = useState<BudgetViewDTO>(initial);
   const [editing, setEditing] = useState<string | null>(null);
   const [draftType, setDraftType] = useState<"amount" | "percent">("amount");
@@ -59,10 +59,11 @@ export function BudgetClient({ initial, userId }: { initial: BudgetViewDTO; user
 
   // Reconcile with live server state on mount (#36 — force-dynamic page can hand a
   // stale prefetch; trusting initial props forever is the bug).
+  // WLT-27-5: forward currency so the refresh stays in the same region as the SSR data.
   const refresh = useCallback(async () => {
-    const res = await fetchBudget();
+    const res = await fetchBudget(currency);
     if (res.ok) setView(res.view);
-  }, []);
+  }, [currency]);
   useEffect(() => {
     void refresh();
   }, [refresh]);
@@ -203,16 +204,17 @@ export function BudgetClient({ initial, userId }: { initial: BudgetViewDTO; user
 
   // WLT-22-1 — drill into a category's line items. BudgetClient owns the fetch +
   // cache so it fetches once per category per load (the GET emits the event once).
+  // WLT-27-5: pass currency so the drill total reconciles to the budget row.
   const loadDrill = useCallback(
     async (category: string) => {
       setDrillCache((c) => ({ ...c, [category]: { status: "loading" } }));
-      const res = await fetchCategoryTransactions(category, view.asOfMonth);
+      const res = await fetchCategoryTransactions(category, view.asOfMonth, currency);
       setDrillCache((c) => ({
         ...c,
         [category]: res.ok ? { status: "ok", items: res.items, total: res.total } : { status: "error" },
       }));
     },
-    [view.asOfMonth],
+    [view.asOfMonth, currency],
   );
 
   // WLT-22-2 — the user's categories for the recategorize picker. Fetched once on

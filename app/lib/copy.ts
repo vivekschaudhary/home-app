@@ -634,6 +634,12 @@ export const COPY = {
     reopenA11y: "Re-open {merchant} follow-up",
     doneIndicatorA11y: "Follow-up resolved",
   },
+  // WLT-27-5 — Region Switcher (per-currency spending context selector).
+  regionSwitcher: {
+    label: "Currency",
+    ariaLabel: "Switch currency view",
+    srActiveLabel: "Active currency: {currency}",
+  },
   // WLT-27-2 — Manual Account Entry form. docs/bets/WLT-27/stories/WLT-27-2/copy.md verbatim.
   manualAccount: {
     addCta: "Add account manually",

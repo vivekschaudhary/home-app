@@ -123,7 +123,17 @@ export function nextMonthStart(month: string): string {
 
 export async function readTransactionsPage(
   userId: string,
-  opts: { cursor?: string | null; search?: string | null; accountId?: string | null; category?: string | null; followup?: "open" | "done" | null; month?: string | null; limit?: number } = {},
+  opts: {
+    cursor?: string | null;
+    search?: string | null;
+    accountId?: string | null;
+    category?: string | null;
+    followup?: "open" | "done" | null;
+    month?: string | null;
+    limit?: number;
+    /** WLT-27-5: ISO 4217 currency code to scope transactions to. Absent = no filter. */
+    currency?: string | null;
+  } = {},
 ): Promise<TransactionsPageResult> {
   const supabase = await createServerSupabase();
   const limit = clampLimit(opts.limit);
@@ -142,13 +152,20 @@ export async function readTransactionsPage(
   // Validated and composed in SQL (not in-memory) — a date range is safe in the
   // filter grammar and doesn't need the in-memory resolution the category filter does.
   const month = parseMonth(opts.month);
+  // WLT-27-5 — currency scope: when set, filters both transactions and the
+  // account-filter dropdown to the active currency so the ledger shows only rows
+  // from that currency's accounts. Absent = no currency restriction (all currencies).
+  const currency = opts.currency ?? null;
 
   // Shared owner-scoped reads: the saved-category map + the account names (also the
   // account-filter options + `hasAccount` for the empty state) + a bounded probe for
   // whether the null-category "Other" bucket exists (gates that filter option, AC2).
+  // WLT-27-5: when a currency is active, scope the account list to that currency so
+  // the account-filter dropdown only shows accounts in the active currency context.
+  const accountsQuery = supabase.from("financial_accounts").select("id, name").eq("user_id", userId);
   const [assignments, accountsRes, otherProbe, subscriptionFlags, followupStatuses] = await Promise.all([
     readCategoryAssignments(supabase, userId),
-    supabase.from("financial_accounts").select("id, name").eq("user_id", userId),
+    currency ? accountsQuery.eq("currency", currency) : accountsQuery,
     supabase.from("transactions").select("dedup_key").eq("user_id", userId).is("category", null).limit(200),
     readSubscriptionFlags(supabase, userId), // WLT-24-1 — the per-row "subscription" indicator
     readFollowupStatuses(supabase, userId), // WLT-25-1/2 — per-row follow-up state (open/done)
@@ -190,6 +207,8 @@ export async function readTransactionsPage(
       .order("id", { ascending: false })
       .limit(take);
     if (accountId) q = q.eq("account_id", accountId);
+    // WLT-27-5: currency scope — filters the ledger to a single currency context.
+    if (currency) q = q.eq("currency", currency);
     if (month) {
       // WLT-26-1: bound to the calendar month (occurred_on is a DATE column).
       q = q.gte("occurred_on", `${month}-01`).lt("occurred_on", nextMonthStart(month));

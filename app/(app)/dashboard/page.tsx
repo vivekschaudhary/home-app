@@ -1,9 +1,11 @@
 import { Suspense } from "react";
 import { requireAal2 } from "@vc1023/passkey-2fa";
+import { readDistinctCurrencies } from "@/app/lib/aggregation-read";
 import { COPY } from "@/app/lib/copy";
 import { getRecap } from "@/app/lib/recap";
 import { readCategorySpendChart } from "@/app/lib/dashboard-spend";
 import { getOrCreateWorkflow } from "@/app/lib/workflow";
+import { RegionSwitcher } from "@/app/(app)/accounts/RegionSwitcher";
 import { DashboardNudge } from "./DashboardNudge";
 import { RecapCard } from "./RecapCard";
 import { WorkflowCard } from "./WorkflowCard";
@@ -21,6 +23,13 @@ const RECAP_ENABLED = process.env.RECAP_ENABLED === "true";
 // Default off; flip DASHBOARD_INTELLIGENCE_ENABLED=true to surface it.
 const DASHBOARD_INTELLIGENCE_ENABLED = process.env.DASHBOARD_INTELLIGENCE_ENABLED === "true";
 
+// ISO 4217 three-letter uppercase code: validate and default to 'USD' on mismatch.
+// AC-12: unrecognized currency codes are silently ignored (no crash, no error banner).
+function parseCurrency(raw: string | undefined): string {
+  if (raw && /^[A-Z]{3}$/.test(raw)) return raw;
+  return "USD";
+}
+
 // WLT-12: lazy idempotent assembly — select/advance the user's workflow from
 // their declared goal; personalizes once real balances exist (two-phase).
 async function WorkflowSection({ userId }: { userId: string }) {
@@ -29,16 +38,17 @@ async function WorkflowSection({ userId }: { userId: string }) {
 }
 
 // WLT-16: the "since last time" recap — reconcile-on-load (reads live each
-// request; force-dynamic above).
-async function RecapSection({ userId }: { userId: string }) {
-  const recap = await getRecap(userId);
+// request; force-dynamic above). WLT-27-5: scoped to activeCurrency.
+async function RecapSection({ userId, activeCurrency }: { userId: string; activeCurrency: string }) {
+  const recap = await getRecap(userId, activeCurrency);
   return <RecapCard view={recap} />;
 }
 
 // WLT-26-1 + WLT-26-2: the full dashboard intelligence section — anomaly panel
 // (above, higher-urgency) + category spend chart (below, contextual).
-async function DashboardIntelligenceSection({ userId }: { userId: string }) {
-  const chart = await readCategorySpendChart(userId);
+// WLT-27-5: scoped to activeCurrency so chart bars reflect only active-currency spending.
+async function DashboardIntelligenceSection({ userId, activeCurrency }: { userId: string; activeCurrency: string }) {
+  const chart = await readCategorySpendChart(userId, activeCurrency);
   const C = COPY.dashboardIntelligence;
   return (
     <section className="mt-6 rounded-lg border border-gray-200 bg-white p-6">
@@ -87,15 +97,35 @@ function WorkflowAssembling() {
 // WLT-20: the Dashboard page now renders INSIDE the app shell (the (app) layout
 // provides the nav chrome + the AAL2 gate). requireAal2() here is the per-page
 // belt-and-suspenders (AC3) + supplies the userId.
-export default async function DashboardPage() {
+// WLT-27-5: reads ?currency= and passes activeCurrency to recap + intelligence sections.
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ currency?: string }>;
+}) {
   const userId = await requireAal2();
+  const sp = await searchParams;
+
+  // WLT-27-5: MULTI_CURRENCY_ACCOUNTS_ENABLED gates the switcher + currency-scoped
+  // reads. When off, activeCurrency is always 'USD' (no behavior change for existing
+  // users). Flag read here (RSC) — client components cannot access process.env.
+  const multiCurrencyEnabled = process.env.MULTI_CURRENCY_ACCOUNTS_ENABLED === "true";
+  const activeCurrency = multiCurrencyEnabled ? parseCurrency(sp.currency) : "USD";
+
+  const currencies = multiCurrencyEnabled ? await readDistinctCurrencies(userId) : [];
 
   return (
     <div>
-      <h1 className="text-xl font-semibold text-gray-900">{COPY.nav.dashboard}</h1>
+      <div className="flex items-start justify-between gap-4">
+        <h1 className="text-xl font-semibold text-gray-900">{COPY.nav.dashboard}</h1>
+        {/* WLT-27-5: switcher hides itself when currencies.length <= 1 (AC-1, AC-3) */}
+        {multiCurrencyEnabled && (
+          <RegionSwitcher currencies={currencies} activeCurrency={activeCurrency} />
+        )}
+      </div>
       {RECAP_ENABLED ? (
         <Suspense fallback={null}>
-          <RecapSection userId={userId} />
+          <RecapSection userId={userId} activeCurrency={activeCurrency} />
         </Suspense>
       ) : null}
       <Suspense fallback={<WorkflowAssembling />}>
@@ -103,7 +133,7 @@ export default async function DashboardPage() {
       </Suspense>
       {DASHBOARD_INTELLIGENCE_ENABLED ? (
         <Suspense fallback={<DashboardIntelligenceSkeleton />}>
-          <DashboardIntelligenceSection userId={userId} />
+          <DashboardIntelligenceSection userId={userId} activeCurrency={activeCurrency} />
         </Suspense>
       ) : null}
       <DashboardNudge />
