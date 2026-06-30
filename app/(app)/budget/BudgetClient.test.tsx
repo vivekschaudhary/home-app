@@ -14,12 +14,12 @@ const fetchCategoriesMock = vi.fn();
 const createCategoryMock = vi.fn();
 const recategorizeTransactionMock = vi.fn();
 vi.mock("@/app/lib/budget-client", () => ({
-  fetchBudget: () => fetchBudgetMock(),
+  fetchBudget: (currency?: string) => fetchBudgetMock(currency),
   saveBudget: (i: unknown) => saveBudgetMock(i),
   clearBudget: (c: unknown) => clearBudgetMock(c),
   recordSpreadViewed: () => recordSpreadViewedMock(),
   recordDrilldownViewed: () => recordDrilldownViewedMock(),
-  fetchCategoryTransactions: (cat: string, month: string) => fetchCategoryTransactionsMock(cat, month),
+  fetchCategoryTransactions: (cat: string, month: string, currency?: string) => fetchCategoryTransactionsMock(cat, month, currency),
   fetchCategories: () => fetchCategoriesMock(),
   createCategory: (name: string, kind: string) => createCategoryMock(name, kind),
   recategorizeTransaction: (i: unknown) => recategorizeTransactionMock(i),
@@ -207,7 +207,7 @@ describe("BudgetClient", () => {
     });
     render(<BudgetClient initial={VIEW} userId="u1" />);
     fireEvent.click(screen.getByRole("button", { name: /Show the transactions in Food And Drink this month/ }));
-    await waitFor(() => expect(fetchCategoryTransactionsMock).toHaveBeenCalledWith("FOOD_AND_DRINK", "2026-06"));
+    await waitFor(() => expect(fetchCategoryTransactionsMock).toHaveBeenCalledWith("FOOD_AND_DRINK", "2026-06", "USD"));
     expect(await screen.findByText("Trader Joe's")).toBeTruthy();
     expect(screen.getByText("Safeway")).toBeTruthy(); // null merchant fell back to description
     // the panel Total ($520.00) reconciles to the row's "This month so far" ($520.00) → ≥2 on screen

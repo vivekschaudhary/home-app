@@ -4,12 +4,19 @@ import { clearBudgetForUser, getBudgetView, saveBudgetForUser } from "@/app/lib/
 // The Budget & Spending data API (WLT-21-1). AAL2-gated + owner-scoped (RLS
 // session inside the lib functions). GET = reconcile-on-mount; POST = set/update
 // a category budget; DELETE = clear one.
+// WLT-27-5: GET reads ?currency= so the client-side reconcile-on-mount uses the
+// same region as the SSR page (without it the mount refresh would always return
+// USD, overwriting whatever non-USD currency the user had selected).
 export const runtime = "nodejs";
 
-export async function GET() {
+const ISO_4217_RE = /^[A-Z]{3}$/;
+
+export async function GET(req: Request) {
   const userId = await getAal2UserId();
   if (!userId) return Response.json({ error: "unauthorized" }, { status: 401 });
-  const view = await getBudgetView(userId);
+  const currencyParam = new URL(req.url).searchParams.get("currency");
+  const currency = currencyParam && ISO_4217_RE.test(currencyParam) ? currencyParam : "USD";
+  const view = await getBudgetView(userId, currency);
   return Response.json(view);
 }
 

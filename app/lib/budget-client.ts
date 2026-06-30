@@ -16,10 +16,14 @@ export interface BudgetViewDTO {
 
 export type BudgetError = "invalid" | "server" | "network";
 
-/** Reconcile-on-mount read (the #36 discipline — never trust stale props forever). */
-export async function fetchBudget(): Promise<{ ok: true; view: BudgetViewDTO } | { ok: false }> {
+/** Reconcile-on-mount read (the #36 discipline — never trust stale props forever).
+ *  WLT-27-5: `currency` must match the active region so the refreshed data stays
+ *  consistent with what the SSR page rendered (without it, the mount refresh
+ *  would silently return USD regardless of the user's selected currency). */
+export async function fetchBudget(currency = "USD"): Promise<{ ok: true; view: BudgetViewDTO } | { ok: false }> {
   try {
-    const res = await fetch("/api/budget", { headers: { accept: "application/json" } });
+    const url = currency !== "USD" ? `/api/budget?currency=${encodeURIComponent(currency)}` : "/api/budget";
+    const res = await fetch(url, { headers: { accept: "application/json" } });
     if (!res.ok) return { ok: false };
     const view = (await res.json()) as BudgetViewDTO;
     return { ok: true, view };
@@ -67,13 +71,17 @@ export interface CategoryDTO {
   countsAsSpending: boolean; // WLT-22-5 — false ⇒ the "exclude from spending" target
 }
 
+// WLT-27-5: `currency` must match the active region so the drill total reconciles
+// to the budget row (the "honesty contract" from WLT-22-1 — same filter as getBudgetView).
 export async function fetchCategoryTransactions(
   category: string,
   month: string,
+  currency = "USD",
 ): Promise<{ ok: true; items: CategoryTxnDTO[]; total: number } | { ok: false }> {
   try {
+    const currencyParam = currency !== "USD" ? `&currency=${encodeURIComponent(currency)}` : "";
     const res = await fetch(
-      `/api/budget/transactions?category=${encodeURIComponent(category)}&month=${encodeURIComponent(month)}`,
+      `/api/budget/transactions?category=${encodeURIComponent(category)}&month=${encodeURIComponent(month)}${currencyParam}`,
       { headers: { accept: "application/json" } },
     );
     if (!res.ok) return { ok: false };

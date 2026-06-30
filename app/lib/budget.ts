@@ -241,11 +241,14 @@ export type CategoryTransactionsResult =
  * (debits in this month, up to today) so the listed Total reconciles to the
  * budget row EXACTLY (the honesty contract). `category === ""` → the null-category
  * "Other" bucket. Newest first. The user's own merchant/description — no PII fabricated.
+ * WLT-27-5: `currency` scopes to one region (same default as getBudgetView) so the
+ * drill total reconciles to the budget row when a non-USD region is active.
  */
 export async function readCategoryTransactions(
   userId: string,
   category: string,
   month: string, // 'YYYY-MM'
+  currency = "USD",
 ): Promise<CategoryTransactionsResult> {
   const supabase = await createServerSupabase();
   const asOf = todayUtc();
@@ -276,6 +279,7 @@ export async function readCategoryTransactions(
             .select("dedup_key, occurred_on, merchant, description, amount, category")
             .eq("user_id", userId)
             .eq("direction", "debit")
+            .eq("currency", currency)
             .gte("occurred_on", `${month}-01`)
             .lt("occurred_on", nextMonthStart(month))
             .lte("occurred_on", asOf)

@@ -54,7 +54,7 @@ export default async function BudgetPage({
           <RegionSwitcher currencies={currencies} activeCurrency={activeCurrency} />
         )}
       </div>
-      <BudgetClient initial={view} userId={userId} />
+      <BudgetClient initial={view} userId={userId} currency={activeCurrency} />
     </div>
   );
 }
